@@ -1,0 +1,468 @@
+---
+title: "Differential Expression Analysis"
+author:
+  - name: Karolina Worf
+    affiliation: 
+    - Institute of Computational Biology, Helmholtz Zentrum München, Neuherberg 85764, Germany
+    - TUM School of Life Sciences Weihenstephan, Technical University of Munich, Freising 85354, Germany
+    email: karolina.worf@helmholtz-muenchen.de
+header-includes:
+  - \usepackage{float}
+date: "`r doc_date()`"
+graphics: yes
+abstract: In this R markdown file, we will provide an differential expression (DE) analysis workflow using different Bioconductor and R packages. ...
+output: 
+    BiocStyle::html_document:
+      toc: true
+      number_sections: true
+editor_options: 
+  chunk_output_type: console
+vignette: >
+  %\VignetteIndexEntry{Differential Expression Analysis}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+---
+
+After normalization and batch correction...
+
+```{r global_options, include = FALSE}
+library(BiocStyle)
+require(knitr)
+knitr::opts_chunk$set(warning = F, message = F, cache = T, cache.lazy = F)
+options(stringsAsFactors = T)
+```
+
+<p>
+**R version**: `r R.version.string`
+<br />
+**Bioconductor version**: `r BiocManager::version()`
+</p>
+
+# Load Packages 
+
+```{r, echo = F}
+library(oligo)
+library(pheatmap)
+library(limma)
+library(dplyr)
+library(pvca)
+library(sva) # for hidden batch correction
+library(biomaRt)
+library(viridis)
+library(ggplot2)
+library(data.table)
+```
+
+# Load Microarray Data
+
+Now, we will load the normalized and batch corrected microarray data summarized to gene and exon levels. 
+
+```{r, echo = F}
+# Import RMA corrected and annotated Affymetrix microarray data on gene level
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/RData_Files/4_affymetrix_exon_microarray_data_after_rma_core_gene_summaries_annotated_combat_batch_corrected.RData")
+dim(geneSummaries)
+# Import RMA corrected and annotated Affymetrix microarray data on gene level
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/RData_Files/4_affymetrix_exon_microarray_data_after_rma_exon_summaries_annotated_combat_batch_corrected.RData")
+dim(exonSummaries)
+```
+
+# Remove Samples With Missing Values
+
+As we have some missing values in the phenotype data, 26 mds (C1-C10) values, we first need to remove them from the microarrays as well as the phenotype dataset.
+
+```{r, echo = F}
+# remove all samples with C1 = NA from phenotype data and gene/exon expression data
+index <- which(is.na(pData(geneSummaries)$C1))
+geneSummaries <- geneSummaries[, -c(index)]
+exonSummaries <- exonSummaries[, -c(index)]
+# remove all samples with Type_of_Death = NA from phenotype data and gene expression data
+index <- which(is.na(pData(geneSummaries)$Type_of_Death))
+geneSummaries <- geneSummaries[, -c(index)]
+exonSummaries <- exonSummaries[, -c(index)]
+# check dim of geneSummaries (25 rows should be removed)
+dim(geneSummaries)
+dim(exonSummaries)
+```
+
+Then, we will check if the phenotype data and the microarray data are still in the same sample order.
+
+```{r}
+pData <- pData(geneSummaries)
+# check if pData and geneSummaries_final are identical
+identical(as.character(pData$ShortName), colnames(exprs(geneSummaries)))
+identical(as.character(pData$ShortName), colnames(exprs(exonSummaries)))
+```
+
+# Complement Phenotype Data
+
+```{r}
+# add original Dx as Diagnosis column to pData
+pData["Diagnosis"] <- pData$Dx
+# change BPD and MDD diagnosis (Dx) to SCZ
+pData$Dx <- as.character(pData$Dx) # change factor column to character
+pData[pData$Dx == "BPD" | pData$Dx == "MDD", "Dx"] <- "SCZ" # change BPD and MDD to SCZ
+pData[, c("Sex", "Dx", "Suicide")] <- lapply(pData[, c("Sex", "Dx", "Suicide")], factor)
+#sapply(pData, class) # check type of columns
+# relevel disease (Dx) to control (CTL)
+pData$Dx <- factor(pData$Dx, levels = c("CTL", "SCZ"))
+# add quadratic RIN 
+pData["RIN2"] <- pData$RIN^2
+```
+
+# Hidden Batch Effects
+
+## Gene Level 
+
+### SVA Without Covariates
+
+```{r, echo = F}
+# setting up the data for SVA
+pheno <- as.data.frame(pData$Dx)
+colnames(pheno) <- "Dx"
+edata <- exprs(geneSummaries)
+mod <- model.matrix(~ Dx, data = pheno)
+mod0 <- model.matrix(~1, data = pheno)
+# estimate the number of latent factors
+n.sv <- num.sv(edata, mod, method = "leek")
+# Apply the sva function to estimate surrogate variables:
+svobj <- sva(edata, mod, mod0, n.sv = n.sv)
+```
+
+Here, num.sv estimated only `r n.sv` surrogate variable/s. 
+
+### SVA With Covariates
+
+```{r, echo = F}
+# setting up the data for SVA
+pheno <- pData
+edata <- exprs(geneSummaries)
+mod <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
+mod0 <- model.matrix(~ 1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
+# estimate the number of latent factors
+n.sv <- num.sv(edata, mod, method="leek")
+# Apply the sva function to extimate surrogate variables:
+svobj <- sva(edata, mod, mod0, n.sv = n.sv)
+```
+
+Here, num.sv estimated only `r n.sv` surrogate variables. 
+
+
+## Exon Level 
+
+### SVA Without Covariates
+
+```{r, echo = F}
+# setting up the data for SVA
+pheno <- as.data.frame(pData$Dx)
+colnames(pheno) <- "Dx"
+edata <- exprs(exonSummaries)
+mod <- model.matrix(~Dx, data = pheno)
+mod0 <- model.matrix(~1, data = pheno)
+# estimate the number of latent factors
+n.sv <- num.sv(edata, mod, method = "leek")
+# Apply the sva function to estimate surrogate variables:
+svobj <- sva(edata, mod, mod0, n.sv = n.sv)
+```
+
+Here, num.sv estimated only `r n.sv` surrogate variable/s. 
+
+### SVA With Covariates
+
+```{r, echo = F}
+# setting up the data for SVA
+pheno <- pData
+edata <- exprs(exonSummaries)
+mod <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
+mod0 <- model.matrix(~ 1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
+# estimate the number of latent factors
+n.sv <- num.sv(edata, mod, method="leek")
+# Apply the sva function to extimate surrogate variables:
+svobj <- sva(edata, mod, mod0, n.sv = n.sv)
+pData$SV1 <- svobj$sv
+```
+
+Here, num.sv estimated only `r n.sv` surrogate variables. 
+
+
+# Differential Gene Expression Analysis (LIMMA) 
+
+## Gene Level
+
+### Using Diagnosis (SCZ, BIP, MDD) As One Case vs. Controls
+
+```{r, echo = F}
+# generate design matrix
+design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, pData)
+head(design)
+# get top DE genes
+fit <- lmFit(geneSummaries, design)
+fit2 <- eBayes(fit)
+top.hits <- topTable(fit2, coef = "DxSCZ")
+top.hits
+```
+
+Get significantly differentially expressed genes for all the different covariates. 
+
+```{r, echo = F}
+# Get padj values for all different covariates
+nc = ncol(design) - 1
+limma.res.fc = topTable(fit2, adjust = "BH", sort.by = "none", number = Inf)
+limma.res.padj = limma.res.fc[, 4:(3 + nc)]
+limma.res.padj
+for (i in 1:nc){
+    limma.res.padj[, i] = topTable(fit2, adjust = "BH", sort.by = "none", number = Inf, coef = i + 1)[, 8]
+}
+head(limma.res.padj)
+colnames(limma.res.padj) <- c("Disease", "Sex", "Age", "pH", "PMI", "RIN", "RIN2", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4")
+pheatmap(as.matrix(limma.res.padj), show_rownames = F)
+# check, how many padj values are < 0.05
+limma.res.padj.0.05 <- apply(limma.res.padj, 2, function(x) sum(x < 0.05))
+xx <- barplot(sort(limma.res.padj.0.05, decreasing = T), main = "Covariates: number of significant hits (padj < 0.05)", col = viridis(1), las = 1, ylim = c(0, 3250), cex.lab=1.5, cex.names = 1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, mgp=c(3.5,1,0))
+text(x = xx, y = sort(limma.res.padj.0.05, decreasing = T), label = sort(limma.res.padj.0.05, decreasing = T), pos = 3, cex = 1.5)
+```
+
+Generate Heatmap of significant hits
+
+```{r, echo = F}
+# 1. Get gene expression for the two genes with FDR < 0.05
+# save mapping of probeid to gene symbol
+hits <- top.hits[top.hits$adj.P.Val < 0.1, "SYMBOL"]
+probeids <- fData(geneSummaries)[fData(geneSummaries)$SYMBOL %in% hits, c("PROBEID", "SYMBOL")]
+# 2. Get gene expression adjusted for all covariates (except Diagnosis)
+all <- data.frame(ShortName = pData$ShortName) 
+for (gene in probeids$SYMBOL) { 
+  # 1. Get gene expression of one of the genes (using the probeid)
+  top.gene <- as.data.frame(exprs(geneSummaries)[rownames(exprs(geneSummaries)) == probeids[probeids$SYMBOL == gene, "PROBEID"], ])
+  # change rownames from probeids to gene symbols
+  colnames(top.gene) <- gene
+  
+  # Get residuals for every covariate for which we want to adjust (without Diagnosis)
+  cov <- c("Sex", "Age", "pH", "PMI", "RIN", "RIN2", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4")
+  res <- as.list(12)
+  for (name in cov) {
+    # generate design matrix with only one covariate
+    design <- model.matrix(~ get(name), pData)
+    fit <- lmFit(t(top.gene), design)
+    res[[paste("res", name, sep = "_")]] <- fit$coefficients[, 2] * design[, 2] #residuals(fit, top.genes) * design[, 2]
+  }
+
+  # 3. Get gene expression without Suicide removed
+  # gene expression with Suicide AND Diagnosis NOT removed 
+  expr <- top.gene - design[, 1] - res$res_Sex - res$res_Age - res$res_pH - res$res_PMI - res$res_RIN - res$res_RIN2 - res$res_Suicide - res$res_Type_of_Death - res$res_C1 - res$res_C2 - res$res_C3 - res$res_C4
+  # Add data for all genes together
+  all <- merge(all, expr, by.x = "ShortName", by.y = "row.names", all.x = T)
+}
+# Group on diagnosis
+samples <- as.data.frame(pData[, c("Diagnosis", "ShortName", "Dx")])
+rownames(samples) <- pData$ShortName
+samples <- samples[order(samples$"Diagnosis"), ]
+samples$ShortName <- NULL
+colnames(samples) <- c("Diagnosis", "Dx")
+# Generate Heatmap
+rownames(all) <- all$ShortName
+all$ShortName <- NULL
+head(all)
+# specify colors
+ann_colors = list(Diagnosis = c(SCZ = viridis(20)[2], BPD = viridis(20)[7], MDD = viridis(20)[15], CTL = viridis(20)[19]), Dx = c(SCZ = viridis(20)[2], CTL = viridis(20)[19]), color = viridis(200))
+ann_colors
+pheatmap(t(all), scale = "row", annotation_col = samples, annotation_colors = ann_colors, show_colnames = F, labels_col = "Samples")
+```
+
+Adding (Dx*Sex) to the model.
+
+```{r, echo = F}
+# generate design matrix
+design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + (Sex * Dx), pData)
+head(design)
+# get top DE genes
+fit <- lmFit(geneSummaries, design)
+fit2 <- eBayes(fit)
+top.hits <- topTable(fit2, coef = "DxSCZ:SexM")
+top.hits
+```
+
+
+## Using Each Diagnosis (SCZ, BIP, MDD) As Extra Covariate
+
+All diagnosis (SCZ, BPD, MDD) included in dataset but single covariates in the design model.
+
+```{r, echo = F}
+# relevel disease (Diagnosis) to control (CTL)
+pData$Diagnosis <- factor(pData$Diagnosis, levels = c("CTL", "SCZ", "BPD", "MDD"))
+# generate design matrix
+design <- model.matrix(~ Diagnosis + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, pData)
+head(design)
+# get top DE genes
+fit <- lmFit(geneSummaries, design)
+fit2 <- eBayes(fit)
+```
+
+Show top hits for **SCZ**:
+
+```{r, echo = F}
+top.hits <- topTable(fit2, coef = "DiagnosisSCZ")
+top.hits
+write.csv2(top.hits, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/Results/SCZ_BPD_MDD_Suicide_As_Covariates_DE_hits_top_10_genes_SCZ.csv")
+```
+
+Show top hits for **BPD**:
+
+```{r, echo = F}
+top.hits <- topTable(fit2, coef = "DiagnosisBPD")
+top.hits
+write.csv2(top.hits, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/Results/SCZ_BPD_MDD_Suicide_As_Covariates_DE_hits_top_10_genes_BPD.csv")
+```
+
+Show top hits for **MDD**:
+
+```{r, echo = F}
+top.hits <- topTable(fit2, coef = "DiagnosisMDD")
+top.hits
+write.csv2(top.hits, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/Results/SCZ_BPD_MDD_Suicide_As_Covariates_DE_hits_top_10_genes_MDD.csv")
+```
+
+
+## Using Calculated PRS As Diagnosis
+
+### Load PRS
+
+```{r}
+# load SCZ2 PRS
+prs.scz2 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/3_LDpred/SCZ2/03_validate/pmb_info06_all_chr_merged_scz2_filtered_PRS_LDpred-inf.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "pval_derived_effects_prs"))
+# load MDD2 PRS
+prs.mdd2 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/3_LDpred/MDD2/03_validate/pmb_info06_all_chr_merged_mdd2_filtered_PRS_LDpred-inf.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "pval_derived_effects_prs"))
+# load BIP-2018 PRS
+prs.bip <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/3_LDpred/BIP-2018/03_validate/pmb_info06_all_chr_merged_bip_filtered_PRS_LDpred-inf.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "pval_derived_effects_prs"))
+# load cross-disorder
+prs.crossdis <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/3_LDpred/Cross_Disorder/03_validate/pmb_info06_all_chr_merged_cross_disorder_filtered_PRS_LDpred-inf.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "pval_derived_effects_prs"))
+
+# add original PRS as PRS column to pData
+pData$PRS.SCZ <- unlist(prs.scz2[prs.scz2$IID %in% pData$IID, "pval_derived_effects_prs"])
+pData$PRS.MDD <- unlist(prs.mdd2[prs.mdd2$IID %in% pData$IID, "pval_derived_effects_prs"])
+pData$PRS.BIP <- unlist(prs.bip[prs.bip$IID %in% pData$IID, "pval_derived_effects_prs"])
+pData$PRS.CD <- unlist(prs.crossdis[prs.crossdis$IID %in% pData$IID, "pval_derived_effects_prs"])
+# generate design matrix
+design <- model.matrix(~ PRS.SCZ + PRS.MDD + PRS.BIP + PRS.CD + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, pData)
+# get top DE genes
+fit <- lmFit(geneSummaries, design)
+fit2 <- eBayes(fit)
+top.hits <- topTable(fit2, coef = "PRS.SCZ") # => x hits!!
+top.hits
+top.hits <- topTable(fit2, coef = "PRS.BIP") # => 0 hits!!
+top.hits
+top.hits <- topTable(fit2, coef = "PRS.MDD") # => 0 hits!!
+top.hits
+top.hits <- topTable(fit2, coef = "PRS.CD") # => 0 hits!!
+top.hits
+```
+
+Get significantly differentially expressed genes for all the different covariates (with PRS as diagnosis). 
+
+```{r, echo = F}
+# Get padj values for all different covariates
+nc = ncol(design) - 1
+limma.res.fc = topTable(fit2, adjust = "BH", sort.by = "none", number = Inf)
+limma.res.padj = limma.res.fc[, 4:(3 + nc)]
+limma.res.padj
+for (i in 1:nc){
+    limma.res.padj[, i] = topTable(fit2, adjust = "BH", sort.by = "none", number = Inf, coef = i + 1)[, 8]
+}
+head(limma.res.padj)
+colnames(limma.res.padj) <- c("PRS.SCZ", "PRS.MDD", "PRS.BIP", "Sex", "Age", "pH", "PMI", "Suicide", "RIN", "RIN2", "C1", "C2", "C3", "C4")
+#pheatmap(as.matrix(limma.res.padj), show_rownames = F)
+# check, how many padj values are < 0.05
+limma.res.padj.0.05 <- apply(limma.res.padj, 2, function(x) sum(x < 0.05))
+xx <- barplot(sort(limma.res.padj.0.05, decreasing = T), main = "Covariates: number of significant hits (padj < 0.05)", col = viridis(1), las = 1, ylim = c(0, 3250), cex.lab=1.5, cex.names = 1.5, cex.axis=1.5, cex.main=1.5, cex.sub=1.5, mgp=c(3.5,1,0))
+text(x = xx, y = sort(limma.res.padj.0.05, decreasing = T), label = sort(limma.res.padj.0.05, decreasing = T), pos = 3, cex = 1.5)
+```
+
+
+## Exon Level 
+
+```{r, echo = F}
+# generate design matrix
+design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+head(design)
+# get top DE genes
+fit <- lmFit(exonSummaries, design)
+fit2 <- eBayes(fit)
+top.hits <- topTable(fit2, coef = "DxSCZ")
+top.hits
+```
+
+## Using Calculated PRS As Diagnosis
+
+### Load PRS
+
+```{r}
+# generate design matrix
+design <- model.matrix(~ PRS.SCZ + PRS.MDD + PRS.BIP + PRS.CD + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# get top DE genes
+fit <- lmFit(exonSummaries, design)
+fit2 <- eBayes(fit)
+top.hits <- topTable(fit2, coef = "PRS.SCZ") # => 0 hits!! (but many adj. p-values with 0.08)
+top.hits
+top.hits <- topTable(fit2, coef = "PRS.BIP") # => 0 hits!!
+top.hits
+top.hits <- topTable(fit2, coef = "PRS.MDD") # => 0 hits!!
+top.hits
+top.hits <- topTable(fit2, coef = "PRS.CD") # => 0 hits!!
+top.hits
+```
+
+## Boxplot Suicide vs. No Suicide
+
+Generate boxplot for suicide vs. no suicide in all diagnosis (SCZ, BPD, MDD):
+
+```{r, echo = F, include = F, eval = F, fig.align = 'left', fig.fullwidth = TRUE}
+# 1. Get gene expression for the ten genes
+# save mapping of probeid to gene symbol
+probeids <- geneSummaries@featureData@data[geneSummaries@featureData@data$SYMBOL %in% c("SERTAD4", "HTR1F", "NTN4", "SLC24A2", "BCAT1", "CNGB1", "ESRRG", "CDH6", "SPOCK1", "FBXO9"), c("PROBEID", "SYMBOL")] # using only the 10 hits wihtout suicide as covariate
+#probeids <- geneSummaries@featureData@data[geneSummaries@featureData@data$SYMBOL %in% c("SERTAD4", "EPM2A", "DCUN1D2", "GPLD1", "HTR1F", "NTN4", "SLC24A2", "BCAT1", "CNGB1", "ESRRG", "CDH6", "SPOCK1", "FBXO9", "DUSP10"), c("PROBEID", "SYMBOL")] # using all hits
+
+# 2. Get gene expression adjusted for all covariates (except Suicide and Diagnosis)
+all <- data.frame(ShortName = character(), Expression = numeric(), Gene = character(), stringsAsFactors = FALSE) 
+for (gene in probeids$SYMBOL) { 
+  # 1. Get gene expression of one of the genes (using the probeid)
+  top.gene <- as.data.frame(exprs(geneSummaries)[rownames(exprs(geneSummaries)) == probeids[probeids$SYMBOL == gene, "PROBEID"], ])
+  # change rownames from probeids to gene symbols
+  colnames(top.gene) <- gene
+
+  # Get residuals for every covariate for which we want to adjust (without Suicide and Diagnosis)
+  cov <- c("Sex", "Age", "pH", "PMI", "RIN", "RIN2", "C1", "C2", "C3", "C4")
+  res <- as.list(10)
+  for (name in cov) {
+    # generate design matrix with only one covariate
+    design <- model.matrix(~ get(name), pData)
+    fit <- lmFit(t(top.gene), design)
+    res[[paste("res", name, sep = "_")]] <- fit$coefficients[, 2] * design[, 2] #residuals(fit, top.genes) * design[, 2]
+  }
+
+  # 3. Get gene expression without Suicide removed
+  # gene expression with Suicide AND Diagnosis NOT removed 
+  expr <- top.gene - design[, 1] - res$res_Sex - res$res_Age - res$res_pH - res$res_PMI - res$res_RIN - res$res_RIN2 - res$res_C1 - res$res_C2 - res$res_C3 - res$res_C4
+  # Save data into a data.frame
+  expr <- data.frame(ShortName = rownames(expr), Expression = expr[[1]], Gene = gene)
+  # Add data for all genes together
+  all <- rbind(all, expr)
+}
+# Add Suicide and Diagnosis to the dataset
+all <- merge(all, pData[, c("ShortName", "Diagnosis", "Suicide")], by = "ShortName", all.x = T)
+all$Diagnosis <- factor(all$Diagnosis, levels = c("CTL", "SCZ", "BPD", "MDD"))
+# 3. Generate boxplot for each gene showing the suicide effect
+#png(paste("/home/karolina/Desktop/PhD/MPIP/workspace/Results/boxplot_", gene, "_suicide2.png", sep = ""), width = 10, height = 6, units = 'in', res = 300) 
+p <- ggplot(all, aes(x = Diagnosis, y = Expression)) + 
+  geom_boxplot(aes(fill = Suicide)) +
+  scale_fill_manual(labels = c("No", "Yes"), values = c(viridis(20)[6], viridis(20)[14])) + 
+  theme(axis.title.x = element_blank(), axis.text = element_text(size = 14), axis.title.y = element_text(size = 20), legend.text = element_text(size = 16), legend.title = element_text(size = 18))
+p + facet_wrap(~ Gene, scales = "free_y", ncol = 5) + theme(strip.text.x = element_text(size = 10, face = "bold"), strip.text.y = element_text(size = 12))
+#dev.off()
+```
+
+
+
+# Session Info
+
+```{r, eval = F}
+sessionInfo()
+```

@@ -1,0 +1,370 @@
+---
+title: "eQTL Analysis"
+author:
+  - name: Karolina Worf
+    affiliation: 
+    - Institute of Computational Biology, Helmholtz Zentrum München, Neuherberg 85764, Germany
+    - TUM School of Life Sciences Weihenstephan, Technical University of Munich, Freising 85354, Germany
+    email: karolina.worf@helmholtz-muenchen.de
+header-includes:
+  - \usepackage{float}
+date: "`r doc_date()`"
+abstract: In this R markdown file, we will provide an eQTL workflow using different Bioconductor and R packages. ...
+output: 
+    BiocStyle::html_document:
+      toc: true
+      number_sections: true
+editor_options: 
+  chunk_output_type: console
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+---
+
+```{r global_options, include=FALSE}
+require(knitr)
+knitr::opts_chunk$set(warning = F, message = F, cache = F, cache.lazy = F)
+options(stringsAsFactors = T)
+```
+
+# Load Packages
+
+```{r}
+library(MatrixEQTL)
+library(data.table)
+```
+
+# Define Function
+
+```{r}
+run_matrix_eqtl <- function(SNP_file, expression_file, cov_file, outfile_cis, outfile_trans){
+  # 1. Set general parameters
+  # Use linear model (other models: modelANOVA, modelLINEAR, or modelLINEAR_CROSS)
+  useModel <- modelLINEAR
+  # We need to set up the p-value cutoff and the error model (in this case assuming independent errors)
+  # Only associations significant at this level will be saved
+  pvOutputThreshold_cis = 5e-2  # cis-eQTLS cutoff: 0.05
+  pvOutputThreshold_tra = 0  # no trans-eQTLs
+  # Error covariance matrix: set to numeric() for identity
+  errorCovariance <- numeric()
+  # Distance for local (cis) gene-SNP pairs
+  cisDist = 1e6  # cis window of 1Mb = 1e6, 100kb = 1e5
+  
+  # 2. Set Data Up
+  # Now we need to set up the snp and gene expression data in the special format required by the MatrixEQTL package
+  # 2.1 SNP Data
+  snps = SlicedData$new()
+  snps$fileDelimiter <- "\t"     # the TAB character
+  snps$fileOmitCharacters <- "NA" # denote missing values;
+  snps$fileSkipRows <- 1          # one row of column labels
+  snps$fileSkipColumns <- 1       # one column of row labels
+  snps$fileSliceSize <- 100000     # read file in pieces of 100,000 rows
+  snps$LoadFile(SNP_file)
+  # 2.2 Gene Expression Data
+  gene <- SlicedData$new()
+  gene$fileDelimiter <- "\t"      # the TAB character
+  gene$fileOmitCharacters <- "NA" # denote missing values;
+  gene$fileSkipRows <- 1          # one row of column labels
+  gene$fileSkipColumns <- 1      # one column of row labels
+  gene$fileSliceSize <- 2000      # read file in pieces of 2,000 rows
+  gene$LoadFile(expression_file)
+  # 2.3 Covariates
+  cvrt <- SlicedData$new()
+  cvrt$fileDelimiter = "\t"      # the TAB character
+  cvrt$fileOmitCharacters = "NA" # denote missing values;
+  cvrt$fileSkipRows = 1          # one row of column labels
+  cvrt$fileSkipColumns = 1       # one column of row labels
+  if(length(cov_file) > 0){
+    cvrt$LoadFile(cov_file)  # read file if given
+  }
+  
+  # 3. Run Matrix_eQTL
+  # Gene Expr x SNP
+  me = Matrix_eQTL_main(
+    snps = snps, 
+    gene = gene, 
+    cvrt = cvrt,
+    output_file_name = outfile_trans,
+    pvOutputThreshold = pvOutputThreshold_tra , #pvOutputThreshold_tra only cis
+    useModel = useModel, 
+    errorCovariance = errorCovariance, 
+    verbose = TRUE, 
+    output_file_name.cis = outfile_cis,
+    pvOutputThreshold.cis = pvOutputThreshold_cis,
+    snpspos = snpspos, 
+    genepos = genepos,
+    cisDist = cisDist,
+    pvalue.hist = "qqplot",
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE)
+  return(me)
+}
+```
+
+# Load SNP And Gene Positions
+
+As we need the SNP and gene position for all matrixEQTL runs, we will load them in the beginning, so that we do not have to repeat this step over and over again.
+
+```{r}
+# MatrixEQTL does not work without giving the tool the SNP and gene position. 
+snpspos <- read.table("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/5_matrix_EQTL/SNP_locations.txt", header = T, stringsAsFactors = FALSE, sep = "\t") # snp chr pos
+head(snpspos)
+genepos <- read.table("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/5_matrix_EQTL/gene_locations.txt", header = T, stringsAsFactors = FALSE, sep = "\t") # geneid chr start end
+genepos <- genepos[!is.na(genepos$start), ]  # remove NA's
+head(genepos)
+```
+
+
+# Example Data From MatrixEQTL
+
+```{r}
+# 1. Get Files
+base.dir <- find.package("MatrixEQTL")
+SNP_file_name <- paste(base.dir, "/data/SNP.txt", sep = "");
+expression_file_name <- paste(base.dir, "/data/GE.txt", sep="")
+covariates_file_name <- paste(base.dir, "/data/Covariates.txt", sep="")
+output_file_name <- tempfile()
+
+# 2. Load And Inspect Data
+# Gene expression data
+expr <- read.table(expression_file_name, sep = "\t", header = T, row.names = 1) # get first line: expr[1, ]
+head(expr)
+# Genotype (SNP) data
+geno <- read.table(SNP_file_name, sep = "\t", header = T, row.names = 1) # get first line: snps[1, ]
+head(geno)
+# Covariates
+cov <- read.table(covariates_file_name, sep = "\t", header = T, row.names = 1)
+cov
+
+# 3. Set general Parameters
+# We need to set up the p-value cutoff and the error model (in this case assuming independent errors).
+pvOutputThreshold <- 1e-2
+errorCovariance <- numeric()
+useModel <- modelLINEAR
+
+# 4. Set data up
+# Now we need to set up the snp and gene expression data in the special format required by the MatrixEQTL package.
+# 4.1 SNP data
+snps = SlicedData$new()
+snps$fileDelimiter <- "\t"     # the TAB character
+snps$fileOmitCharacters <- "NA" # denote missing values;
+snps$fileSkipRows <- 1          # one row of column labels
+snps$fileSkipColumns <- 1       # one column of row labels
+snps$fileSliceSize <- 2000     # read file in pieces of 2,000 rows
+snps$LoadFile(SNP_file_name)
+
+# 4.2 Gene expression data
+gene <- SlicedData$new()
+gene$fileDelimiter <- "\t"      # the TAB character
+gene$fileOmitCharacters <- "NA" # denote missing values;
+gene$fileSkipRows <- 1          # one row of column labels
+gene$fileSkipColumns <- 1      # one column of row labels
+gene$fileSliceSize <- 2000      # read file in pieces of 2,000 rows
+gene$LoadFile(expression_file_name)
+
+# 4.3 Covariates
+cvrt = SlicedData$new();
+cvrt$fileDelimiter = "\t";      # the TAB character
+cvrt$fileOmitCharacters = "NA"; # denote missing values;
+cvrt$fileSkipRows = 1;          # one row of column labels
+cvrt$fileSkipColumns = 1;       # one column of row labels
+if(length(covariates_file_name) > 0) {
+  cvrt$LoadFile(covariates_file_name);
+}
+
+# 5. Run MatrixEQTL
+me <- Matrix_eQTL_engine(
+    snps = snps,
+    gene = gene,
+    cvrt = cvrt,
+    output_file_name = NULL,
+    pvOutputThreshold = pvOutputThreshold,
+    useModel = useModel, 
+    errorCovariance = errorCovariance, 
+    verbose = TRUE,
+    pvalue.hist = TRUE,
+    min.pv.by.genesnp = FALSE,
+    noFDRsaveMemory = FALSE);
+
+#  6. Understand results
+# We can make a plot of all the p-values from the tests:
+plot(me)
+
+# We can also look at the number and type of eQTL:
+me$all$neqtls
+me$all$eqtls
+```
+
+# Calculate eQTLS For Complete Data (SCZ + AFF + CTL)
+
+## Get Files
+
+First, we will save the file names for the different datasets we need for the matrixEQTL function/package.
+
+```{r}
+# Genotype (SNP) file name
+SNP_file_name_all <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/5_matrix_EQTL/01_pmb_snps_SCZ_CTL.txt"
+
+# Gene expression file name
+expression_file_name_all <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/5_matrix_EQTL/01_pmb_gene_expr_SCZ_CTL.txt"
+
+# Covariates file name
+covariates_file_name_all <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/5_matrix_EQTL/01_pmb_cov_SCZ_CTL.txt"
+
+# Output file name
+output_file_name_cis_all <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/5_matrix_EQTL/results/01_pmb_SCZ_CTL_matrixEQTL_cis_results.txt"
+output_file_name_trans_all <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/5_matrix_EQTL/results/01_pmb_SCZ_CTL_matrixEQTL_trans_results.txt"
+```
+
+## Load And Inspect Data
+
+Load the data and check if it is in the right format.
+
+```{r, eval = F}
+
+load("/storage/groups/ccm01/karolina/Desktop/PhD/MPIP/workspace/RData_Files/4_affymetrix_exon_microarray_data_after_rma_gene_summaries_annotated_combat_batch_corrected.RData")
+
+# Gene expression data
+expr <- fread(expression_file_name_all, sep = "\t", header = T) # get first line: expr[1, ]
+head(expr)
+
+# Genotype (SNP) data
+snps <- fread(SNP_file_name_all, sep = "\t", header = T) # get first line: snps[1, ]
+head(snps)
+
+# Covariates
+cova <- fread(covariates_file_name_all, sep = "\t", header = T)
+
+# Delete files again
+#rm(expr, snps, cova)
+scz <- rbind(data.matrix(cova[cova$rn == "DxAFF", ]), scz <- data.matrix(cova[cova$rn == "DxSCZ", ]))
+scz <- as.data.frame(colSums(scz))
+scz["rn", "colSums(scz)"] <- "Dx"
+cova <- cova[!cova$rn %in% c("DxAFF", "DxSCZ"), ] # remove DxAFF and DxSCZ rows
+cova <- rbind(cova, t(scz)) # add Dx (scz) row
+write.table(cova, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/5_matrix_EQTL/01_pmb_cov_SCZ_AFF_CTL.txt", row.names = F, sep = "\t", quote = F)
+```
+
+### Run MatrixEQTL
+
+```{r}
+me.all <- run_matrix_eqtl(SNP_file = SNP_file_name_all, expression_file = expression_file_name_all, cov_file = covariates_file_name_all, outfile_cis = output_file_name_cis_all, outfile_trans = output_file_name_trans_all)
+```
+
+### Results
+
+Found 3,963,137 cis-eQTLs. No trans-eQTLs.
+ 
+```{r}
+cat('Analysis done in: ', me.all$time.in.sec, ' seconds', '\n');
+#cat('Detected local eQTLs:', '\n');
+#show(me.all$cis$eqtls)
+#cat('Detected distant eQTLs:', '\n');
+#show(me.all$trans$eqtls)
+
+## Plot the Q-Q plot of local and distant p-values
+plot(me.all)
+
+# Save matrixEQTL output to RData file
+save(me.all, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/5_matrix_EQTL/results/01_pmb_SCZ_AFF_CTL_matrixEQTL.RData")
+```
+
+
+# Only SCZ Data
+
+## Get Files
+
+First, we will save the file names for the different datasets we need for the matrixEQTL function/package.
+
+```{r}
+# Genotype (SNP) file name
+SNP_file_name_scz <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/5_matrix_EQTL/02_pmb_snps_SCZ.txt"
+
+# Gene expression file name
+expression_file_name_scz <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/5_matrix_EQTL/02_pmb_gene_expr_SCZ.txt"
+
+# Covariates file name
+covariates_file_name_scz <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/5_matrix_EQTL/02_pmb_cov_SCZ.txt"
+
+# Output file name
+output_file_name_cis_scz <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/5_matrix_EQTL/results/02_pmb_SCZ_matrixEQTL_cis_results.txt"
+output_file_name_trans_scz <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/5_matrix_EQTL/results/02_pmb_SCZ_matrixEQTL_trans_results.txt"
+```
+
+### Run MatrixEQTL
+
+```{r}
+me.scz <- run_matrix_eqtl(SNP_file = SNP_file_name_scz, expression_file = expression_file_name_scz, cov_file = covariates_file_name_scz, outfile_cis = output_file_name_cis_scz, outfile_trans = output_file_name_trans_scz)
+```
+
+### Results
+ 
+Found 3,951,845  cis-eQTLs. No trans-eQTLs.
+ 
+```{r}
+cat('Analysis done in: ', me.scz$time.in.sec, ' seconds', '\n');
+#cat('Detected local eQTLs:', '\n');
+#show(me.scz$cis$eqtls)
+#cat('Detected distant eQTLs:', '\n');
+#show(me.scz$trans$eqtls)
+
+## Plot the Q-Q plot of local and distant p-values
+plot(me.scz)
+
+# Save matrixEQTL output to RData file
+save(me.scz, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/5_matrix_EQTL/results/02_pmb_SCZ_matrixEQTL.RData")
+```
+
+
+# Only CTL Data
+
+## Get Files
+
+First, we will save the file names for the different datasets we need for the matrixEQTL function/package.
+
+```{r}
+# Genotype (SNP) file name
+SNP_file_name_ctl <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/5_matrix_EQTL/03_pmb_snps_CTL.txt"
+
+# Gene expression file name
+expression_file_name_ctl <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/5_matrix_EQTL/03_pmb_gene_expr_CTL.txt"
+
+# Covariates file name
+covariates_file_name_ctl <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/5_matrix_EQTL/03_pmb_cov_CTL.txt"
+
+# Output file name
+output_file_name_cis_ctl <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/5_matrix_EQTL/results/03_pmb_CTL_matrixEQTL_cis_results.txt"
+output_file_name_trans_ctl <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/5_matrix_EQTL/results/03_pmb_CTL_matrixEQTL_trans_results.txt"
+```
+
+### Run MatrixEQTL
+
+```{r}
+me.ctl <- run_matrix_eqtl(SNP_file = SNP_file_name_ctl, expression_file = expression_file_name_ctl, cov_file = covariates_file_name_ctl, outfile_cis = output_file_name_cis_ctl, outfile_trans = output_file_name_trans_ctl)
+```
+
+### Results
+
+Found 4,016,368 cis-eQTL. No trans-eQTL.
+
+```{r}
+cat('Analysis done in: ', me.ctl$time.in.sec, ' seconds', '\n');
+#cat('Detected local eQTLs:', '\n');
+#show(me.ctl$cis$eqtls)
+#cat('Detected distant eQTLs:', '\n');
+#show(me.ctl$trans$eqtls)
+
+## Plot the Q-Q plot of local and distant p-values
+plot(me.ctl)
+
+# Save matrixEQTL output to RData file
+save(me.ctl, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/5_matrix_EQTL/results/03_pmb_CTL_matrixEQTL.RData")
+```
+
+
+# Session Info
+
+```{r, eval = F}
+sessionInfo()
+```

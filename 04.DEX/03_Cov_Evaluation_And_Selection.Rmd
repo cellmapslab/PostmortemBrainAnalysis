@@ -1,0 +1,747 @@
+---
+title: "Covariates Evaluation And Selection"
+author: "Karolina Worf"
+date: "`r doc_date()`"
+graphics: yes
+output: 
+  BiocStyle::html_document:
+    toc: true
+    toc_float: false
+    number_sections: TRUE
+vignette: >
+  %\VignetteIndexEntry{Covariates Evaluation And Selection}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+In this script, we want to check, which of the covariates are significantly correlated to the data and should be included in our design for the DE Analysis. Our code is based on the methods and provided scripts used in the Fromer et al. (Nature Neuroscience 2016) Paper.
+
+```{r global_options, include = FALSE}
+require(knitr)
+knitr::opts_chunk$set(warning = F, message = F, cache = T, cache.lazy = F)
+options(stringsAsFactors = T)
+```
+
+# Load Packages 
+
+```{r}
+library(oligo)
+library(pvca)
+library(psych)
+library(ggplot2)
+library(reshape2)
+library(pheatmap)
+library(limma)
+library(sva)
+library(corrplot)
+library(viridis) # for colorblind color palette
+```
+
+# Without using ancestry information
+
+## Load Microarray Data
+
+Now, we will load the RMA normalized, annotated and batch corrected data as well as the corresponding phenotype data.
+
+```{r}
+# Import RMA corrected and annotated Affymetrix Microarray Data
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/RData_Files/4_affymetrix_exon_microarray_data_after_rma_gene_summaries_annotated_combat_batch_corrected.RData")
+dim(geneSummaries)
+```
+
+As it is important, that the phenotype dataset and the microarray expressions have an identical order of the sample names, we will now check if this is true.
+
+```{r}
+# check if pData and geneSummaries_final are identical
+pData <- pData(geneSummaries)
+identical(as.character(pData$ShortName), colnames(exprs(geneSummaries)))
+```
+
+## Check effects of covariates
+
+Here, we will check, if the covariates are significantly changing the gene expressions using different methods.
+
+### Principal Variance Component Analysis (PVCA)
+
+Principal Variance Component Analysis is a screening tool to determine which sources of variability (biological, technical or other) are most prominent in a given microarray data set and should be included as covariates in the model. 
+
+```{r, echo = F}
+# get the neccessary phenoData
+pData2 <- pData[, c("Age", "Sex", "Dx", "pH", "PMI", "Suicide", "RIN", "Batch")]
+pData2[, "Age"] <- cut(pData2[, "Age"], breaks = c(15, 30, 45, 60, 75, 90))
+pData2[, "pH"] <- cut(pData2[, "pH"], breaks = c(min(pData2[, "pH"]), mean(pData2[, "pH"]), max(pData2[, "pH"])), labels= c("Mean_or_Below", "Above"))
+pData2[, "PMI"] <- cut(pData2[, "PMI"], breaks = c(5, 20, 35, 50, 65, 80))
+pData2[, "RIN"] <- cut(pData2[, "RIN"], breaks = c(min(pData2[, "RIN"]), mean(pData2[, "RIN"]), max(pData2[, "RIN"])), labels= c("Mean_or_Below", "Above"))
+geneSummaries@phenoData@data <- pData2
+# Set the covariates whose effect size on the data needs to be calculated
+cov.eff.var <- c("Age", "Sex", "Dx", "pH", "PMI", "Suicide", "RIN", "Batch")
+# The PVCA Threshold Value (between 0 and 1) is the percentile value of the minimum amount of the variabilities that the selected principal components need to explain, here requiring 75% of the expression variance to be captured by the PCs
+pct.threshold <- 0.75 
+# Perform the PVCA analysis
+pvcaObj <- pvcaBatchAssess(geneSummaries, cov.eff.var, pct.threshold)
+bp <- barplot(pvcaObj$dat[c(23:25, 32:37)],  xlab = "Effects", ylab = "Weighted average proportion variance", ylim = c(0,1.1), col = c("blue"),
+              las = 2, main = "PVCA estimation bar chart")
+axis(1, at = bp, labels = pvcaObj$label[c(23:25, 32:37)], xlab = "Effects", cex.axis = 0.5, las = 2)
+values = pvcaObj$dat[c(23:25, 32:37)]
+new_values = round(values , 3)
+text(bp, pvcaObj$dat[c(23:25, 32:37)], labels = new_values, pos = 3, cex = 0.8)
+```
+
+### Using PCA
+
+First, we need to filter out phenotype data with missing values as well as unuseful columns in the phenotype data (e.g. MHRIID; Filename, ShortName, Batch and File) as these are just identifiers for mapping or already excluded (e.g. batch correction) from the dataset. Then, we will generate the design matrix including all covariates that we want to test. Therefore, we first need to convert all categorical covariates into factor and all continuous covariates into numerical class. We will also change all BPD and MDD diagnosis into AFF (as they did in Fromer et al.) and calculate the design matrix of all leftover covariates (see below).
+
+```{r, echo = F}
+# remove identifier columns (MHRIID, Filenamne, File, Batch and ShortName)
+pData.new <- pData[, -which(names(pData) %in% c("MHRIID", "Filename", "File", "ShortName", "Batch", "FID", "SOL", "IID", "pH_old", "Cause_of_Death", "Ancestry", "DOI", "Chip", "DIS", "Suicide"))]
+# change BPD and MDD diagnosis (Dx) to AFF
+pData.new$Dx <- as.character(pData.new$Dx) # change factor column to character
+pData.new[pData.new$Dx == "BPD" | pData.new$Dx == "MDD", "Dx"] <- "SCZ" # change BPD and MDD to AFF
+pData.new[, c("Sex", "Dx", "Suicide")] <- lapply(pData.new[, c("Sex", "Dx", "Suicide")], factor)
+sapply(pData.new, class) # check type of columns
+# save categorical and continuous variable names
+classes <- sapply(pData.new, class) # get type of columns
+categorical.cov = names(classes[classes == "factor"])
+continuous.cov = names(classes[classes == "numeric"])
+# relevel disease (Dx) to control (CTL)
+pData.new$Dx <- factor(pData.new$Dx, levels = c("CTL", "SCZ"))
+# generate contrast for design matrix
+contrast <- lapply(categorical.cov, function(x) {fac = pData.new[, x]; return(contrasts(fac))})
+names(contrast) <- categorical.cov
+# generate design matrix
+design <- model.matrix(~ . + Age + Sex + Dx + pH + PMI + Suicide + RIN, pData.new, contrasts.arg = contrast)
+head(design)
+```
+
+At the moment, we consider following covariates: `r paste(colnames(pData.new), collapse=", ")`
+
+Now, we will calculate the different principal components. The eigenvalues are not directly calculated by prcomp, so we need to do this on our own. Then we filter for all PCs with >= 1 % variance explained:
+
+```{r, echo = F}
+pc <- prcomp(t(exprs(geneSummaries)), scale.= T) # scaling default is FALSE, but it is advisable to set to TRUE (see help of prcomp)
+# calculate eigenvalue (PCA variance)
+pc.var <- pc$sdev^2
+pve <- round(100 * (pc.var / sum(pc.var)))
+# examine how much variance is explained by PCs, and consider those with PVE >= 1%:
+npca = max(1, length(which(pve >= 1.0)))
+samplePCvals = pc$x[, 1:npca, drop = FALSE]
+colnames(samplePCvals) = paste(colnames(samplePCvals), " (", pve[1:npca], "%)", sep = "")
+```
+
+`r paste(colnames(samplePCvals), sep=", ")`
+
+Then, we will calculate the correlation of the covariances to the PCs. Then calculate the FDR values of each covariate to each PC and filter for all covariates that have a significant (< 0.1) correlation to at least one PC. 
+
+```{r}
+all_cor <- corr.test(samplePCvals, design, use='pairwise.complete.obs', method = "pearson", adjust = "none")
+cor_mat <- melt(all_cor$p, varnames=c("PC", "Covariate"))
+colnames(cor_mat)[colnames(cor_mat) == "value"] <- "pvalue"
+cor_mat$r <- melt(all_cor$r)$value # add r to data frame
+# Now calculate the fdr for all different covariates and check if they are significant (< 0.1) in ANY of the significant PC's
+fdr <- p.adjust(cor_mat$pvalue, method="fdr")
+cor_mat$fdr <- fdr 
+significant <- fdr <= 0.1
+# get covariate names
+cov.names <- lapply(colnames(pData.new), function(x) colnames(design)[grep(x, colnames(design))])
+names(cov.names) <- colnames(pData.new)
+significant.cov <- sort(unique(cor_mat$Covariate[significant]))
+significant.cov <- names(which(sapply(cov.names, function(v) any(v %in% significant.cov))))
+not.significant.cov <- setdiff(colnames(pData.new), significant.cov)
+```
+
+Here, are all significant covariates from the design matrix: `r paste(significant.cov, sep = ", ")`
+
+Furthermore, we plot the significance of the correlations between the different covariates and significant PCs. We will also present the complete covariate list, which we will consider for our differential expression analysis.  
+
+```{r, echo = F}
+cov.to.keep <- c("Age", "Sex", "PMI", "RIN")
+# remove NA columns (Intercept)
+plotCor = na.omit(cor_mat[1:nrow(cor_mat), ])
+plotCor$PC = factor(plotCor$PC, levels=rev(levels(plotCor$PC)))
+plot.x.labels = levels(plotCor$Covariate)[levels(plotCor$Covariate) %in% plotCor$Covariate]
+ggplot(plotCor, aes(Covariate, PC, fill = fdr)) + geom_tile() + scale_alpha_manual(values=c('TRUE'=0.85, 'FALSE'=1)) + xlab("") + ylab("")
+# get covariate names
+cov.to.use <- union(cov.to.keep, significant.cov)
+design.cor <- corr.test(design[, -1], use='pairwise.complete.obs', method = "pearson", adjust = "none")
+```
+
+The final known covariates, we will keep in our analysis are: `r paste(cov.to.use, collapse=", ")`
+
+Following covariates should not be included: `r setdiff(colnames(pData.new), cov.to.use)`
+
+### Using BIC
+
+In Fromer et al. they used a second method to check for the importance of a covariate (with max. 2 df): they ask, how many genes have an improved Bayesian Information Criterion (BIC) score, also known as the Schwarz Criterion, compared to a linear regression model containing only the diagnosis as covariate. So, we will generate a design matrix only including the diagnosis (Dx) as covariate and a second design matrix including diagnosis + one other covariate (each covariate once). Then, we will use the selectModel function of the limma package with the criterion parameter set to bic and check, how many genes have an improved BIC score compared to the deisgn only using diagnosis as a covariate. 
+
+```{r}
+design <- model.matrix(~ Dx, pData.new) # design using ONLY diagnosis as covariate
+# go through all other possible covariates in pData.new
+bics <- data.frame(matrix(NA, nrow = 1, ncol = 1))
+# go through all covariates
+for (cov in colnames(pData.new)) {
+  if (cov != "Dx") {
+    design2 <- model.matrix(~ Dx + get(cov), pData.new) # design using diagnosis and one other covariate
+    designlist <- list(design = design, design2 = design2)
+    out <- selectModel(geneSummaries, designlist = designlist, criterion = "bic")
+    bics[cov] <- table(out$pref)[2][[1]] # get number of genes with imprved BIC
+  }
+}
+bics$matrix.NA..nrow...1..ncol...1. <- NULL
+```
+
+| Effect | Abbreviation | Df | # genes with improved BIC |
+|----------------------|--------------|----|---------------------------|
+| Age at Death | Age | 1 | `r bics$Age` |
+| Gender | Sex | 1 | `r bics$Sex` |
+| pH | pH | 1 | `r bics$pH` |
+| Postmortem Interval | PMI | 1 | `r bics$PMI` |
+| Suicide | Suicide | 1 | `r bics$Suicide` |
+| RNA Integrity Number | RIN | 1 | `r bics$RIN` |
+
+Df = Degree of freedom (that is, the number of design matrix columns for one variable) 
+
+### Check quadratic continuous variables
+
+Next, we will evaluate whether the quasi-continuous variables - Age, PMI, RIN and pH - affect gene expression in a simple linear manner or whether including quadratic terms also improves the model. Therefore, we will test the design matrix using the base model (all selected covariates from above, including diagnosis - Dx) with the base model + one of the quadratic terms. 
+
+```{r, echo = F}
+# include Age, PMI, RIN and pH as quadratic terms Age^2, PMI^2, RIN^2 and pH^2
+pData.quad <- cbind(pData.new, pData.new[, "Age"]^2, pData.new[, "PMI"]^2, pData.new[, "RIN"]^2, pData.new[, "pH"]^2)
+colnames(pData.quad) <- c(colnames(pData.new), "Age2", "PMI2", "RIN2", "pH2")
+head(pData.quad)
+# generate design using the base model (diagnosis, Age, Sex )
+design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN, pData.new) 
+# go through all other possible covariates in pData.new
+bics.quad <- data.frame(matrix(NA, nrow = 1, ncol = 1))
+# go through all covariates
+for (cov in colnames(pData.quad)) {
+  if (!cov %in% colnames(pData.new)) {
+    design2 <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + get(cov), pData.quad) # design using diagnosis and one other covariate
+    designlist <- list(design = design, design2 = design2)
+    out <- selectModel(geneSummaries, designlist = designlist, criterion = "bic")
+    bics.quad[cov] <- table(out$pref)[2][[1]] # get number of genes with imprved BIC
+  }
+}
+bics.quad$matrix.NA..nrow...1..ncol...1. <- NULL
+```
+
+| Effect | Abbreviation | Df | # genes with improved BIC |
+|----------------------|--------------|----|---------------------------|
+| Age^2 | Age2 | 1 | `r bics.quad$Age2` |
+| PMI^2 | PMI2 | 1 | `r bics.quad$PMI2` |
+| RIN^2 | RIN2 | 1 | `r bics.quad$RIN2` |
+| pH^2 | pH2 | 1 | `r bics.quad$pH2` |
+
+Final covariates for model design: **Dx, Age, Sex, PMI, RIN, pH, RIN2**
+
+## Hidden Batch Effects (SVA)
+
+### SVA Without Covariates
+
+The sva function performs two different steps. First it identifies the number of latent factors that need to be estimated. If the sva
+function is called without the n.sv argument specified, the number of factors will be estimated for you. The number of factors can also be estimated using the num.sv function. 
+
+```{r}
+# remove all samples with C1 = NA from phenotype data and gene expression data
+index <- which(is.na(pData.new$C1))
+pData.new <- pData.new[-c(index), ]
+geneSummaries <- geneSummaries[, -c(index)]
+# check dim of geneSummaries (25 rows should be removed)
+dim(geneSummaries)
+# setting up the data for SVA
+pheno <- as.data.frame(pData.new$Dx)
+colnames(pheno) <- "Dx"
+pheno$Dx <- factor(pheno$Dx, levels = c("CTL", "SCZ"))
+edata <- exprs(geneSummaries)
+mod <- model.matrix(~ Dx, data = pheno)
+mod0 <- model.matrix(~1, data = pheno)
+# estimate the number of latent factors
+n.sv <- num.sv(edata, mod, method="leek")
+# Apply the sva function to extimate surrogate variables:
+svobj <- sva(edata, mod, mod0, n.sv = n.sv)
+```
+
+Here, num.sv estimated only `r n.sv` surrogate variable/s. 
+
+Now, we can check how well the surrogate variable/s perform. First, we will calculate the F-test p-values for differential expression with respect to the disease status, without adjusting for surrogate variables, adjust them for multiple testing, and calculate the number that are significant with a Q-value (FDR corrected) less than 0.01. 
+
+```{r}
+pValues <- f.pvalue(edata, mod, mod0)
+qValues <- p.adjust(pValues, method = "BH") # FDR (Benjamini - Hochberg)
+```
+
+`r length(qValues[qValues < 0.01])` of the genes are significant with an FDR < 0.01 (1%) and `r length(qValues[qValues < 0.05])` are significant with FDR < 0.05 (5%). Now, we will do the same including the surrogate variable as a covariate. 
+
+```{r}
+modSv <- cbind(mod, svobj$sv)
+mod0Sv <- cbind(mod0, svobj$sv)
+pValuesSv <- f.pvalue(edata, modSv, mod0Sv)
+qValuesSv <- p.adjust(pValuesSv, method = "BH")
+```
+
+`r length(qValues[qValues < 0.01])` of the genes are significant with an FDR < 0.01 (1%) and `r length(qValues[qValues < 0.05])` are significant with FDR < 0.05 (5%). 
+
+**SVA does not improve/change the results at all.**
+
+Check correlation between covariates and surrogate variable:
+
+```{r}
+modNew <- cbind(design, svobj$sv)
+colnames(modNew) <- c(colnames(design), "SV")
+modCor <- corr.test(modNew[, -1], use='pairwise.complete.obs', method = "pearson", adjust = "none")
+pheatmap(modCor$r)
+corrplot(modCor$r, method="circle")
+```
+
+### SVA With Covariates
+
+Now, we will add the estimated covariates to the models for SVA. 
+
+```{r, echo = F}
+# setting up the data for SVA
+pData.new <- pData(geneSummaries)[, c("Dx", "Sex", "Age", "pH", "PMI", "RIN", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4")]
+pData.new["RIN2"] <- pData.new$RIN^2
+pheno <- as.data.frame(pData.new)
+pheno[pheno$Dx == "MDD" | pheno$Dx == "BPD", "Dx"] <- "SCZ"
+pheno$Dx <- factor(pheno$Dx, levels = c("CTL", "SCZ"))
+# remove all samples with Type_of_Death = NA from phenotype data and gene expression data
+index <- which(is.na(pheno$Type_of_Death))
+pheno <- pheno[-c(index), ]
+geneSummaries <- geneSummaries[, -c(index)]
+edata <- exprs(geneSummaries)
+mod <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
+mod0 <- model.matrix(~ 1 + Age + Sex + pH + PMI + RIN + RIN2 + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
+# estimate the number of latent factors
+n.sv <- num.sv(edata, mod, method = "leek")
+# Apply the sva function to estimate surrogate variables:
+svobj <- sva(edata, mod, mod0, n.sv = n.sv)
+pData(geneSummaries)$SV1 <- svobj$sv
+save(geneSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/RData_Files/5_affymetrix_exon_microarray_data_after_rma_gene_summaries_annotated_combat_batch_corrected_SV_included.RData")
+```
+
+Here, num.sv estimated only `r n.sv` surrogate variables. **0 sv estimated**
+
+Generate corrPlot including the surrogate variable. 
+
+```{r}
+mod <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
+modNew <- cbind(mod, svobj$sv)
+colnames(modNew) <- c(colnames(mod), "SV")
+modCor <- corr.test(modNew[, -1], use='pairwise.complete.obs', method = "pearson", adjust = "none")
+pheatmap(modCor$r)
+corrplot(modCor$r, method="circle")
+```
+
+Now, we will force SVA to give us the first 10 surrogate variables and check their correlation to our covariates.
+
+```{r, echo = F}
+# setting up the data for SVA
+pheno <- as.data.frame(pData.new$Dx)
+colnames(pheno) <- "Dx"
+edata <- exprs(geneSummaries)
+mod <- model.matrix(~ Dx, data = pheno)
+mod0 <- model.matrix(~1, data = pheno)
+# Apply the sva function to extimate surrogate variables:
+svobj <- sva(edata, mod, mod0, n.sv = 10)
+```
+
+Now, we can check how well the surrogate variables perform. First, we will calculate the F-test p-values for differential expression with respect to the disease status, without adjusting for surrogate variables, adjust them for multiple testing, and calculate the number that are significant with a Q-value (FDR corrected) less than 0.01. 
+
+```{r, echo = F}
+pValues <- f.pvalue(edata, mod, mod0)
+qValues <- p.adjust(pValues, method = "BH") # FDR (Benjamini - Hochberg)
+```
+
+`r length(qValues[qValues < 0.01])` of the genes are significant with an FDR < 0.1 (1%) and `r length(qValues[qValues < 0.05])` are significant with FDR < 0.05 (5%). Now, we will do the same including the surrogate variable as a covariate. 
+
+```{r, echo = F}
+surrogates <- svobj$sv
+colnames(surrogates) <- c("SV1", "SV2", "SV3", "SV4", "SV5", "SV6", "SV7", "SV8", "SV9", "SV10")
+modSv <- cbind(mod, surrogates)
+mod0Sv <- cbind(mod0, surrogates)
+pValuesSv <- f.pvalue(edata, modSv, mod0Sv)
+qValuesSv <- p.adjust(pValuesSv, method = "BH")
+```
+
+`r length(qValues[qValues < 0.01])` of the genes are significant with an FDR < 0.1 (1%) and `r length(qValues[qValues < 0.05])` are significant with FDR < 0.05 (5%). 
+
+**SVA does not improve/change the results at all.**
+
+Check correlation between covariates and surrogate variable:
+
+```{r, echo = F}
+modNew <- cbind(design, surrogates)
+colnames(modNew) <- c(colnames(design), colnames(surrogates))
+modCor <- corr.test(modNew[, -1], use='pairwise.complete.obs', method = "pearson", adjust = "none")
+pheatmap(modCor$r)
+corrplot(modCor$r, method="circle")
+```
+
+** => No latent batch factors found **
+
+# With Ancestry Information
+
+## Load Microarray Data
+
+First, we will load the RMA normalized, annotated and batch corrected data as well as the corresponding phenotype data again. With this step, we make sure, that the datasets were not transformed in any way. We also check the dimension of the expression dataset.
+
+```{r}
+# Import RMA corrected and annotated Affymetrix Microarray Data
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/RData_Files/4_affymetrix_exon_microarray_data_after_rma_gene_summaries_annotated_combat_batch_corrected.RData")
+dim(geneSummaries)
+```
+
+As we have some missing values in the phenotype data, 26 mds (C1-C10) values, we first need to remove them from the microarrays as well as the phenotype dataset => we will only do this step for the eQTL analysis (not for the DEG analysis)!!!
+
+```{r}
+# remove all samples with C1 = NA from phenotype data and gene expression data
+index <- which(is.na(pData$C1))
+pData <- pData[-c(index), ]
+geneSummaries <- geneSummaries[, -c(index)]
+# check dim of geneSummaries (25 rows should be removed)
+dim(geneSummaries)
+```
+
+Then, we will check if the phenotype data and the microarray data are still in the same sample order.
+
+```{r}
+# check if pData and geneSummaries_final are identical
+identical(as.character(pData$ShortName), colnames(exprs(geneSummaries)))
+```
+
+Now, we will perform the same steps as above, but this time we removed the 26 samples without any genotype data from the given datasets. As we reduced the number of samples, we will also get different results as before, but hopefully it will not change too much. As the descriptions are the same as above, we will skip them in this chapter.
+
+## Check effects of covariates
+
+### Principal Variance Component Analysis (PVCA)
+
+This step takes forever... PVCA seems not usable for a large number of covariates to test for.
+
+```{r, echo = F, eval = F}
+# get the neccessary phenoData
+pData2 <- pData[, c("Age", "Sex", "Dx", "pH", "PMI", "Suicide", "RIN", "C1", "C2", "C3", "C4")]
+pData2[, "Age"] <- cut(pData2[, "Age"], breaks = c(15, 30, 45, 60, 75, 90))
+pData2[, "pH"] <- cut(pData2[, "pH"], breaks = c(min(pData2[, "pH"]), mean(pData2[, "pH"]), max(pData2[, "pH"])), labels= c("Mean_or_Below", "Above"))
+pData2[, "PMI"] <- cut(pData2[, "PMI"], breaks = c(5, 20, 35, 50, 65, 80))
+pData2[, "RIN"] <- cut(pData2[, "RIN"], breaks = c(min(pData2[, "RIN"]), mean(pData2[, "RIN"]), max(pData2[, "RIN"])), labels= c("Mean_or_Below", "Above"))
+geneSummaries@phenoData@data <- pData2
+# Set the covariates whose effect size on the data needs to be calculated
+cov.eff.var <- c("Age", "Sex", "Dx", "pH", "PMI", "Suicide", "RIN", "Batch")
+# The PVCA Threshold Value (between 0 and 1) is the percentile value of the minimum amount of the variabilities that the selected principal components need to explain, here requiring 75% of the expression variance to be captured by the PCs
+pct.threshold <- 0.75 
+# Perform the PVCA analysis
+pvcaObj <- pvcaBatchAssess(geneSummaries, cov.eff.var, pct.threshold)
+bp <- barplot(pvcaObj$dat[c(23:25, 32:37)],  xlab = "Effects", ylab = "Weighted average proportion variance", ylim = c(0,1.1), col = c("blue"),
+              las = 2, main = "PVCA estimation bar chart")
+axis(1, at = bp, labels = pvcaObj$label[c(23:25, 32:37)], xlab = "Effects", cex.axis = 0.5, las = 2)
+values = pvcaObj$dat[c(23:25, 32:37)]
+new_values = round(values , 3)
+text(bp, pvcaObj$dat[c(23:25, 32:37)], labels = new_values, pos = 3, cex = 0.8)
+```
+
+### Using PCA
+
+This time, we need to filter out unuseful columns in the phenotype data (e.g. MHRIID; Filename, ShortName, Batch, File, FID and SOL). Then, we will generate the design matrix including all covariates that we want to test.
+
+```{r, echo = F}
+# remove all covariates with missing values (NA or "") as well as identifier columns MHRIID, Filename and ShortName
+pData.new <- pData[, which(apply(pData, 2, function(x) all(!is.na(x) & !x == "")))]
+pData.new <- pData.new[, -which(names(pData.new) %in% c("MHRIID", "Filename", "ShortName", "Batch", "File", "IID", "FID", "SOL", "C5", "C6", "C7", "C8", "C9", "C10"))]
+# change BPD and MDD diagnosis (Dx) to AFF
+pData.new$Dx <- as.character(pData.new$Dx) # change factor column to character
+pData.new[pData.new$Dx == "BPD" | pData.new$Dx == "MDD", "Dx"] <- "AFF" # change BPD and MDD to AFF
+pData.new[, c("Sex", "Dx", "Suicide")] <- lapply(pData.new[, c("Sex", "Dx", "Suicide")], factor)
+sapply(pData.new, class) # check type of columns
+# save categorical and continuous variable names
+classes <- sapply(pData.new, class) # get type of columns
+categorical.cov = names(classes[classes == "factor"])
+continuous.cov = names(classes[classes == "numeric"])
+# relevel disease (Dx) to control (CTL)
+pData.new$Dx <- factor(pData.new$Dx, levels = c("CTL", "AFF", "SCZ"))
+# generate contrast for design matrix
+contrast <- lapply(categorical.cov, function(x) {fac = pData.new[, x]; return(contrasts(fac))})
+names(contrast) <- categorical.cov
+# generate design matrix
+pData.new <- pData.new[pData.new$Dx == "AFF", "Dx"] <- "SCZ"
+pData.new
+design <- model.matrix(~ . + Age + Sex + Dx + pH + PMI + Suicide + RIN + C1 + C2 + C3 + C4, pData.new, contrasts.arg = contrast)
+head(design)
+```
+
+At the moment, we consider following covariates: `r paste(colnames(pData.new), collapse=", ")`
+
+Get PCs with >= 1 % variance explained:
+
+```{r, echo = F}
+pc <- prcomp(t(exprs(geneSummaries)), scale.= T) # scaling default is FALSE, but it is advisable to set to TRUE (see help of prcomp)
+# calculate eigenvalue (PCA variance)
+pc.var <- pc$sdev^2
+pve <- round(100 * (pc.var / sum(pc.var)))
+# examine how much variance is explained by PCs, and consider those with PVE >= 1%:
+npca = max(1, length(which(pve >= 1.0)))
+samplePCvals = pc$x[, 1:npca, drop = FALSE]
+colnames(samplePCvals) = paste(colnames(samplePCvals), " (", pve[1:npca], "%)", sep = "")
+```
+
+`r paste(colnames(samplePCvals), sep=", ")`
+
+Calculate correlation and FDR correction of covariances to PCs and filter for significance (< 0.01).
+
+```{r, echo = F}
+all_cor <- corr.test(samplePCvals, design, use='pairwise.complete.obs', method = "pearson", adjust = "none")
+cor_mat <- melt(all_cor$p, varnames=c("PC", "Covariate"))
+colnames(cor_mat)[colnames(cor_mat) == "value"] <- "pvalue"
+cor_mat$r <- melt(all_cor$r)$value # add r to data frame
+# Now calculate the fdr for all different covariates and check if they are significant (< 0.1) in ANY of the 19 PC's
+fdr <- p.adjust(cor_mat$pvalue, method="fdr")
+cor_mat$fdr <- fdr 
+significant <- fdr <= 0.1
+# get covariate names
+cov.names <- lapply(colnames(pData.new), function(x) colnames(design)[grep(x, colnames(design))])
+names(cov.names) <- colnames(pData.new)
+significant.cov <- sort(unique(cor_mat$Covariate[significant]))
+significant.cov <- names(which(sapply(cov.names, function(v) any(v %in% significant.cov))))
+not.significant.cov <- setdiff( colnames(pData.new), significant.cov)
+```
+
+Here, are all significant covariates from the design matrix: `r paste(significant.cov, sep = ", ")`
+
+```{r, echo = F}
+pData[pData$Dx == "BPD" | pData$Dx == "MDD", "Dx"] <- "SCZ"
+classes <- sapply(pData, class) # get type of columns
+categorical.cov = names(classes[classes == "factor"])
+continuous.cov = names(classes[classes == "numeric"])
+# relevel disease (Dx) to control (CTL)
+pData$Dx <- factor(pData$Dx, levels = c("CTL", "SCZ"))
+# generate contrast for design matrix
+contrast <- lapply(categorical.cov, function(x) {fac = pData[, x]; return(contrasts(fac))})
+names(contrast) <- categorical.cov
+design <- model.matrix(~ Dx + Age + Sex + pH + PMI + Suicide + RIN + C1 + C2 + C3 + C4, pData, contrasts.arg = contrast)
+colnames(design) <- c("(Intercept)", "Dx", "Age", "Sex", "pH", "PMI", "Suicide", "RIN", "C1", "C2", "C3", "C4")
+cov.to.keep <- c("Dx", "Age", "Sex", "pH", "Suicide", "PMI", "RIN", "C1", "C2", "C3", "C4")
+# remove NA columns (Intercept)
+plotCor = na.omit(cor_mat[1:nrow(cor_mat), ])
+plotCor$PC = factor(plotCor$PC, levels=rev(levels(plotCor$PC)))
+plot.x.labels = levels(plotCor$Covariate)[levels(plotCor$Covariate) %in% plotCor$Covariate]
+ggplot(plotCor, aes(Covariate, PC, fill=fdr)) + geom_tile() + scale_alpha_manual(values=c('TRUE'=0.85, 'FALSE'=1), guide="none") + xlab("") + ylab("")
+# get covariate names
+cov.to.use <- union(cov.to.keep, significant.cov)
+design.cor <- corr.test(design[, -1], use='pairwise.complete.obs', method = "pearson", adjust = "none")
+corrplot(design.cor$r, method = "circle", col = viridis(200, direction = -1))
+```
+
+The final known covariates, we will keep in our analysis are: `r paste(cov.to.use, collapse=", ")`
+
+Following covariates should not be included: `r setdiff(colnames(pData.new), cov.to.use)`
+
+### Using BIC
+
+```{r, echo = F}
+design <- model.matrix(~ Dx, pData.new) # design using ONLY diagnosis as covariate
+# go through all other possible covariates in pData.new
+bics <- data.frame(matrix(NA, nrow = 1, ncol = 1))
+# go through all covariates
+for (cov in colnames(pData.new)) {
+  if (cov != "Dx") {
+    design2 <- model.matrix(~ Dx + get(cov), pData.new) # design using diagnosis and one other covariate
+    designlist <- list(design = design, design2 = design2)
+    out <- selectModel(geneSummaries, designlist = designlist, criterion = "bic")
+    bics[cov] <- table(out$pref)[2][[1]] # get number of genes with imprved BIC
+  }
+}
+bics$matrix.NA..nrow...1..ncol...1. <- NULL
+```
+
+| Effect | Abbreviation | Df | # genes with improved BIC |
+|----------------------|--------------|----|---------------------------|
+| Age at Death | Age | 1 | `r bics$Age` |
+| Gender | Sex | 1 | `r bics$Sex` |
+| pH | pH | 1 | `r bics$pH` |
+| Postmortem Interval | PMI | 1 | `r bics$PMI` |
+| Suicide | Suicide | 1 | `r bics$Suicide` |
+| RNA Integrity Number | RIN | 1 | `r bics$RIN` |
+| Ancestry Dim 1 | C1 | 1 | `r bics$C1` |
+| Ancestry Dim 2 | C2 | 1 | `r bics$C2` |
+| Ancestry Dim 3 | C3 | 1 | `r bics$C3` |
+| Ancestry Dim 4 | C4 | 1 | `r bics$C4` |
+
+Df = Degree of freedom (that is, the number of design matrix columns for one variable) 
+
+### Check quadratic continuous variables
+
+```{r, echo = F}
+# include Age, PMI, RIN and pH as quadratic terms Age^2, PMI^2, RIN^2 and pH^2
+pData.quad <- cbind(pData.new, pData.new[, "Age"]^2, pData.new[, "PMI"]^2, pData.new[, "RIN"]^2, pData.new[, "pH"]^2)
+colnames(pData.quad) <- c(colnames(pData.new), "Age2", "PMI2", "RIN2", "pH2")
+head(pData.quad)
+# generate design using the base model (diagnosis, Age, Sex )
+design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + Suicide + C1 + C2 + C3 + C4, pData.new) 
+# go through all other possible covariates in pData.new
+bics.quad <- data.frame(matrix(NA, nrow = 1, ncol = 1))
+# go through all covariates
+for (cov in colnames(pData.quad)) {
+  if (!cov %in% colnames(pData.new)) {
+    design2 <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + Suicide + C1 + C2 + C3 + C4 + get(cov), pData.quad) # design using diagnosis and one other covariate
+    designlist <- list(design = design, design2 = design2)
+    out <- selectModel(geneSummaries, designlist = designlist, criterion = "bic")
+    bics.quad[cov] <- table(out$pref)[2][[1]] # get number of genes with imprved BIC
+  }
+}
+bics.quad$matrix.NA..nrow...1..ncol...1. <- NULL
+bics.quad
+```
+
+| Effect | Abbreviation | Df | # genes with improved BIC |
+|----------------------|--------------|----|---------------------------|
+| Age^2 | Age2 | 1 | `r bics.quad$Age2` |
+| PMI^2 | PMI2 | 1 | `r bics.quad$PMI2` |
+| RIN^2 | RIN2 | 1 | `r bics.quad$RIN2` |
+| pH^2 | pH2 | 1 | `r bics.quad$pH2` |
+
+Final covariates for model design: **Dx, Age, Sex, PMI, RIN, pH, Suicide, RIN2, pH2**
+
+## Hidden Batch Effects (SVA)
+
+### SVA Without Covariates
+
+Now, we will also perform SVA using the estimated design model including mds (C1-4) from above. 
+
+```{r, echo = F}
+# setting up the data for SVA
+pheno <- as.data.frame(pData.new$Dx)
+colnames(pheno) <- "Dx"
+edata <- exprs(geneSummaries)
+mod <- model.matrix(~ Dx, data = pheno)
+mod0 <- model.matrix(~1, data = pheno)
+# estimate the number of latent factors
+n.sv <- num.sv(edata, mod, method="leek")
+# Apply the sva function to extimate surrogate variables:
+svobj <- sva(edata, mod, mod0, n.sv = n.sv)
+```
+
+Here, num.sv estimated only `r n.sv` surrogate variable/s. 
+**Again 0 surrogate variables estimated**
+
+### SVA With Covariates
+
+Now, we will add the estimated covariates to the models for SVA. 
+
+```{r, echo = F}
+# setting up the data for SVA
+pData.new["RIN2"] <- pData.quad$RIN2
+pData.new["pH2"] <- pData.quad$pH2
+pheno <- pData.new
+edata <- exprs(geneSummaries)
+mod <- model.matrix(~ Dx + Age + Sex + PMI + RIN + pH + Suicide + RIN2 + pH2 + Type_of_Death, data = pheno)
+mod0 <- model.matrix(~ 1 + Age + Sex + PMI + RIN + pH + Suicide + RIN2 + pH2 + Type_of_Death, data = pheno)
+# estimate the number of latent factors
+n.sv <- num.sv(edata, mod, method="leek")
+# Apply the sva function to extimate surrogate variables:
+svobj <- sva(edata, mod, mod0, n.sv = n.sv)
+#svobj$sv
+```
+
+Here, num.sv estimated only `r n.sv` surrogate variables. **0 sv estimated**
+
+Now, we will force SVA to give us the first 10 surrogate variables and check their correlation to our covariates.
+
+```{r, echo = F}
+# setting up the data for SVA
+pheno <- as.data.frame(pData.new$Dx)
+colnames(pheno) <- "Dx"
+edata <- exprs(geneSummaries)
+mod <- model.matrix(~ Dx, data = pheno)
+mod0 <- model.matrix(~1, data = pheno)
+# Apply the sva function to extimate surrogate variables:
+svobj <- sva(edata, mod, mod0, n.sv = 10)
+```
+
+Now, we can check how well the surrogate variables perform. First, we will calculate the F-test p-values for differential expression with respect to the disease status, without adjusting for surrogate variables, adjust them for multiple testing, and calculate the number that are significant with a Q-value (FDR corrected) less than 0.01. 
+
+```{r, echo = F}
+pValues <- f.pvalue(edata, mod, mod0)
+qValues <- p.adjust(pValues, method = "BH") # FDR (Benjamini - Hochberg)
+```
+
+`r length(qValues[qValues < 0.01])` of the genes are significant with an FDR < 0.1 (1%) and `r length(qValues[qValues < 0.05])` are significant with FDR < 0.05 (5%). Now, we will do the same including the surrogate variable as a covariate. 
+
+```{r, echo = F}
+surrogates <- svobj$sv
+colnames(surrogates) <- c("SV1", "SV2", "SV3", "SV4", "SV5", "SV6", "SV7", "SV8", "SV9", "SV10")
+modSv <- cbind(mod, surrogates)
+mod0Sv <- cbind(mod0, surrogates)
+pValuesSv <- f.pvalue(edata, modSv, mod0Sv)
+qValuesSv <- p.adjust(pValuesSv, method = "BH")
+```
+
+`r length(qValues[qValues < 0.01])` of the genes are significant with an FDR < 0.1 (1%) and `r length(qValues[qValues < 0.05])` are significant with FDR < 0.05 (5%). 
+
+**SVA does not improve/change the results at all.**
+
+Check correlation between covariates and surrogate variable:
+
+```{r, echo = F}
+modNew <- cbind(design, surrogates)
+colnames(modNew) <- c(colnames(design), colnames(surrogates))
+modCor <- corr.test(modNew[, -1], use='pairwise.complete.obs', method = "pearson", adjust = "none")
+pheatmap(modCor$r)
+corrplot(modCor$r, method="circle")
+```
+
+## Exon/Probeset Summaries
+
+### SVA Without Covariates
+
+```{r, echo = F}
+library(sva)
+# load data
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/RData_Files/4_affymetrix_exon_microarray_data_after_rma_exon_summaries_annotated_combat_batch_corrected.RData")
+# setting up the data for SVA
+pheno <- as.data.frame(pData$Dx)
+colnames(pheno) <- "Dx"
+pheno[pheno$Dx == "BPD", ] <- "SCZ"
+pheno[pheno$Dx == "MDD", ] <- "SCZ"
+pheno$Dx <- factor(pheno$Dx, levels = c("CTL", "SCZ"))
+edata <- exprs(exonSummaries)
+mod <- model.matrix(~ Dx, data = pheno)
+mod0 <- model.matrix(~1, data = pheno)
+# estimate the number of latent factors
+n.sv <- num.sv(edata, mod, method = "leek")
+# Apply the sva function to estimate surrogate variables:
+svobj <- sva(edata, mod, mod0, n.sv = n.sv)
+```
+
+Here, num.sv estimated only `r n.sv` surrogate variable/s. 
+**Again 0 surrogate variables estimated**
+
+### SVA With Covariates
+
+```{r, echo = F}
+# setting up the data for SVA
+pData["RIN2"] <- pData$RIN^2
+pData["pH2"] <- pData$pH^2
+pheno <- pData
+pheno[pheno$Dx == "BPD", "Dx"] <- "SCZ"
+pheno[pheno$Dx == "MDD", "Dx"] <- "SCZ"
+pheno$Dx <- factor(pheno$Dx, levels = c("CTL", "SCZ"))
+index <- which(is.na(pData$C1))
+pData <- pData[-c(index), ]
+exonSummaries <- exonSummaries[, -c(index)]
+edata <- exprs(exonSummaries)
+mod <- model.matrix(~ Dx + Age + Sex + PMI + RIN + pH + Suicide + RIN2 + C1 + C2 + C3 + C4, data = pheno)
+mod0 <- model.matrix(~ 1 + Age + Sex + PMI + RIN + pH + Suicide + RIN2 + C1 + C2 + C3 + C4, data = pheno)
+# estimate the number of latent factors
+n.sv <- num.sv(edata, mod, method="leek")
+# Apply the sva function to extimate surrogate variables:
+svobj <- sva(edata, mod, mod0, n.sv = n.sv)
+#svobj$sv
+```
+
+Here, num.sv estimated only `r n.sv` surrogate variables. **0 sv estimated**
+
+
+# Session Info
+
+```{r, eval = F}
+sessionInfo()
+```

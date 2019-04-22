@@ -1,0 +1,446 @@
+---
+title: "Affymetrix Exon Array Analysis"
+author:
+  - name: Karolina Worf
+    affiliation: 
+    - Institute of Computational Biology, Helmholtz Zentrum München, Neuherberg 85764, Germany
+    - TUM School of Life Sciences Weihenstephan, Technical University of Munich, Freising 85354, Germany
+    email: karolina.worf@helmholtz-muenchen.de
+header-includes:
+  - \usepackage{float}
+date: "`r doc_date()`"
+abstract: In this R markdown file, we will provide an Affymetrix exon microarray preprocessing and matrix generation workflow using different Bioconductor and R packages. The analyzed data consists of a typical clinical microarray data set that compares postmortem brain tissues of healthy people to mentally ill patients. We will start with importing the raw data CEL files as a Bioconductor ExpressionSet and perform background correction, normalization and summarization using the rma function of oligo. For the annotation to gene and exon IDs we will use biomaRt and for the batch correction of known confounding variables the ComBat function from SVA. 
+output: 
+    BiocStyle::html_document:
+      toc: true
+      number_sections: true
+editor_options: 
+  chunk_output_type: console
+vignette: >
+  %\VignetteIndexEntry{Affymetrix Exon Array Analysis}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+---
+
+
+```{r knitrOptions, echo=F}
+library(BiocStyle)
+library(knitr)
+options(digits = 4, width = 80, stringsAsFactors = T)
+opts_chunk$set(echo = TRUE,
+               fig.width = 6, 
+               fig.height = 3.5,
+               fig.pos = "H",
+               dpi = 300,
+               warning = FALSE, 
+               message = FALSE, 
+               cache = TRUE, 
+               cache.lazy = FALSE)
+```
+
+<p>
+**R version**: `r R.version.string`
+<br />
+**Bioconductor version**: `r BiocInstaller::biocVersion()`
+</p>
+
+# Introduction
+
+This document includes the preprocessing workflow for Affymetrix exon microarrays (HuEx-1_0-st-v2) of postmortem human brain (hippocampus) samples coming from patients with schizophrenia (SCZ), bipolar disorder (BPD) and major depression disorder (MDD) as well as healthy controls (CTL). The *.CEL* output files of the Affymetrix microarrays as well as the phenotype data file in *.csv* format are conduced as input for the workflow. Following steps will be performed: 
+
+1. Load data and remove replicates and samples with missing pH values
+2. Data calibration: background correction, normalization
+
+Below you can find the list of packages that are required by the workflow. 
+
+```{r}
+# General Bioconductor packages
+library(oligoClasses)
+
+# Annotation and data import packages
+library(pd.huex.1.0.st.v2) # for oligo::rma function
+library(huex10stprobeset.db) # probeset infos for HuEx-1, and summarization (RMA)
+library(huex10sttranscriptcluster.db) # transcript/gene infos for HuEx-1_0-st-v2
+library(GenomicFeatures)
+library(GenomicRanges)
+library(rtracklayer)
+library(GenomicAlignments)
+
+# Quality control and pre-processing packages 
+library(oligo) # for background correction, normalization and summarization
+library(sva) # for Combat and hidden batch correction
+library(mice) # for imputation of missing phenotype values
+
+# Formatting packages
+library(data.table)
+library(dplyr) # for data transformation
+```
+
+# Import Affymetrix Data
+
+First, we will load the raw data *CEL* files produced by the Affymetrix array scanner software. These files contain the measured probe intensities. We also need do save the phenotype information for each sample. 
+
+We generate a list including the *CEL* files and paths from a given directory.
+
+```{r}
+celFiles <- list.celfiles("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/2018-07-11_gene_expression/raw_data", full.names = TRUE)
+```
+
+Now, we will save the phenotype information into a pData variable. The samples need to be in the same order as the CEL files are read in.
+
+```{r}
+pData <- read.table("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/2019-04-09_sample_sheet_KW.txt", sep = "\t", header = TRUE, stringsAsFactors = T)
+```
+
+## Remove Replicates
+
+Our dataset includes five replicated samples, which we first need to remove from the *celFiles* and *pData* variable. 
+
+| MHRI-ID |        Filename1 (2009)       |        Filename2 (2014)       |
+|:-------:|:-----------------------------:|:-----------------------------:|
+|  93.087 | afae2196-30-93.087-150709.CEL |   9.175_(HuEx-1_0-st-v2).CEL  |
+|  93.046 | afae2196-35-93.046-150709.CEL | MU_9.174_(HuEx-1_0-st-v2).CEL |
+|  97.214 |  afae2196-4-97.214-150709.CEL | MU_9_114_(HuEx-1_0-st-v2).CEL |
+|  93.052 | afae2196-43-93.052-150709.CEL | MU_9_176_(HuEx-1_0-st-v2).CEL |
+|  95.146 |  afae2196-6-95.146-150709.CEL | MU_9_107_(HuEx-1_0-st-v2).CEL |
+
+We will only remove the five older replicated files (from 2009). 
+
+```{r}
+replicates <- pData[(duplicated(pData$MHRIID) | duplicated(pData$MHRIID, fromLast = TRUE)) & pData$Batch == "A", "Filename"]
+pData <- pData[-(which(pData$Filename %in% replicates)), ] # remove the replicates from phenotype data
+celFiles <- unlist(lapply(celFiles, function(x) if(!(strsplit(x, "/")[[1]][9] %in% replicates)) x)) # remove replicates from cel file list
+```
+
+Finally, we can read in the CEL files.
+
+```{r, echo = T, results = 'hide'}
+rawData <- read.celfiles(celFiles) # affyExpressionFS/ExonFeatureSet
+```
+
+And check, if they are identical with the order of the filenames in pData.
+
+```{r}
+pData <- pData[order(pData$Filename), ]
+identical(as.character(pData$Filename), colnames(exprs(rawData)))
+```
+
+## Add pData to raw ExpressionSet
+
+Then, we check, if the sample names in the expression dataset are identical (and in same order) with the filenames in pData. If they are identical, we can place the pData information into the ExpressionSet.
+
+```{r}
+if(identical(as.character(pData$Filename), colnames(exprs(rawData))) == TRUE){
+  pData(rawData) <- pData
+}
+# change sample names to shorter versions
+sampleNames(rawData) <- as.character(pData$ShortName)
+dim(rawData)
+```
+
+## Save data
+
+After every long and time consuming step we will save the generated data into an RData file. This step is neccessary, so that we do not need to run all above steps again. 
+
+```{r}
+save(rawData, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/RData_Files/1_affymetrix_exon_microarray_raw_data.RData")
+# remove unneccessary data
+rm(celFiles, replicates)
+```
+
+# Transcript (Gene) Level Analysis
+
+## Background Adjustment, Normalization and Summarization.
+
+For the background correction, normalization, and summarization oligos Robust Multichip Average (RMA) algorithm is standard practice and runs all three adjustments at once. 
+
+To map the exon arrays to gene level, we have following three options: 
+
+1. **core**: for all annotated RefSeq genes, 
+2. **extended**: including RefSeq genes and genes with mRNA evidence, or 
+3. **full**: including RefSeq genes, genes with mRNA evidence and genes with bioinformatic/computational prediction. 
+
+As we want to use "safely" annotated genes we will set target to **core**. The RMA algorithm takes a while to process the huge amount of data provided by the Affymetrix microarrays. So, we will save the corrected data into an RData file for further analyses steps.  
+
+```{r}
+geneSummaries <- rma(rawData, target = "core") 
+dim(geneSummaries)
+save(geneSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/RData_Files/2_affymetrix_exon_microarray_data_after_rma_core_gene_summaries.RData")
+```
+
+## Annotation
+
+For the differential expression analysis, we want to evaluate the genes by name or gene symbol and, therefore, need to annotate the dataset to the right Affymetrix (HuEx-1_0-st-v2) gene annotation dataset. 
+
+If you used the probesets in RMA above, you need the *huex10stprobeset.db* R package installed. Otherwise (for genes) the *huex10sttranscriptcluster.db* package needs to be installed. As we now work on the gene level, we will also use the second option. We use the function select from AnnotationDbi to map our probeset ids to the gene symbols (SYMBOL) and short descriptions (GENENAME) of the transcript clusters.
+
+```{r}
+# columns(huex10sttranscriptcluster.db)  # check which columns are available
+anno_mpip <- AnnotationDbi::select(huex10sttranscriptcluster.db, keys = (featureNames(geneSummaries)), columns = c("SYMBOL", "GENENAME"), keytype = "PROBEID")
+```
+
+Then, we will filter out probesets that do not map to a gene and check the number of genes afterwards.
+
+```{r}
+anno_mpip <- anno_mpip[!is.na(anno_mpip$SYMBOL),]
+nrow(anno_mpip)
+```
+
+Some parts of the data can be mapped to several gene names. As it is not easy to interpret results mapping to multiple genes, we will remove multiple mappings from the dataset and save the annotated data into an RData file (code and text from: https://f1000research.com/articles/5-1384/v2).
+
+```{r}
+anno_grouped <- group_by(anno_mpip, PROBEID)
+anno_summarized <- summarize(anno_grouped, no_of_matches = n_distinct(SYMBOL))  # length = 17545
+anno_filtered <- filter(anno_summarized, no_of_matches > 1) # length = 2521
+probe_stats <- anno_filtered
+length(probe_stats$PROBEID)
+ids_to_exclude <- (featureNames(geneSummaries) %in% probe_stats$PROBEID)
+geneSummaries <- subset(geneSummaries, !ids_to_exclude)
+fData(geneSummaries)$PROBEID <- rownames(fData(geneSummaries))
+fData(geneSummaries) <- left_join(fData(geneSummaries), anno_mpip)
+rownames(fData(geneSummaries)) <- fData(geneSummaries)$PROBEID
+length(rownames(fData(geneSummaries)))
+dim(geneSummaries)
+```
+
+Some of the microarray probesets could not be mapped to a known gene. As we want to investigate the genes, we first need to remove all samples with missing gene mappings (not mapped to gene name and gene ID) from the microarray dataset. 
+
+```{r}
+# remove samples with NA in gene name
+geneSummaries <- geneSummaries[which(!is.na(geneSummaries@featureData@data$SYMBOL)), ]
+dim(geneSummaries)
+```
+
+Last but not least, we save the annotated dataset into an RData file:
+
+```{r}
+save(geneSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/RData_Files/3_affymetrix_exon_microarray_data_after_rma_core_gene_summaries_annotated.RData")
+```
+
+
+# Exon Level Analysis
+
+## Background Adjustment, Normalization and Summarization on Probeset Level
+
+For summarization on the exon level it is possible to set target to **probeset** as done here:
+
+```{r}
+probesetSummaries <- rma(rawData, target = "probeset") 
+dim(probesetSummaries)
+save(probesetSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/RData_Files/2_affymetrix_exon_microarray_data_after_rma_probeset_summaries.RData")
+rm(rawData)
+```
+
+## Summarize To Exon level
+
+The 26,564 annotated genes in the human genome (build October, 2003) contain 233,785 exons and 207,344 introns (NCBI: https://www.ncbi.nlm.nih.gov/pubmed/15217358). 
+
+First, we load the data (after probeset summarization).
+
+To summarize the dataset on exon level, we need to map the probeset IDs to exon IDs. Therefore, we download the "HuEx-1_0-st-v2 Probeset Annotations, CSV Format, Release 36 (58 MB, 7/6/16)" (filename after unzipping: HuEx-1_0-st-v2.na36.hg19.probeset.csv) under the "Current NetAffx Annotation Files" section on the Affymterix support website (http://www.affymetrix.com/support/technical/byproduct.affx?product=huexon-st). Now, we will load the Affymetrix Huex Annotation file and remove all probeset IDs without a sequence start and stop information. For the mapping to Exon IDs we generate a GRanges Object out of the Affymetrix probeset information (chr, start, stop and probeset ID). 
+
+```{r}
+# Load Affymetrix Huex1.0stv2 probeset annotation file (downloaded from the Affymetrix website)
+huex <- read.csv("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/HuEx-1_0-st-v2/HuEx-1_0-st-v2.na36.hg19.probeset.csv", comment.char = "#")
+huex <- huex[huex$start != "---", ]  # remove ids with no start and stop information
+
+# Generate GRanges object for the probeset information (with chr, start, stop and probeset id)
+probesets <- GRanges(seqnames = Rle(paste0(huex$seqname)), 
+                 ranges = IRanges(start = as.numeric(as.character(huex$start)), end = as.numeric(as.character(huex$stop))),
+                 id_internal_huex = huex$probeset_id)
+```
+
+Then, we load the GENCODE gtf file and merge the Affymetrix huex information with it. This generates the necessary probeset ID exon ID mapping as well as the mapping dataset for the annotation in the next step/section.
+
+```{r}
+# Load Gencode gtf file
+genes <- import.gff("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/annotation_files/gencode.v19.annotation.gtf", format = "gtf")
+#table(genes$gene_type)
+genes <- genes[genes$gene_type == "protein_coding"]  # get only protein-coding genes
+genes <- genes[genes$type == "exon"]  # get only exons from the genes
+
+# Merge the probeset ids to gencode annotation by using the overlap of sequence ranges and generate the annotation mapping dataset
+findOverlaps(probesets, genes, ignore.strand = T)
+anno <- mergeByOverlaps(probesets, genes)
+anno <- anno[, c("probesets", "id_internal_huex", "gene_id", "transcript_id", "gene_name", "exon_id")]
+
+# remove unnecessary data
+rm(huex, probesets, genes)
+```
+
+To summarize the dataset based on exon IDs, we will first rename the rows of the expression matrix to the Ensemble Exon IDs and summarize using these IDs and the median (NOT median polish!!) of their expressions.
+
+```{r}
+# remove probesets that do not have an exon id mapping
+probesetSummaries <- probesetSummaries[featureNames(probesetSummaries) %in% as.character(anno$id_internal_huex), ]
+# get probeset to Entrez Exon ID mapping
+mapping <- anno[, c("id_internal_huex", "exon_id")]
+mapping <- mapping[!duplicated(mapping), ] # remove duplicated rows
+# remove proebesetids not in probesetSummaries
+# check if rownames of expression matrix and feature Data are identical, if yes: rename expressionset to exon IDs
+identical(rownames(exprs(probesetSummaries)), as.character(unique(sort(mapping$id_internal_huex))))
+expressions <- merge(exprs(probesetSummaries), mapping, by.x = "row.names", by.y = "id_internal_huex", all.x = T)
+expressions$Row.names <- NULL # remove Row.names column
+# Summarize to exon level using median expression
+expr_dt <- data.table(expressions)
+expr_dt <- expr_dt[, lapply(.SD, median), by = 'exon_id']
+exprs_summarized <- as.matrix(expr_dt[, -1])
+rownames(exprs_summarized) <- expr_dt$exon_id
+# Summarize using median polish from oligo
+#exprs_summarized <- oligo::summarize(expr.mat, probes = rownames(expr.mat), method = "medianpolish")
+dim(exprs_summarized)
+```
+
+Now, we build a new ExonFeatureSet including the exon summarized expressions. 
+
+```{r}
+# generate empty data.frame with rownumbers of expr.matrix as row names for featureData of the ExpressionSet
+df <- matrix(NA, ncol = 1, nrow = length(rownames(exprs_summarized)))[, -1]
+row.names(df) <- row.names(exprs_summarized)
+data <- AnnotatedDataFrame(as.data.frame(df))
+# generate new ExonFeatureSet
+exonSummaries <- new("ExonFeatureSet", exprs = exprs_summarized, phenoData = phenoData(probesetSummaries), featureData = data, experimentData = experimentData(probesetSummaries), protocolData = protocolData(probesetSummaries), annotation = "pd.huex.1.0.st.v2")
+# save data
+save(exonSummaries, anno, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/RData_Files/2_affymetrix_exon_microarray_data_after_rma_exon_summaries.RData")
+# remove unnecessary data
+rm(mapping, expr_dt, exprs_summarized, df, data, expressions, probesetSummaries)
+```
+
+## Annotation
+
+For the annotation we use the anno dataset generated by the Affymetrix Annotation and GENCODE data in the section before. We first check, if any probeset ID has no Gene ID mapping (all probesets have a Gene ID given! => no filtering done here!).
+
+```{r}
+nrow(anno)
+anno <- anno[!is.na(anno$gene_id), ]
+nrow(anno)
+```
+
+Some parts of the data can be mapped to several gene names. As it is not easy to interpret results mapping to multiple genes, we will remove multiple mappings from the dataset and save the annotated data into an RData file (code and text from: https://f1000research.com/articles/5-1384/v2).
+
+```{r}
+anno <- as.data.table(anno)
+anno <- anno[, c("probesets.seqnames", "probesets.start", "probesets.end", "gene_id", "gene_name", "exon_id")]
+# get min start and max stop position for one exon
+anno <- anno[, list(chr = probesets.seqnames, start = min(probesets.start), end = min(probesets.end), gene_id = gene_id, gene_name = gene_name), by = exon_id]
+anno <- anno[!duplicated(anno), ]
+# paste chr, start and stop together
+anno <- anno[ , new := do.call(paste, c(.SD, sep = ":")), .SDcols=-c(1, 4, 5, 6)]
+anno <- anno[ , c(7, 1:6)]
+anno <- anno[ , location := do.call(paste, c(.SD, sep = "-")), .SDcols=-c(2, 3, 5, 6, 7)]
+anno <- anno[ , c(2, 8, 6, 7)]
+# remove duplicate exon ids ( these exons have the location on X and Y chromosome, but only X is true!)
+exons_to_remove <- which(duplicated(anno$exon_id) | duplicated(anno$exon_id, fromLast = T) & startsWith(anno$location, "chrY"))
+anno <- anno[-c(exons_to_remove), ]
+identical(length(unique(anno$exon_id)), length(rownames(exprs(exonSummaries))))  # check if it worked 
+# now remove exons with multiple gene id mappings
+anno_summarized <- anno[, .(count = uniqueN(gene_id)), by = exon_id]  # group by exon and count number of different Ensemble gene ids
+anno_filtered <- as.list(anno_summarized[anno_summarized$count > 1, "exon_id"])  # get exon ids with multiple Ensemble gene ids
+ids_to_exclude <- (featureNames(exonSummaries) %in% anno_filtered$exon_id)
+exonSummaries <- subset(exonSummaries, !ids_to_exclude)
+fData(exonSummaries)$exon_id <- rownames(fData(exonSummaries))
+fData(exonSummaries) <- left_join(fData(exonSummaries), anno)
+rownames(fData(exonSummaries)) <- fData(exonSummaries)$exon_id
+length(rownames(fData(exonSummaries)))
+dim(exonSummaries)
+```
+
+We do not have any NA's in the gene IDs and/or gene symbols, so we do not need to exclude them. Therefore, we can just save the annotated dataset into an RData file:
+
+```{r}
+save(exonSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/RData_Files/3_affymetrix_exon_microarray_data_after_rma_exon_summaries_annotated.RData")
+```
+
+
+# Batch Correction
+
+Before we can start the DE analysis, we need to remove unwanted batch effects. Here, we will perform two different steps:
+
+1. Remove the known batch effect (different generation times of the samples)
+2. Remove hidden batch effects (usually done before an eQTL analysis)
+
+## Remove The Known Batch Effect
+
+### Remove Batch On Exon Level
+
+For the batch correction of the known batches of the microarrays, we will use ComBat from the Surrogate Variable Analysis (SVA) package. We have four batches included in the data. A plot as well as a more detailed description is given in the *02_QC_And_Plots.Rmd* script. 
+
+```{r}
+exprs_rma <- exprs(exonSummaries)
+batch <- pData(exonSummaries)$Batch
+modcombat <- model.matrix(~1, data = pData(exonSummaries))
+combat_edata <- ComBat(dat = exprs_rma, batch = batch, mod = modcombat, par.prior = TRUE, prior.plots = FALSE)
+identical(rownames(exprs(exonSummaries)), rownames(combat_edata)) # check if the two matrices are in the same order
+exprs(exonSummaries) <- combat_edata
+dim(exonSummaries)
+save(exonSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/RData_Files/4_affymetrix_exon_microarray_data_after_rma_exon_summaries_annotated_combat_batch_corrected.RData")
+rm(combat_edata, exprs_rma, modcombat, batch)
+```
+
+### Remove Batch On Gene Level
+
+For the batch correction of the known batches of the microarrays, we will use ComBat from the Surrogate Variable Analysis (SVA) package. We have four batches included in the data. A plot as well as a more detailed description is given in the *02_QC_And_Plots.Rmd* script. 
+
+```{r}
+exprs_rma <- exprs(geneSummaries)
+batch <- pData(geneSummaries)$Batch
+modcombat <- model.matrix(~1, data = pData(geneSummaries))
+combat_edata <- ComBat(dat = exprs_rma, batch = batch, mod = modcombat, par.prior = TRUE, prior.plots = FALSE)
+identical(rownames(exprs(geneSummaries)), rownames(combat_edata)) # check if the two matrices are in the same order
+exprs(geneSummaries) <- combat_edata
+dim(geneSummaries)
+save(geneSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/RData_Files/4_affymetrix_exon_microarray_data_after_rma_core_gene_summaries_annotated_combat_batch_corrected.RData")
+```
+
+## Remove Hidden Batch Effects
+
+For the hidden batch effects, we also will use SVA. Here, we first need to evaluate the number of SV required for the data. The package SVA provides a method, which helps to choose this number. As received surrogate variables will be integrated as a covariate into our design matrix for the differential expression analysis, we will include the SVA hidden batch correction in the *03_Cov_Evaluation_And_Selection.Rmd* file and leave this chapter here empty.
+
+```{r, echo = F, include = F, eval = F}
+### Generate Boxplot for FKBP5 Gene ###
+transcript.ids <- huex[grep("FKBP5", huex$gene_assignment), "transcript_cluster_id"]
+exon.ids <- huex[grep("FKBP5", huex$gene_assignment), "exon_id"]
+fkbp.transcript.exprs <- exprs(geneSummaries)[rownames(exprs(geneSummaries)) %in% transcript.ids, ]
+fkbp.exon.exprs <- exprs(exonSummaries)[rownames(exprs(exonSummaries)) %in% exon.ids, ]
+fkbp <- rbind(fkbp.transcript.exprs, fkbp.exon.exprs)
+rownames(fkbp) <- c("FKBP", rownames(fkbp)[-1])
+boxplot(t(fkbp), ylab = "Gene expression", xlab = "Gene name and Exon IDs", cex.lab = 1.5)
+
+# boxplot of cases vs. controls
+# remove all samples with C1 = NA from phenotype data and gene/exon expression data
+index <- which(is.na(pData(geneSummaries)$C1))
+geneSummaries <- geneSummaries[, -c(index)]
+exonSummaries <- exonSummaries[, -c(index)]
+# remove all samples with Type_of_Death = NA from phenotype data and gene expression data
+index <- which(is.na(pData(geneSummaries)$Type_of_Death))
+geneSummaries <- geneSummaries[, -c(index)]
+exonSummaries <- exonSummaries[, -c(index)]
+# check dim of geneSummaries (25 rows should be removed)
+dim(geneSummaries)
+pData <- pData(geneSummaries)
+# add original Dx as Diagnosis column to pData
+pData["Diagnosis"] <- pData$Dx
+# change BPD and MDD diagnosis (Dx) to SCZ
+pData$Dx <- as.character(pData$Dx) # change factor column to character
+pData[pData$Dx == "BPD" | pData$Dx == "MDD", "Dx"] <- "SCZ" # change BPD and MDD to SCZ
+pData[, c("Sex", "Dx", "Suicide")] <- lapply(pData[, c("Sex", "Dx", "Suicide")], factor)
+cases <- pData[pData$Dx == "SCZ", "ShortName"]
+ctrl <- pData[pData$Dx == "CTL", "ShortName"]
+fkbp.cases <- as.data.frame(fkbp.transcript.exprs[which(names(fkbp.transcript.exprs) %in% cases)])
+fkbp.ctrls <- as.data.frame(fkbp.transcript.exprs[which(names(fkbp.transcript.exprs) %in% ctrl)])
+fkbp.cases <- cbind(fkbp.cases, rep("Cases", 107))
+colnames(fkbp.cases) <- c("Expression", "Dx")
+fkbp.ctrls <- cbind(fkbp.ctrls, rep("Controls", 62))
+colnames(fkbp.ctrls) <- c("Expression", "Dx")
+fkbp <- rbind(fkbp.cases, fkbp.ctrls)
+ggplot(fkbp, aes(x = Dx, y = Expression, fill = Dx)) + 
+  geom_boxplot() +
+  theme_grey(base_size = 18)
+```
+
+
+# Session Info
+
+```{r}
+sessionInfo()
+```

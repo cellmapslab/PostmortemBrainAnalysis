@@ -1,0 +1,29 @@
+PLINK v1.90b5.3 64-bit (21 Feb 2018)
+Options in effect:
+  --gen geno_stats/TRPS_merged_noNA.gen
+  --out 03_testscore_1_update
+  --sample geno_stats/TRPS_merged.sample
+  --score 03_TRPS_score_1_updateA.txt
+
+Hostname: Janines-MacBook-Pro.local
+Working directory: /Users/Janine/Documents/MPI/MPI_Data/Anfragen/Dean/TRPS
+Start time: Thu Jan 31 13:54:28 2019
+
+Random number seed: 1548939268
+8192 MB RAM detected; reserving 4096 MB for main workspace.
+--data: 03_testscore_1_update-temporary.bed +
+03_testscore_1_update-temporary.bim + 03_testscore_1_update-temporary.fam
+written.
+289 variants loaded from .bim file.
+246 people (0 males, 0 females, 246 ambiguous) loaded from .fam.
+Ambiguous sex IDs written to 03_testscore_1_update.nosex .
+Using 1 thread (no multithreaded calculations invoked).
+Before main variant filters, 246 founders and 0 nonfounders present.
+Calculating allele frequencies... done.
+Total genotyping rate is 0.866318.
+289 variants and 246 people pass filters and QC.
+Note: No phenotypes present.
+--score: 288 valid predictors loaded.
+--score: Results written to 03_testscore_1_update.profile .
+
+End time: Thu Jan 31 13:54:28 2019

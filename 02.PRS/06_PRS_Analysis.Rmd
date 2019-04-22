@@ -1,0 +1,380 @@
+---
+title: "Polygenic Risk Score (PRS) Analysis And Figure Generation"
+author:
+  - name: Karolina Worf
+    affiliation: 
+    - Institute of Computational Biology, Helmholtz Zentrum München, Neuherberg 85764, Germany
+    - TUM School of Life Sciences Weihenstephan, Technical University of Munich, Freising 85354, Germany
+    email: karolina.worf@helmholtz-muenchen.de
+header-includes:
+  - \usepackage{float}
+  - \usepackage{graphicx, multicol}
+date: "`r doc_date()`"
+abstract: In this R markdown file, we will provide the quality control and plot generation of the raw, normalized, and batch corrected data generated in the Microarray Preprocessing Pipeline.
+output: 
+    BiocStyle::html_document:
+      toc: true
+      number_sections: true
+editor_options: 
+  chunk_output_type: console
+vignette: >
+  %\VignetteIndexEntry{Quality Control of the Affymetrix Microarrays}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+---
+
+```{r knitrOptions, include = F}
+library(BiocStyle)
+require(knitr)
+options(stringsAsFactors = T)
+opts_chunk$set(echo = TRUE,
+               fig.pos = "H",
+               dpi = 300,
+               warning = FALSE, 
+               message = FALSE, 
+               cache = TRUE, 
+               cache.lazy = FALSE)
+```
+
+<p>
+**R version**: `r R.version.string`
+<br />
+**Bioconductor version**: `r BiocInstaller::biocVersion()`
+</p>
+
+# Load Packages 
+
+```{r}
+library(viridis) # for colorblind color palette
+library(data.table)
+library(ggplot2)
+library(corrplot)
+library(psych)
+library(pheatmap)
+```
+
+# Load data
+
+We first need to load the PRS LDpred-inf scores. Remember to add a comma "," at the end of the header line (or remove all commas from the rest of the lines) otherwise read.table or fread can not read in the data correctly. 
+
+```{r echo = F}
+# load SCZ2 PRS
+prs.scz2 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/3_LDpred/SCZ2/03_validate/pmb_info06_all_chr_merged_scz2_filtered_PRS_LDpred-inf.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "true_phens", "raw_effects_prs", "pval_derived_effects_prs"))
+# load MDD2 PRS
+prs.mdd2 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/3_LDpred/MDD2/03_validate/pmb_info06_all_chr_merged_mdd2_filtered_PRS_LDpred-inf.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "true_phens", "raw_effects_prs", "pval_derived_effects_prs"))
+# load BIP-2018 PRS
+prs.bip <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/3_LDpred/BIP-2018/03_validate/pmb_info06_all_chr_merged_bip_filtered_PRS_LDpred-inf.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "true_phens", "raw_effects_prs", "pval_derived_effects_prs"))
+# load ADHD-2017
+prs.adhd <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/3_LDpred/ADHD-2017/03_validate/pmb_info06_all_chr_merged_adhd_filtered_PRS_LDpred-inf.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "true_phens", "raw_effects_prs", "pval_derived_effects_prs"))
+#load ASD
+prs.asd <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/3_LDpred/ASD/03_validate/pmb_info06_all_chr_merged_asd_filtered_PRS_LDpred-inf.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "true_phens", "raw_effects_prs", "pval_derived_effects_prs"))
+prs.bip.vs.scz <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/3_LDpred/BIPvsSCZ/03_validate/pmb_info06_all_chr_merged_bd_vs_scz_filtered_PRS_LDpred-inf.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "true_phens", "raw_effects_prs", "pval_derived_effects_prs"))
+prs.bip.scz.vs.ctl <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/3_LDpred/BIP+SCZvsCONT/03_validate/pmb_info06_all_chr_merged_bd_scz_vs_cont_filtered_PRS_LDpred-inf.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "true_phens", "raw_effects_prs", "pval_derived_effects_prs"))
+# load phenotype file
+prs.ea <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/3_LDpred/EA/03_validate/pmb_info06_all_chr_merged_ea_filtered_PRS_LDpred-inf.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "true_phens", "raw_effects_prs", "pval_derived_effects_prs"))
+prs.cross.disorder <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/3_LDpred/Cross_Disorder/03_validate/pmb_info06_all_chr_merged_cross_disorder_filtered_PRS_LDpred-inf.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "true_phens", "raw_effects_prs", "pval_derived_effects_prs"))
+gr.score <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/4_TRPS/03_TRPS.txt", sep = "\t", header = T, stringsAsFactors = F, select = c("IID", "gr_score"))
+gr.score <- gr.score[!startsWith(gr.score$IID, "MD") & !endsWith(gr.score$IID, "ZNP")]
+gr.score <- gr.score[gr.score$IID %in% pData$IID]
+pData <- read.csv2("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/pData.csv", sep = ";", header = T, stringsAsFactors = F)
+head(pData)
+```
+
+# Plots
+
+```{r echo = F}
+# Add diagnosis column to the PRS
+prs.scz2 <- merge(prs.scz2, pData, by = "IID", all.x = T)
+prs.mdd2 <- merge(prs.mdd2, pData, by = "IID", all.x = T)
+prs.bip <- merge(prs.bip, pData, by = "IID", all.x = T)
+prs.adhd <- merge(prs.adhd, pData, by = "IID", all.x = T)
+prs.asd <- merge(prs.asd, pData, by = "IID", all.x = T)
+prs.bip.vs.scz <- merge(prs.bip.vs.scz, pData, by = "IID", all.x = T)
+prs.bip.scz.vs.ctl <- merge(prs.bip.scz.vs.ctl, pData, by = "IID", all.x = T)
+prs.gr.score <- merge(gr.score, pData, by = "IID", all.x = T)
+prs.ea <- merge(prs.ea, pData, by = "IID", all.x = T)
+prs.cd <- merge(prs.cross.disorder, pData, by = "IID", all.x = T)
+
+# get six colors (for plots)
+col <- viridis(20)
+
+# check data
+head(prs.scz2)
+head(prs.mdd2)
+
+prs.scz2 <- as.data.frame(prs.scz2)
+prs.scz2$Dx <- as.factor(prs.scz2$Dx)
+prs.scz2$Dx <- factor(prs.scz2$Dx, levels = c("CTL", "MDD", "BPD", "SCZ"))
+
+# Boxplots of SCZ2 PRS
+png("/home/karolina/Desktop/PhD/MPIP/workspace/genotype_data/boxplot_PRS_SCZ2.png", width = 10, height = 6, units = 'in', res = 300)
+ggplot(prs.scz2, aes(x = Dx, y = pval_derived_effects_prs, fill = Dx)) + 
+  geom_boxplot() + 
+  scale_fill_manual(values = c(col[3], col[6], col[11], col[17]), name = "Diagnosis") +
+  ggtitle("PRS based on SCZ2 summary statistic") + 
+  ylab("p-value derived effect prs") +
+  theme_grey(base_size = 18) +
+  theme(plot.title = element_text(hjust = 0.75), axis.title.x = element_blank(), axis.title.y = element_text(size=20))
+dev.off()
+
+# Histogram density plot
+ggplot(prs.scz2, aes(x = pval_derived_effects_prs, group = Dx, fill = as.character(Dx), colour = as.character(Dx))) + 
+  labs(title = "PRS based on SCZ2 summary statistic", x = "P-value derived effects PRS", y = "Density", color = "Phenotype")  + 
+  scale_color_manual(values = c(col[1], col[3], col[5], col[7])) +
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  labs(x = "P-value derived effects PRS", y = "Density") + 
+  geom_density(fill = NA) + theme() + geom_hline(yintercept = 0, colour = "white", size = 0.8)
+
+# Change prs.mdd2 from data.table to data.frame for releveling the Dx column
+prs.mdd2 <- as.data.frame(prs.mdd2)
+prs.mdd2$Dx <- as.factor(prs.mdd2$Dx)
+prs.mdd2$Dx <- factor(prs.mdd2$Dx, levels = c("CTL", "MDD", "BPD", "SCZ"))
+
+# Boxplots of MDD2 PRS
+png("/home/karolina/Desktop/PhD/MPIP/workspace/genotype_data/boxplot_PRS_MDD2.png", width = 10, height = 6, units = 'in', res = 300)
+ggplot(prs.mdd2, aes(x = Dx, y = pval_derived_effects_prs, fill = Dx)) + 
+  geom_boxplot() +
+  scale_fill_manual(values = c(col[3], col[6], col[11], col[17]), name = "Diagnosis") +
+  ggtitle("PRS based on MDD2 summary statistic") +
+  ylab("p-value derived effect prs") +
+  theme_grey(base_size = 18) +
+  theme(plot.title = element_text(hjust = 0.75), axis.title.x = element_blank(), axis.title.y = element_text(size=20))
+dev.off()
+
+# Change prs.bip from data.table to data.frame for releveling the Dx column
+prs.bip <- as.data.frame(prs.bip)
+prs.bip$Dx <- as.factor(prs.bip$Dx)
+prs.bip$Dx <- factor(prs.bip$Dx, levels = c("CTL", "MDD", "BPD", "SCZ"))
+
+# Boxplots of BIP-20182 PRS
+png("/home/karolina/Desktop/PhD/MPIP/workspace/genotype_data/boxplot_PRS_BIP_2018.png", width = 10, height = 6, units = 'in', res = 300)
+ggplot(prs.bip, aes(x = Dx, y = pval_derived_effects_prs, fill = Dx)) + 
+  geom_boxplot() +
+  scale_fill_manual(values = c(col[3], col[6], col[11], col[17]), name = "Diagnosis") +
+  ggtitle("PRS based on BIP 2018 summary statistic") +
+  ylab("p-value derived effect prs") +
+  theme_grey(base_size = 18) +
+  theme(plot.title = element_text(hjust = 0.75), axis.title.x = element_blank(), axis.title.y = element_text(size=20))
+dev.off()
+
+# Change prs.adhd from data.table to data.frame for releveling the Dx column
+prs.adhd <- as.data.frame(prs.adhd)
+prs.adhd$Dx <- as.factor(prs.adhd$Dx)
+prs.adhd$Dx <- factor(prs.adhd$Dx, levels = c("CTL", "MDD", "BPD", "SCZ"))
+
+# Boxplots of BIP-20182 PRS
+png("/home/karolina/Desktop/PhD/MPIP/workspace/genotype_data/boxplot_PRS_ADHD_2017.png", width = 10, height = 6, units = 'in', res = 300)
+ggplot(prs.adhd, aes(x = Dx, y = pval_derived_effects_prs, fill = Dx)) + 
+  geom_boxplot() +
+  scale_fill_manual(values = c(col[3], col[6], col[11], col[17]), name = "Diagnosis") +
+  ggtitle("PRS based on ADHD 2017 summary statistic") +
+  ylab("p-value derived effect prs") +
+  theme_grey(base_size = 18) +
+  theme(plot.title = element_text(hjust = 0.75), axis.title.x = element_blank(), axis.title.y = element_text(size=20))
+dev.off()
+
+# Change prs.asd from data.table to data.frame for releveling the Dx column
+prs.asd <- as.data.frame(prs.asd)
+prs.asd$Dx <- as.factor(prs.asd$Dx)
+prs.asd$Dx <- factor(prs.asd$Dx, levels = c("CTL", "MDD", "BPD", "SCZ"))
+
+# Boxplots of BIP-20182 PRS
+png("/home/karolina/Desktop/PhD/MPIP/workspace/genotype_data/boxplot_PRS_ASD.png", width = 10, height = 6, units = 'in', res = 300)
+ggplot(prs.asd, aes(x = Dx, y = pval_derived_effects_prs, fill = Dx)) + 
+  geom_boxplot() +
+  scale_fill_manual(values = c(col[3], col[6], col[11], col[17]), name = "Diagnosis") +
+  ggtitle("PRS based on ASD summary statistic") +
+  ylab("p-value derived effect prs") +
+  theme_grey(base_size = 18) +
+  theme(plot.title = element_text(hjust = 0.75), axis.title.x = element_blank(), axis.title.y = element_text(size=20))
+dev.off()
+
+# Change prs.bip.vs.scz from data.table to data.frame for releveling the Dx column
+prs.bip.vs.scz <- as.data.frame(prs.bip.vs.scz)
+prs.bip.vs.scz$Dx <- as.factor(prs.bip.vs.scz$Dx)
+prs.bip.vs.scz$Dx <- factor(prs.bip.vs.scz$Dx, levels = c("CTL", "MDD", "BPD", "SCZ"))
+
+# Boxplots of BIP-20182 PRS
+png("/home/karolina/Desktop/PhD/MPIP/workspace/genotype_data/boxplot_PRS_BIP_vs_SCZ.png", width = 10, height = 6, units = 'in', res = 300)
+ggplot(prs.bip.vs.scz, aes(x = Dx, y = pval_derived_effects_prs, fill = Dx)) + 
+  geom_boxplot() +
+  scale_fill_manual(values = c(col[3], col[6], col[11], col[17]), name = "Diagnosis") +
+  ggtitle("PRS based on BIP vs. SCZ summary statistic") +
+  ylab("p-value derived effect prs") +
+  theme_grey(base_size = 18) +
+  theme(plot.title = element_text(hjust = 0.75), axis.title.x = element_blank(), axis.title.y = element_text(size=20))
+dev.off()
+
+
+# Change prs.bip.scz.vs.ctl from data.table to data.frame for releveling the Dx column
+prs.bip.scz.vs.ctl <- as.data.frame(prs.bip.scz.vs.ctl)
+prs.bip.scz.vs.ctl$Dx <- as.factor(prs.bip.scz.vs.ctl$Dx)
+prs.bip.scz.vs.ctl$Dx <- factor(prs.bip.scz.vs.ctl$Dx, levels = c("CTL", "MDD", "BPD", "SCZ"))
+
+# Boxplots of BIP-20182 PRS
+png("/home/karolina/Desktop/PhD/MPIP/workspace/genotype_data/boxplot_PRS_BIP_SCZ_vs_CTL.png", width = 10, height = 6, units = 'in', res = 300)
+ggplot(prs.bip.scz.vs.ctl, aes(x = Dx, y = pval_derived_effects_prs, fill = Dx)) + 
+  geom_boxplot() +
+  scale_fill_manual(values = c(col[3], col[6], col[11], col[17]), name = "Diagnosis") +
+  ggtitle("PRS based on BIP+SCZ vs. CTL summary statistic") +
+  ylab("p-value derived effect prs") +
+  theme_grey(base_size = 18) +
+  theme(plot.title = element_text(hjust = 0.75), axis.title.x = element_blank(), axis.title.y = element_text(size=20))
+dev.off()
+
+# Change prs.gs.score from data.table to data.frame for releveling the Dx column
+prs.gr.score <- as.data.frame(prs.gr.score)
+prs.gr.score$Dx <- as.factor(prs.gr.score$Dx)
+prs.gr.score$Dx <- factor(prs.gr.score$Dx, levels = c("CTL", "MDD", "BPD", "SCZ"))
+
+# Boxplots of GR Score PRS
+png("/home/karolina/Desktop/PhD/MPIP/workspace/genotype_data/boxplot_PRS_gr_score.png", width = 10, height = 6, units = 'in', res = 300)
+ggplot(prs.gr.score, aes(x = Dx, y = gr_score, fill = Dx)) + 
+  geom_boxplot() +
+  scale_fill_manual(values = c(col[3], col[6], col[11], col[17]), name = "Diagnosis") +
+  ggtitle("Polygenic Risk based on GR Score") +
+  ylab("GR Score") +
+  theme_grey(base_size = 18) +
+  theme(plot.title = element_text(hjust = 0.75), axis.title.x = element_blank(), axis.title.y = element_text(size=20))
+dev.off()
+mean(prs.gr.score[prs.gr.score$Dx == "CTL", "gr_score"])
+
+# Change prs.ea from data.table to data.frame for releveling the Dx column
+prs.ea <- as.data.frame(prs.ea)
+prs.ea$Dx <- as.factor(prs.ea$Dx)
+prs.ea$Dx <- factor(prs.ea$Dx, levels = c("CTL", "MDD", "BPD", "SCZ"))
+
+# Boxplots of Educational Attainment (EA) PRS
+png("/home/karolina/Desktop/PhD/MPIP/workspace/genotype_data/boxplot_PRS_EA.png", width = 10, height = 6, units = 'in', res = 300)
+ggplot(prs.ea, aes(x = Dx, y = pval_derived_effects_prs, fill = Dx)) + 
+  geom_boxplot() +
+  scale_fill_manual(values = c(col[3], col[6], col[11], col[17]), name = "Diagnosis") +
+  ggtitle("PRS based on EA summary statistic") +
+  ylab("p-value derived effect prs") +
+  theme_grey(base_size = 18) +
+  theme(plot.title = element_text(hjust = 0.75), axis.title.x = element_blank(), axis.title.y = element_text(size=20))
+dev.off()
+
+# Change prs.cd from data.table to data.frame for releveling the Dx column
+prs.cd <- as.data.frame(prs.cd)
+prs.cd$Dx <- as.factor(prs.cd$Dx)
+prs.cd$Dx <- factor(prs.cd$Dx, levels = c("CTL", "MDD", "BPD", "SCZ"))
+
+# Boxplots of Educational Attainment (EA) PRS
+png("/home/karolina/Desktop/PhD/MPIP/workspace/genotype_data/boxplot_PRS_Cross_Disorder.png", width = 10, height = 6, units = 'in', res = 300)
+ggplot(prs.cd, aes(x = Dx, y = pval_derived_effects_prs, fill = Dx)) + 
+  geom_boxplot() +
+  scale_fill_manual(values = c(col[3], col[6], col[11], col[17]), name = "Diagnosis") +
+  ggtitle("PRS based on Cross Disorder summary statistic") +
+  ylab("p-value derived effect prs") +
+  theme_grey(base_size = 18) +
+  theme(plot.title = element_text(hjust = 0.75), axis.title.x = element_blank(), axis.title.y = element_text(size=20))
+dev.off()
+```
+
+### Correlation Plot
+
+```{r, echo = F}
+# 1. Load expression dataset + phenotype data
+load("/home/karolina/Desktop/PhD/MPIP/workspace/RData_Files/4_affymetrix_exon_microarray_data_after_rma_gene_summaries_annotated_combat_batch_corrected.RData")
+head(pData)
+# 2. Save only important columns of pData and add PRS
+pData <- pData[, c("IID", "Age", "Sex", "Dx", "pH", "PMI", "Suicide", "RIN", "C1", "C2", "C3", "C4")]
+pData$RIN2 <- pData$RIN^2
+# 3. Add PRS for different summary statistic files to pData
+prs.scz2 <- data.frame(IID = prs.scz2$IID, PRS_SCZ2 = prs.scz2$pval_derived_effects_prs)
+pData <- merge(pData, prs.scz2, by = "IID", all.x = T)
+prs.mdd2 <- data.frame(IID = prs.mdd2$IID, PRS_MDD2 = prs.mdd2$pval_derived_effects_prs)
+pData <- merge(pData, prs.mdd2, by = "IID", all.x = T)
+prs.bip <- data.frame(IID = prs.bip$IID, PRS_BIP = prs.bip$pval_derived_effects_prs)
+pData <- merge(pData, prs.bip, by = "IID", all.x = T)
+prs.adhd <- data.frame(IID = prs.adhd$IID, PRS_ADHD = prs.adhd$pval_derived_effects_prs)
+pData <- merge(pData, prs.adhd, by = "IID", all.x = T)
+prs.asd <- data.frame(IID = prs.asd$IID, PRS_ASD = prs.asd$pval_derived_effects_prs)
+pData <- merge(pData, prs.asd, by = "IID", all.x = T)
+prs.bip.vs.scz <- data.frame(IID = prs.bip.vs.scz$IID, PRS_BIPvsSCZ = prs.bip.vs.scz$pval_derived_effects_prs)
+pData <- merge(pData, prs.bip.vs.scz, by = "IID", all.x = T)
+prs.bip.scz.vs.ctl <- data.frame(IID = prs.bip.scz.vs.ctl$IID, PRS_BIPSCZvsCTL = prs.bip.scz.vs.ctl$pval_derived_effects_prs)
+pData <- merge(pData, prs.bip.scz.vs.ctl, by = "IID", all.x = T)
+prs.gr.score <- data.frame(IID = prs.gr.score$IID, PRS_GRScore = prs.gr.score$gr_score)
+pData <- merge(pData, prs.gr.score, by = "IID", all.x = T)
+prs.ea <- data.frame(IID = prs.ea$IID, PRS_EA = prs.ea$pval_derived_effects_prs)
+pData <- merge(pData, prs.ea, by = "IID", all.x = T)
+prs.cd <- data.frame(IID = prs.cd$IID, PRS_CD = prs.cd$pval_derived_effects_prs)
+pData <- merge(pData, prs.cd, by = "IID", all.x = T)
+# 4. Remove all rows including an NA in any column and remove the IID column (NOT needed for the corrplot!)
+pData.new <- pData[complete.cases(pData),]
+pData.new$IID <- NULL
+# 5. change BPD and MDD diagnosis in Dx to SCZ
+pData.new$Dx <- as.character(pData.new$Dx)  # change factor column to character
+pData.new[pData.new$Dx == "BPD" | pData.new$Dx == "MDD", "Dx"] <- "SCZ"  # change BPD and MDD to SCZ
+pData.new[, c("Sex", "Dx", "Suicide")] <- lapply(pData.new[, c("Sex", "Dx", "Suicide")], factor)
+#sapply(pData.new, class) # check type of columns
+# relevel disease (Dx) to control (CTL)
+pData.new$Dx <- factor(pData.new$Dx, levels = c("CTL", "SCZ"))
+# save categorical and continuous variable names
+classes <- sapply(pData.new, class) # get type of columns
+categorical.cov = names(classes[classes == "factor"])
+continuous.cov = names(classes[classes == "numeric"])
+# generate contrast for design matrix
+contrast <- lapply(categorical.cov, function(x) {fac = pData.new[, x]; return(contrasts(fac))})
+names(contrast) <- categorical.cov
+# generate design matrix
+design <- model.matrix(~ . + Age + Sex + Dx + pH + PMI + Suicide + RIN + RIN2 + C1 + C2 + C3 + C4 + PRS_SCZ2 + PRS_MDD2 + PRS_BIP + PRS_ADHD + PRS_ASD + PRS_BIPvsSCZ + PRS_BIPSCZvsCTL + PRS_GRScore + PRS_EA + PRS_CD, pData.new, contrasts.arg = contrast)
+design.cor <- corr.test(design[, -1], use='pairwise.complete.obs', method = "pearson", adjust = "none")
+corrplot(design.cor$r, method = "circle", col = viridis(200, direction = -1))
+# generate design matrix
+pData.new <- pData.new[, c("PRS_SCZ2", "PRS_MDD2", "PRS_BIP", "PRS_ADHD", "PRS_ASD", "PRS_BIPvsSCZ", "PRS_BIPSCZvsCTL", "PRS_GRScore", "PRS_EA", "PRS_CD")]
+design <- model.matrix(~ . + PRS_SCZ2 + PRS_MDD2 + PRS_BIP + PRS_ADHD + PRS_ASD + PRS_BIPvsSCZ + PRS_BIPSCZvsCTL + PRS_GRScore + PRS_EA + PRS_CD, pData.new, contrasts.arg = contrast)
+design
+design.cor <- corr.test(design[, -1], use='pairwise.complete.obs', method = "pearson", adjust = "none")
+corrplot(design.cor$r, method = "circle", col = viridis(200, direction = -1))
+```
+
+
+### Heatmap (Patients vs. PRScores)
+
+Für alle PRS:
+
+```{r, echo = F}
+# save only IID and PRS columns
+pData.new <- pData[, c("IID", "PRS_SCZ2", "PRS_MDD2", "PRS_BIP", "PRS_ADHD", "PRS_ASD", "PRS_BIPvsSCZ", "PRS_BIPSCZvsCTL", "PRS_GRScore", "PRS_EA", "PRS_CD")]
+# Remove all rows including an NA in any column and remove the IID column 
+pData.new <- pData.new[complete.cases(pData.new),]
+# set IIDs as rownames and remove IID column afterwards
+row.names(pData.new) <- pData.new$IID
+pData.new$IID <- NULL
+# generate heatmap
+samples <- as.data.frame(pData[, c("IID", "Dx")])
+samples <- samples[complete.cases(samples),]
+row.names(samples) <- samples$IID
+samples$IID <- NULL
+ann_colors = list(Dx = c(SCZ = viridis(20)[2], BPD = viridis(20)[6], MDD = viridis(20)[14], CTL = viridis(20)[19]))
+pheatmap(t(pData.new), scale = "row", annotation_col = samples, annotation_colors = ann_colors) #, color = viridis(200))
+```
+
+Nur für SCZ2, MDD2 and BIP PRS:
+
+```{r, echo = F}
+# save only IID and PRS columns
+pData.new <- pData[, c("IID", "PRS_SCZ2", "PRS_MDD2", "PRS_BIP")]
+# Remove all rows including an NA in any column and remove the IID column 
+pData.new <- pData.new[complete.cases(pData.new),]
+# set IIDs as rownames and remove IID column afterwards
+row.names(pData.new) <- pData.new$IID
+pData.new$IID <- NULL
+# generate heatmap
+samples <- as.data.frame(pData[, c("IID", "Dx")])
+samples <- samples[complete.cases(samples),]
+row.names(samples) <- samples$IID
+samples$IID <- NULL
+ann_colors = list(Dx = c(SCZ = viridis(20)[2], BPD = viridis(20)[6], MDD = viridis(20)[14], CTL = viridis(20)[19]))
+pheatmap(t(pData.new), scale = "row", annotation_col = samples, annotation_colors = ann_colors) #, color = viridis(200))
+```
+
+
+# Session Info
+
+```{r, eval = F}
+sessionInfo()
+```
