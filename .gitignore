@@ -1,2 +1,4 @@
 *.Rout
-
+*.RData
+*.RDataTmp
+*.Rhistory
