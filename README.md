@@ -2,17 +2,19 @@ Analysis of postmortem brain samples coming from healthy controls (CTL) and pati
 
 Following analyses will be performed: 
 
-1. **Differential expression (DE) analysis**
+1. **GWAS**
+2. **Polygenic Risk Score (PRS) calculation**
+  - Pre-processing of cohort, genotype data and GWAS summary statistics
+  - Run LDpred
+  - Evaluate and plot results
+3. **GRScore**
+4. **Differential expression (DE) analysis**
   - Pre-processing of Affymetrix microarray data
   - QC and figures
   - Covariate evaluation and selection
-  - DE analysis  
-2. **Polygenic Risk Score (PRS) calculation**
-  - Pre-processing of genotype data
-  - Run LDpred
-  - Evaluate and plot results
-3. **eQTL analysis**
+  - DE analysis
+5. **eQTL analysis**
   - Pre-processing of genotype, gene expression and covariate data
   - Run MatrixEQTL
   - Evaluate and plot results
-4. **Co-expression analysis**
+6. **Co-expression analysis**
