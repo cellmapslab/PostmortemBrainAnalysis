@@ -1,3 +1,7 @@
+/01_Preprocessing_cache/*
+/01_Preprocessing_cache/latex/*
+*.html
+*.log
 *.Rout
 *.RData
 *.RDataTmp
