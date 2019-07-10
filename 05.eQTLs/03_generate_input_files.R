@@ -11,7 +11,7 @@ library(rtracklayer)
 ### 1. Gene eQTL Input Files ###
 ################################
 # Load gene expression data
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/4_affymetrix_exon_microarray_data_after_rma_core_gene_summaries_annotated_combat_batch_corrected.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_core_gene_summaries_filtered_annotated_batch_corrected.RData")
 # As we have some missing values in the phenotype data, 33 mds (C1-C10) and 2 Type_of_Death values, 
 # we first need to remove them from the microarrays as well as the phenotype dataset.
 # remove all samples with C1 = NA from phenotype data and gene expression data
@@ -143,16 +143,16 @@ cov <- cov[, order(colnames(cov))]
 dim(cov)
 
 # Covariates: check if samples overlap to snps and gene expression
-identical(colnames(cov), colnames(snps))
+identical(colnames(cov[,-1]), colnames(snps))
 cov <- data.table(cov, keep.rownames = T)
 
 # Save covariates into a new file
 fwrite(cov, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/01_pmb_cov_SCZ_CTL.txt", row.names = F, col.names = T, sep = "\t", quote = F)
 
-########################
-### ONLY SCZ SAMPLES ###
-########################
-# get all SCZ cases (68 samples)
+##########################
+### ONLY CASE SAMPLES ###
+#########################
+# get all cases (107 samples)
 cov2 <- as.data.frame(cov)  # change data.table to data.frame
 rownames(cov2) <- cov2$rn # get rownames
 cov2$rn <- NULL # remove rn column
@@ -220,7 +220,7 @@ fwrite(ctl.expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.
 ### 2. Exon eQTL Input Files ###
 ################################
 # Load gene expression data
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/4_affymetrix_exon_microarray_data_after_rma_exon_summaries_annotated_combat_batch_corrected.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_exon_summaries_annotated_batch_corrected.RData")
 
 # As we have some missing values in the phenotype data, 33 mds (C1-C10) and 2 Type_of_Death values, 
 # we first need to remove them from the microarrays as well as the phenotype dataset.
@@ -257,13 +257,13 @@ write.table(exonspos, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brai
 ### ALL SAMPLES ###
 ###################
 # 2. Generate Exon Expression Dataset
-# Get Gene expression data
+# Get exon expression data
 expr <- exprs(exonSummaries)
 expr[1:6, 1:6]
 # check if exon ID order is the same as in exonspos
 identical(unique(rownames(expr)), as.character(exonspos$geneid))# Gene expression: get overlapping samples to snps data
 cols <- colnames(snps)  # get new colnames of snps
-expr <- data.table(expr[, colnames(expr) %in% cols], keep.rownames = TRUE)  # get same samples for gene expression dataset
+expr <- data.table(expr[, colnames(expr) %in% cols], keep.rownames = TRUE)  # get same samples for exon expression dataset
 setcolorder(expr, c("rn", sort(colnames(expr)[-1])))
 head(expr)
 identical(colnames(expr)[-1], cols)
@@ -271,12 +271,13 @@ identical(colnames(expr)[-1], cols)
 # Save gene expression data into a new file
 fwrite(expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/01_pmb_exon_expr_SCZ_CTL.txt", row.names = F, col.names = T, sep = "\t", quote = F)
 
-########################
-### ONLY SCZ SAMPLES ###
-########################
+#########################
+### ONLY CASE SAMPLES ###
+#########################
 # get exon expression data for SCZ (CASE) samples
 scz.exon.expr <- subset(expr, , scz.samples)
 head(scz.exon.expr)
+
 # save gene expression into a file
 fwrite(scz.exon.expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/02_pmb_exon_expr_SCZ.txt", row.names = F, col.names = T, sep = "\t", quote = F)
 
@@ -289,3 +290,76 @@ head(ctl.exon.expr)
 # save gene expression into a file
 fwrite(ctl.exon.expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/03_pmb_exon_expr_CTL.txt", row.names = F, col.names = T, sep = "\t", quote = F)
 
+
+######################################
+### 3. Transcript eQTL Input Files ###
+######################################
+# Load gene expression data
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_transcript_summaries_annotated_batch_corrected.RData")
+
+# As we have some missing values in the phenotype data, 33 mds (C1-C10) and 2 Type_of_Death values, 
+# we first need to remove them from the microarrays as well as the phenotype dataset.
+# remove all samples with C1 = NA from phenotype data and gene expression data
+index <- which(is.na(pData(transcriptSummaries)$C1))
+transcriptSummaries <- transcriptSummaries[, -c(index)]
+# remove all samples with Type_of_Death = NA from phenotype data and gene expression data
+index <- which(is.na(pData(transcriptSummaries)$Type_of_Death))
+transcriptSummaries <- transcriptSummaries[, -c(index)]
+# check dim of transcriptSummaries (35 rows should be removed => 169 samples left)
+dim(transcriptSummaries)
+pData <- pData(transcriptSummaries)
+pData$ShortName <- factor(pData$ShortName, levels = pData$ShortName)
+
+################################
+### GET Transcript POSITIONS ###
+################################
+# Get exon symbols, chr, start and end pos
+transpos <- transcriptSummaries@featureData@data[, c("transcript_id", "location")]
+transpos$chr <- sapply(strsplit(transpos$location, ':'), "[", 1)
+transpos$chr <- sapply(strsplit(transpos$chr, 'r'), "[", 2)
+transpos$loc <- sapply(strsplit(transpos$location, ':'), "[", 2)
+transpos$start <- sapply(strsplit(transpos$loc, '-'), "[", 1)
+transpos$end <- sapply(strsplit(transpos$loc, '-'), "[", 2)
+transpos <- transpos[, c("transcript_id", "chr", "start", "end")]
+colnames(transpos) <- c("geneid", "chr", "start", "end")
+head(transpos)
+# check, if we now really have the same exons with locations
+identical(transpos$geneid, rownames(exprs(transcriptSummaries)))
+# save data into a file
+write.table(transpos, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/transcript_locations.txt", col.names = T, row.names = F, sep = "\t", quote = F)
+
+###################
+### ALL SAMPLES ###
+###################
+# 2. Generate transcript Expression Dataset
+# Get transcript expression data
+expr <- exprs(transcriptSummaries)
+expr[1:6, 1:6]
+# check if exon ID order is the same as in transpos
+identical(unique(rownames(expr)), as.character(transpos$geneid))# Transcript expression: get overlapping samples to snps data
+cols <- colnames(snps)  # get new colnames of snps
+expr <- data.table(expr[, colnames(expr) %in% cols], keep.rownames = TRUE)  # get same samples for gene expression dataset
+setcolorder(expr, c("rn", sort(colnames(expr)[-1])))
+head(expr)
+identical(colnames(expr)[-1], cols)
+
+# Save transcript expression data into a new file
+fwrite(expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/01_pmb_transcript_expr_SCZ_CTL.txt", row.names = F, col.names = T, sep = "\t", quote = F)
+
+#########################
+### ONLY CASE SAMPLES ###
+#########################
+# get transcript expression data for SCZ (CASE) samples
+scz.transcript.expr <- subset(expr, , scz.samples)
+head(scz.transcript.expr)
+# save gene expression into a file
+fwrite(scz.transcript.expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/02_pmb_transcript_expr_SCZ.txt", row.names = F, col.names = T, sep = "\t", quote = F)
+
+########################
+### ONLY CTL SAMPLES ###
+########################
+# get gene expression data for CTL samples
+ctl.transcript.expr <- subset(expr, , ctl.samples)
+head(ctl.transcript.expr)
+# save gene expression into a file
+fwrite(ctl.transcript.expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/03_pmb_transcript_expr_CTL.txt", row.names = F, col.names = T, sep = "\t", quote = F)

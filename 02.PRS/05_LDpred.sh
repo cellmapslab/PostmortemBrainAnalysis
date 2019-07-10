@@ -14,7 +14,8 @@ The script runs only on bash!!! (not shell "sh")
 
 Usage: LDpred.sh -g <path/to/get/plink-geno-files> -s <path/to/sumstats> -n <number-of-individuals> -o <path/to/store/output-files> -t <path/to/LDpred>
 
--g  --genotypes   path and file name prefix (without file ending) of the plink formatted genotype files (e.g. pmb_info06_all_chr_merged_mdd2_filtered)
+-g  --genotypes   path and file name prefix (without file ending) of the plink formatted genotype files (e.g. pmb_info06_all_chr_merged_scz2_filtered)
+-c  --cohort      path and file name prefix (without file ending) of the plnk formatted cohort genotype files (e.g. 03_updateMap_all_chr_merged_scz2_filtered)
 -s  --sumstats    path and file name of the GWAS summary statistics file (e.g. MDD2_2018_filtered.sumstats) 
 -n  --num         number of individuals (sample size) used to generate the GWAS summary statistics (e.g. 20,000 cases and 30,000 controls: N = 50,000)
 -f  --ssformat    format to use for the summary statistics file in the coord_genotypes.py script (e.g. STANDARD, BASIC, GIANT, GIANT2, DECODE, PGC, PGC_large)
@@ -29,6 +30,7 @@ optional:
 
 # Define empty input variables
 genotypes=  # path and file name prefix of the plink formated genotype files
+cohort=  # path and file name prefix of the plink formatted cohort files
 sumstats=  # path and file name of the GWAS summary statistics file
 out_path=  # directory, to store the output files into, here: /storage/groups/groups_ccm/workspace/MPIP-Dean_postmortem_brain/genotype_data/3_LDpred"
 tools_path=  # path to the tools needed for the script 
@@ -48,6 +50,9 @@ while [ "$1" != "" ]; do
     case $1 in
         -g | --genotypes )  shift
                             genotypes=$1
+                            ;;
+        -c | --cohort )     shift
+                            cohort=$1
                             ;;
         -s | --sumstats )   shift
                             sumstats=$1
@@ -75,7 +80,7 @@ done
 
 
 # Check, if all necessary parameters are given
-if [ $genotypes ] && [ $sumstats ] && [ $nums ] && [ $format ] && [ $out_path ] && [ $tools_path ]; then
+if [ $genotypes ] && [ $cohort ] && [ $sumstats ] && [ $nums ] && [ $out_path ] && [ $tools_path ]; then
 
     # Print the server name on which the job is running on the grid
     echo ">>> Start pipeline on $HOSTNAME <<<"
@@ -91,7 +96,7 @@ if [ $genotypes ] && [ $sumstats ] && [ $nums ] && [ $format ] && [ $out_path ] 
     #echo "Calculated radius for ${sumstats}: $radius"
 
     # Second, we need the genotype file name prefix (no file ending) without the path 
-    out_file_name=${genotypes##*/}
+    out_file_name=${cohort##*/}
     #echo $out_file_name
     
     # Third, we need to remove the output file of coord_genotypes.py, if it already exists (does not work otherwise...)
@@ -100,15 +105,15 @@ if [ $genotypes ] && [ $sumstats ] && [ $nums ] && [ $format ] && [ $out_path ] 
     fi
 
     # 1. Run coord_genotypes.py
-    ${tools_path}/ldpred-master/LDpred.py coord --gf ${genotypes} --ssf ${sumstats} --N ${nums} --out ${out_path}/01_coord/${out_file_name}.coord_file --ssf_format $format &> ${out_path}/01_coord/coord_genotypes.log
-    echo "coord_genotypes.py done"
+    ${tools_path}/ldpred-master/LDpred.py coord --gf $cohort --ssf ${sumstats} --N ${nums} --vgf ${genotypes} --ssf-format $format --out ${out_path}/01_coord/${out_file_name}.coord_file &> ${out_path}/01_coord/coord_genotypes.log
+    echo "coord_genotypes.py done"  # --ssf-format $format
 
     # 2. Run LDpred: change causal fraction back to PS = 1,0.3,0.1,0.03,0.01,0.003,0.001,0.0003,0.0001
-    ${tools_path}/ldpred-master/LDpred.py gibbs --coord=${out_path}/01_coord/${out_file_name}.coord_file --ld_radius=${radius} --local_ld_file_prefix=${out_path}/02_LDpred/${out_file_name} --PS=1,0.3,0.1,0.03,0.01,0.003,0.001,0.0003,0.0001 --N=${nums} --out=${out_path}/02_LDpred/${out_file_name} &> ${out_path}/02_LDpred/LDpred.log
+    ${tools_path}/ldpred-master/LDpred.py gibbs --cf ${out_path}/01_coord/${out_file_name}.coord_file --ldr ${radius} --f 1 0.3 0.1 0.03 0.01 0.003 0.001 --ldf ${out_path}/02_LDpred/${out_file_name} --N ${nums} --out ${out_path}/02_LDpred/${out_file_name} &> ${out_path}/02_LDpred/LDpred.log
     echo "LDpred.py done"
 
     # 3. Run Validation (get score for each patient)
-    ${tools_path}/ldpred-master/LDpred.py score --gf=${genotypes} --rf=${out_path}/02_LDpred/${out_file_name} --pf=/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/phenotypes.txt --PS=1,0.3,0.1 --out=${out_path}/03_validate/${out_file_name}_PRS &> ${out_path}/03_validate/validate.log
+    ${tools_path}/ldpred-master/LDpred.py score --gf ${genotypes} --rf ${out_path}/02_LDpred/${out_file_name} --f 1 0.3 0.1 0.03 0.01 0.003 0.001 --pf /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/phenotypes.txt --out ${out_path}/03_validate/${out_file_name}_PRS &> ${out_path}/03_validate/validate.log
     echo "validate.py done"
 
     # Print that the job is done

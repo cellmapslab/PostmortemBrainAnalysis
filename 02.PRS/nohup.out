@@ -1,0 +1,52 @@
+>>> Start pipeline on biogrid-003.scidom.de <<<
+>>> Start pipeline on biogrid-003.scidom.de <<<
+coord_genotypes.py done
+coord_genotypes.py done
+LDpred.py done
+LDpred.py done
+validate.py done
+!!!Done with LDpred of 03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_bip_filtered!!!
+validate.py done
+!!!Done with LDpred of 03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_mdd2_filtered!!!
+>>> Start pipeline on biogrid-003.scidom.de <<<
+>>> Start pipeline on biogrid-003.scidom.de <<<
+coord_genotypes.py done
+coord_genotypes.py done
+LDpred.py done
+LDpred.py done
+validate.py done
+!!!Done with LDpred of 03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_bip_vs_scz_filtered!!!
+validate.py done
+!!!Done with LDpred of 03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_bip_scz_vs_cont_filtered!!!
+>>> Start pipeline on biogrid-003.scidom.de <<<
+>>> Start pipeline on biogrid-003.scidom.de <<<
+coord_genotypes.py done
+LDpred.py done
+validate.py done
+!!!Done with LDpred of 03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_adhd_filtered!!!
+coord_genotypes.py done
+>>> Start pipeline on biogrid-003.scidom.de <<<
+>>> Start pipeline on biogrid-003.scidom.de <<<
+coord_genotypes.py done
+coord_genotypes.py done
+LDpred.py done
+validate.py done
+!!!Done with LDpred of 03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_asd_filtered!!!
+LDpred.py done
+validate.py done
+!!!Done with LDpred of 03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_adhd_filtered!!!
+>>> Start pipeline on biogrid-003.scidom.de <<<
+>>> Start pipeline on biogrid-003.scidom.de <<<
+coord_genotypes.py done
+LDpred.py done
+validate.py done
+!!!Done with LDpred of 03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_bmi_filtered!!!
+coord_genotypes.py done
+LDpred.py done
+validate.py done
+!!!Done with LDpred of 03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_ea_filtered!!!
+>>> Start pipeline on biogrid-003.scidom.de <<<
+coord_genotypes.py done
+LDpred.py done
+validate.py done
+!!!Done with LDpred of 03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_cd_filtered!!!

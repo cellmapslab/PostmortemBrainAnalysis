@@ -1,0 +1,318 @@
+---
+title: "eQTL Figure Generation"
+author:
+  - name: Karolina Worf
+    affiliation: 
+    - Institute of Computational Biology, Helmholtz Zentrum München, Neuherberg 85764, Germany
+    - TUM School of Life Sciences Weihenstephan, Technical University of Munich, Freising 85354, Germany
+    email: karolina.worf@helmholtz-muenchen.de
+header-includes:
+  - \usepackage{float}
+  - \usepackage{graphicx, multicol}
+date: "`r doc_date()`"
+abstract: In this R markdown file, we will provide the quality control and plot generation of the raw, normalized, and batch corrected data generated in the Microarray Preprocessing Pipeline.
+output: 
+    BiocStyle::pdf_document:
+      toc: true
+      number_sections: true
+editor_options: 
+  chunk_output_type: console
+vignette: >
+  %\VignetteIndexEntry{Quality Control of the Affymetrix Microarrays}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+---
+
+```{r knitrOptions, include = F}
+library(BiocStyle)
+require(knitr)
+options(stringsAsFactors = T)
+opts_chunk$set(echo = TRUE,
+               fig.pos = "H",
+               dpi = 300,
+               warning = FALSE, 
+               message = FALSE, 
+               cache = TRUE, 
+               cache.lazy = FALSE)
+```
+
+<p>
+**R version**: `r R.version.string`
+<br />
+**Bioconductor version**: `r BiocInstaller::biocVersion()`
+</p>
+
+
+# Load Packages
+
+```{r}
+library(viridis)
+library(UpSetR)
+library(data.table)
+library(ggplot2)
+library(qqman)
+library(beadarray)
+options(bitmapType='cairo')
+```
+
+# Gene eQTLs
+
+## Load data
+
+```{r, results='hide'}
+data <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/01_pmb_SCZ_CTL_matrixEQTL_cis_results_genes.txt", header = T, stringsAsFactors = F, select = c("SNP", "gene", "FDR"))
+cis.genes.all <- data[data$FDR < 0.05,  ]  # filter for only eQTLs with p-value < 0.01
+
+data <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/01_pmb_SCZ_CTL_matrixEQTL_cis_results_exons.txt", header = T, stringsAsFactors = F, select = c("SNP", "gene", "FDR"))
+cis.exons.all <- data[data$FDR < 0.05,   ]  # filter for only eQTLs with p-value < 0.01
+
+data <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/02_pmb_SCZ_matrixEQTL_cis_results_genes.txt", header = T, stringsAsFactors = F, select = c("SNP", "gene", "FDR"))
+cis.genes.cases <- data[data$FDR < 0.05,   ]  # filter for only eQTLs with p-value < 0.01
+
+data <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/02_pmb_SCZ_matrixEQTL_cis_results_exons.txt", header = T, stringsAsFactors = F, select = c("SNP", "gene", "FDR"))
+cis.exons.cases <- data[data$FDR < 0.05,  ]  # filter for only eQTLs with p-value < 0.01
+
+rm(data)
+```
+
+## Load SNP And Gene Positions
+
+As we need the SNP and gene position for all matrixEQTL runs, we will load them in the beginning, so that we do not have to repeat this step over and over again.
+
+```{r}
+# MatrixEQTL does not work without giving the tool the SNP and gene position. 
+snpspos <- read.table("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/SNP_locations.txt", header = T, stringsAsFactors = FALSE, sep = "\t") # snp chr pos
+head(snpspos)
+genepos <- read.table("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/gene_locations.txt", header = T, stringsAsFactors = FALSE, sep = "\t") # geneid chr start end
+head(genepos)
+```
+
+
+## Significant Hits
+
+Second, we will save only significant cis-eQTLs (FDR < 0.05).
+
+```{r, results='hide'}
+eqtls.genes.all <- cis.genes.all[cis.genes.all$FDR < 0.05, ]
+eqtls.genes.cases <- cis.genes.cases[cis.genes.cases$FDR < 0.05, ]
+eqtls.exons.all <- cis.exons.all[cis.exons.all$FDR < 0.05, ]
+eqtls.exons.cases <- cis.exons.cases[cis.exons.cases$FDR < 0.05, ]
+# upset plot all SNPs
+eqtls.snps <- list(genes_all = eqtls.genes.all$SNP, genes_cases_only = eqtls.genes.cases$SNP, exons_all = eqtls.exons.all$SNP, exons_cases_only = eqtls.exons.cases$SNP)
+png("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/upset_plot_cis_eqtls_snps.png", width = 1000, height = 600, type = "cairo")
+upset(fromList(eqtls.snps), mainbar.y.label = "# SNPs", text.scale = 2)
+dev.off()
+# upset plot all genes
+# first we need to map exon ids to gene ids
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/4_affymetrix_exon_microarray_data_after_rma_exon_summaries_annotated_combat_batch_corrected.RData")
+map <- fData(exonSummaries)[, c("exon_id", "gene_name")]
+exons.all <- merge(eqtls.exons.all, map, by.x = "gene", by.y = "exon_id", all.x = T)
+exons.cases <- merge(eqtls.exons.cases, map, by.x = "gene", by.y = "exon_id", all.x = T)
+eqtls.genes <- list(genes_all = eqtls.genes.all$gene, genes_cases_only = eqtls.genes.cases$gene, exons_all = exons.all$gene_name, exons_cases_only = exons.cases$gene_name)
+png("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/upset_plot_cis_eqtls_genes.png", width = 1000, height = 600, type = "cairo")
+upset(fromList(eqtls.genes), mainbar.y.label = "# genes", text.scale = 2)
+dev.off()
+```
+
+Third, we will check the number of found eQTLs and unique gene names in all datasets.
+
+|                         | Only SCZ | Only CTL | ALL | 
+|-------------------------|----------|----------|-----------|
+| all cis-eQTLs           | `r length(me.scz$cis$eqtls$FDR)` | `r length(me.ctl$cis$eqtls$FDR)` | `r length(me.all$cis$eqtls$FDR)` |
+| all unique genes        | `r length(unique(sort(me.scz$cis$eqtls$gene)))` | `r length(unique(sort(me.ctl$cis$eqtls$gene)))` | `r length(unique(sort(me.all$cis$eqtls$gene)))` |
+| FDR < 0.05 cis-eQTLs    | `r length(eqtls.scz$snps)` | `r length(eqtls.ctl$snps)` | `r length(eqtls.all$snps)`
+| FDR < 0.05 unique genes | `r length(unique(sort(eqtls.scz$gene)))` | `r length(unique(sort(eqtls.ctl$gene)))` | `r length(unique(sort(eqtls.all$gene)))` |
+
+
+## Calculate Distances Between SNPs and Genes in eQTLs
+
+```{r, results='hide'}
+### SCZ ###
+# add SNP chromosome and position
+eqtls.scz <- merge(cis.genes.all, snpspos, by.x = "SNP", by.y = "snp", all.x = T)
+# add gene chromosome and start and end positions
+eqtls.scz <- merge(eqtls.scz, genepos, by.x = "gene", by.y = "geneid")
+# check, if chromosomes of SNP and gene are equal
+chromosomes <- eqtls.scz[, c("chr.x", "chr.y")]
+chromosomes[!duplicated(chromosomes),] # check visually if the chromosomes are exactly the same => TRUE
+eqtls.scz <- eqtls.scz[complete.cases(eqtls.scz), ]
+write.table(eqtls.scz, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/5_matrix_EQTL/results/gene_cis_eqtls_cases_hits.txt", sep = "\t")
+# get distance between gene and SNP
+dist.scz <- unlist(lapply(1:length(eqtls.scz$gene), function(x) if(as.numeric(eqtls.scz[x, "pos"]) < as.numeric(eqtls.scz[x, "start"])){ print(as.numeric(eqtls.scz[x, "pos"]) - as.numeric(eqtls.scz[x, "start"]))} else if(as.numeric(eqtls.scz[x, "pos"]) > as.numeric(eqtls.scz[x, "end"])){print(as.numeric(eqtls.scz[x, "pos"]) - as.numeric(eqtls.scz[x, "end"]))} else {print(0)}))
+#dist.scz <- abs(dist.scz)
+pdf("/home/icb/karolina.worf/barplot_distances_gene_eqtls.pdf", height = 5)
+hist(dist.scz[dist.scz != 0], breaks = 40, xlab = "Distance of gene eQTL-variant to TSS and TES", ylab = "Frequency", main = "", col = viridis(1))
+dev.off()
+# with percentages
+h = hist(dist.scz, breaks = 40) # or hist(x,plot=FALSE) to avoid the plot of the histogram
+h$density = h$counts/sum(h$counts)*100
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/hist_gene_cis_eqtls_cases.pdf")
+plot(h, freq = FALSE, xlab = "Distance of eQTL-variant to TSS and TES", ylab = "Frequency", main = "", cex.axis = 1.4, cex.lab = 1.5, col = viridis(1), xaxt = "n")
+axis(1, at = seq(-1e+06, 1e+06, by = 5e+05), las = 1, labels=c("-1000","-500", "0","500","1000"), cex.axis = 1.4)
+dev.off()
+
+
+### CTL ###
+# add SNP chromosome and position
+eqtls.ctl <- merge(eqtls.ctl, snpspos, by.x = "snps", by.y = "snp", all.x = T)
+# add gene chromosome and start and end positions
+eqtls.ctl <- merge(eqtls.ctl, genepos, by.x = "gene", by.y = "geneid")
+eqtls.ctl <- eqtls.ctl[complete.cases(eqtls.ctl), ]
+write.table(eqtls.ctl, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/5_matrix_EQTL/results/gene_cis_eqtls_controls_hits.txt", sep = "\t")
+# get distance between gene and SNP
+dist.ctl <- unlist(lapply(1:length(eqtls.ctl$gene), function(x) if(as.numeric(eqtls.ctl[x, "pos"]) < as.numeric(eqtls.ctl[x, "start"])){ print(as.numeric(eqtls.ctl[x, "pos"]) - as.numeric(eqtls.ctl[x, "start"]))} else if(as.numeric(eqtls.ctl[x, "pos"]) > as.numeric(eqtls.ctl[x, "end"])){print(as.numeric(eqtls.ctl[x, "pos"]) - as.numeric(eqtls.ctl[x, "end"]))} else {print(0)}))
+hist(dist.ctl, breaks = 40, xlab = "Distance of eQTL-variant to TSS and TES", ylab = "Frequency", main = "", col = viridis(1))
+# with percentages
+h = hist(dist.ctl, breaks = 40) # or hist(x,plot=FALSE) to avoid the plot of the histogram
+h$density = h$counts/sum(h$counts)*100
+#bitmap("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/hist_gene_cis_eqtls_controls.png", "png16m")
+plot(h, freq = FALSE, xlab = "Distance of eQTL-variant to TSS and TES", ylab = "Frequency", main = "", cex.axis = 1.4, cex.lab = 1.5, col = viridis(1), xaxt = "n")
+axis(1, at = seq(-1e+06, 1e+06, by = 5e+05), las = 1, labels=c("-1000","-500", "0","500","1000"), cex.axis = 1.4)
+#dev.off()
+### ALL ###
+# add SNP chromosome and position
+eqtls.all <- merge(eqtls.all, snpspos, by.x = "snps", by.y = "snp", all.x = T)
+# add gene chromosome and start and end positions
+eqtls.all <- merge(eqtls.all, genepos, by.x = "gene", by.y = "geneid")
+eqtls.all <- eqtls.all[complete.cases(eqtls.all), ]
+write.table(eqtls.all, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/5_matrix_EQTL/results/gene_cis_eqtls_all_hits.txt", sep = "\t")
+# get distance between gene and SNP
+dist.all <- unlist(lapply(1:length(eqtls.all$gene), function(x) if(as.numeric(eqtls.all[x, "pos"]) < as.numeric(eqtls.all[x, "start"])){ print(as.numeric(eqtls.all[x, "pos"]) - as.numeric(eqtls.all[x, "start"]))} else if(as.numeric(eqtls.all[x, "pos"]) > as.numeric(eqtls.all[x, "end"])){print(as.numeric(eqtls.all[x, "pos"]) - as.numeric(eqtls.all[x, "end"]))} else {print(0)}))
+hist(dist.all, breaks = 40, xlab = "Distance of eQTL-variant to TSS and TES", ylab = "Frequency", main = "", col = viridis(1))
+# with percentages
+h = hist(dist.all, breaks = 40) # or hist(x,plot=FALSE) to avoid the plot of the histogram
+h$density = h$counts/sum(h$counts)*100
+#bitmap("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/hist_gene_cis_eqtls_all.png", "png16m")
+plot(h, freq = FALSE, xlab = "Distance of eQTL-variant to TSS and TES", ylab = "Frequency", main = "", cex.axis = 1.4, cex.lab = 1.5, col = viridis(1), xaxt = "n")
+axis(1, at = seq(-1e+06, 1e+06, by = 5e+05), las = 1, labels=c("-1000","-500", "0","500","1000"), cex.axis = 1.4)
+#dev.off()
+```
+
+|                          | Only SCZ | Only CTL | ALL | 
+|--------------------------|----------|----------|-----------|
+| significant cis-eQTLs    | `r length(eqtls.scz$gene)` | `r length(eqtls.ctl$gene)` | `r length(eqtls.all$gene)` | 
+| eQTLs lying on gene      | `r length(dist.scz[dist.scz == 0])` | `r length(dist.ctl[dist.ctl == 0])` | `r length(dist.all[dist.all == 0])` | 
+| min distance all         | `r min(dist.scz)` | `r min(dist.ctl)` | `r min(dist.all)` | 
+| min distance not on gene | `r min(dist.scz[dist.scz != 0])` | `r min(dist.ctl[dist.ctl != 0])` | `r min(dist.all[dist.all != 0])` | 
+| max distance             | `r max(dist.scz)` | `r max(dist.ctl)` | `r max(dist.all)` | 
+| mean distance            | `r mean(dist.scz)` | `r mean(dist.ctl)` | `r mean(dist.all)` | 
+| median distance          | `r median(dist.scz)` | `r median(dist.ctl)` | `r median(dist.all)` |
+
+
+## Plots
+
+### Upset plots of significant eQTL results
+
+Upset plots (like VENN) to compare the datasets with each other:
+
+```{r}
+eqtls.all.name <- paste(eqtls.all$snps, eqtls.all$gene)
+eqtls.ctl.name <- paste(eqtls.ctl$snps, eqtls.ctl$gene)
+eqtls.scz.name <- paste(eqtls.scz$snps, eqtls.scz$gene)
+eqtls <- list(all = eqtls.all.name, cases_only = eqtls.scz.name, controls_only = eqtls.ctl.name)
+#png("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/upset_gene_cis_eqtls.png", width = 1000, height = 600)
+upset(fromList(eqtls), mainbar.y.label = "# genes", text.scale = 2)
+#dev.off()
+eqtl.genes <- list(all = eqtls.all$gene, cases_only = eqtls.scz$gene, controls_only = eqtls.ctl$gene)
+#png("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/upset_gene_cis_eqtls_all_genes.png", width = 1000, height = 600)
+upset(fromList(eqtl.genes), mainbar.y.label = "# genes", text.scale = 2)
+#dev.off()
+```
+
+### Manhattan Plots
+
+1. The easy way using the qqman package:
+
+```{r}
+# for all
+all <- merge(me.all$cis$eqtls, snpspos, by.x = "snps", by.y = "snp", all.x = T)
+all <- all[complete.cases(all), ]
+#png("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/manhattan_plot_gene_cis_eqtls_all.png")
+manhattan(all, chr = "chr", bp = "pos", snp = "snps", p = "pvalue")
+#dev.off()
+# for SCZ only
+cases <- merge(me.scz$cis$eqtls, snpspos, by.x = "snps", by.y = "snp", all.x = T)
+cases <- cases[complete.cases(cases), ]
+#png("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/manhattan_plot_gene_cis_eqtls_cases.png")
+manhattan(cases, chr = "chr", bp = "pos", snp = "snps", p = "pvalue")
+#dev.off()
+# for CTL only
+controls <- merge(me.ctl$cis$eqtls, snpspos, by.x = "snps", by.y = "snp", all.x = T)
+controls <- controls[complete.cases(controls), ]
+#bitmap("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/manhattan_plot_gene_cis_eqtls_controls.png", "png16m")
+manhattan(controls, chr = "chr", bp = "pos", snp = "snps", p = "pvalue")
+#dev.off()
+```
+
+## Overlap to Fromer DEG
+
+Now, we will check the overlap of our significant eQTLs to the differentially expressed genes in the Fromer et al., Nature 2016 paper.
+
+```{r}
+fromer <- read.csv2("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/Fromer_top_DE_genes.csv", sep = ";")
+overlap <- list(all = eqtls.all$gene, cases_only = eqtls.scz$gene, controls_only = eqtls.ctl$gene, fromer = fromer$Gene.Symbol)
+upset(fromList(overlap), mainbar.y.label = "# genes", text.scale = 2)
+```
+
+In Fromer et al. `r length(fromer$Gene.Symbol)` cis-eQTLs with `r length(unique(sort(fromer$Gene.Symbol)))` unique gene names are reported as significant.
+
+|                         | Only SCZ | Only CTL | ALL |
+|-------------------------|----------|----------|-----------|
+| Fromer cis-eQTLs        | `r intersect(fromer$Gene.Symbol, eqtls.scz$gene)` | `r intersect(fromer$Gene.Symbol, eqtls.ctl$gene)` | `r intersect(fromer$Gene.Symbol, eqtls.all$gene)` |
+
+
+# Check overlap to Fromer eQTLs
+
+First, we will change the SNP names: remove the alleles of all IDs and change chr:pos to chr_pos (like in Fromer et al. 2016).
+
+```{r}
+fromer.eqtls.sva <- fread("/storage/groups/ccm01/datasets/2019_Fromer_et_al_Supplements/eQTL/CMC_MSSM-Penn-Pitt_DLPFC_Analysis_eQTL-adjustedSVA.txt", sep = " ", stringsAsFactors = F, select = c("SNP", "Gene_symbol", "pvalue", "FDR"))
+# get only hits (adj.p-val < 0.05)
+fromer.eqtls.sva <- fromer.eqtls.sva[fromer.eqtls.sva$FDR < 0.05, ]
+# remove all rows there gene symbol is not available symbolized as a dot "." in the data
+fromer.eqtls.sva <- fromer.eqtls.sva[fromer.eqtls.sva$Gene_symbol != ".", ]
+
+genes <- list(fromer = fromer.eqtls.sva$Gene_symbol, all = eqtls.all$gene, cases_only = eqtls.scz$gene, controls_only = eqtls.ctl$gene)
+upset(fromList(genes))
+```
+
+
+# Boxplot of top eQTL with gene expression
+
+Best hit is an eQTL with SNP ID rs151095999 and gene symbol ADGRG7. Now, we will plot the gene expression of this gene in the different alleles. 
+
+```{r}
+#plot the top 2
+system(paste0("/storage/groups/ccm01/tools/PLINK/plink --bfile /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/preprocessed_genotypes/1.2_merged_chr/pmb_info06_all_chr_maf0.05_merged_noDup_final --snps rs1133328 --recodeA --tab --out /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/eqtl-gex"))
+snp <- read.delim("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/eqtl-gex.raw",head=T)
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/4_affymetrix_exon_microarray_data_after_rma_core_gene_summaries_annotated_combat_batch_corrected.RData")
+
+snp <- snp[, c("IID", "rs1133328_T")]
+exp <- as.data.frame(cbind(t(exprs(geneSummaries[fData(geneSummaries)[fData(geneSummaries)$SYMBOL == "EFHB", "PROBEID"], ])), geneSummaries@phenoData@data$Dx, as.character(geneSummaries@phenoData@data$IID)))
+colnames(exp) <- c("EFHB", "Dx", "IID")
+eqtl <- merge(snp, exp, by = "IID")
+# remove NA's
+eqtl <- eqtl[complete.cases(eqtl), ]
+dex0 <- eqtl[eqtl$Dx == 1, ]
+dex1 <- eqtl[eqtl$Dx == 2 | eqtl$Dx == 3 | eqtl$Dx == 4, ]
+
+a <- cbind(as.numeric(as.character(dex0$EFHB)), as.character(dex0$rs1133328_T), rep("Controls",16))
+b <- cbind(as.numeric(as.character(dex1$EFHB)), as.character(dex1$rs1133328_T), rep("Cases",143))
+colnames(a) <- c("EFHB", "rs1133328", "dx")
+colnames(b) <- c("EFHB", "rs1133328", "dx")
+c <- as.data.frame(rbind(a,b))
+c$EFHB <- as.numeric(as.character(c$EFHB))
+
+pdf("ILMN_1805449_fe.pdf")
+ggplot(na.omit(c), aes(rs1133328, EFHB, fill = factor(dx))) +
+  geom_boxplot() + facet_wrap(~ dx) + theme_classic()
+dev.off()
+```
+
+
+# Session Info
+
+```{r, eval = F}
+sessionInfo()
+```
+

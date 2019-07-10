@@ -51,7 +51,78 @@ library(ggplot2)
 library(corrplot)
 library(psych)
 library(pheatmap)
+library(limma)
+library(rcompanion)
 ```
+
+# Check theta values
+
+## Load data
+
+```{r}
+prs_scz2_inf <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/SCZ2/03_validate/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_scz2_filtered_PRS_LDpred-inf.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+prs_scz2_1 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/SCZ2/03_validate/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_scz2_filtered_PRS_LDpred_p1.0000e+00.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+prs_scz2_0.1 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/SCZ2/03_validate/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_scz2_filtered_PRS_LDpred_p1.0000e-01.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+prs_scz2_0.01 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/SCZ2/03_validate/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_scz2_filtered_PRS_LDpred_p1.0000e-02.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+prs_scz2_0.001 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/SCZ2/03_validate/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_scz2_filtered_PRS_LDpred_p1.0000e-02.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))  # somehow missing...
+prs_scz2_0.3 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/SCZ2/03_validate/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_scz2_filtered_PRS_LDpred_p3.0000e-01.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+prs_scz2_0.03 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/SCZ2/03_validate/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_scz2_filtered_PRS_LDpred_p3.0000e-02.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+prs_scz2_0.003 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/SCZ2/03_validate/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_scz2_filtered_PRS_LDpred_p3.0000e-03.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+# Load phenotype data
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/4_affymetrix_exon_microarray_data_after_rma_core_gene_summaries_annotated_combat_batch_corrected.RData")
+# filter data
+index <- which(is.na(pData(geneSummaries)$C1))  # remove all samples with C1 = NA
+geneSummaries <- geneSummaries[, -c(index)]
+index <- which(is.na(pData(geneSummaries)$Type_of_Death))  # remove all samples with Type_of_Death = NA
+geneSummaries <- geneSummaries[, -c(index)]
+dim(geneSummaries)
+# save phenotype data
+pData <- pData(geneSummaries)
+# Merge all PRS into one dataframe
+prs_scz <- cbind(prs_scz2_inf$PRS, prs_scz2_1$PRS, prs_scz2_0.3$PRS, prs_scz2_0.1$PRS, prs_scz2_0.03$PRS, prs_scz2_0.01$PRS, prs_scz2_0.003$PRS, prs_scz2_0.001$PRS)
+rownames(prs_scz) <- prs_scz2_inf$IID
+prs_scz <- prs_scz[row.names(prs_scz) %in% pData$IID, ]
+colnames(prs_scz) <- c("PRS_inf", "PRS_1", "PRS_0.3", "PRS_0.1", "PRS_0.03", "PRS_0.01", "PR_0.003", "PRS_0.001")
+```
+
+## Generate corrplot of different thetas
+
+```{r}
+# add Dx
+prs_scz <- merge(prs_scz, mapping, by.x = "row.names", by.y = "IID", all.x = T)
+prs_scz$Dx <- as.character(prs_scz$Dx)
+prs_scz[as.character(prs_scz$Dx) == "CTL", "Dx"] <- 0
+prs_scz[as.character(prs_scz$Dx) == "SCZ", "Dx"] <- 1
+prs_scz$Dx <- as.numeric(prs_scz$Dx)
+row.names(prs_scz) <- prs_scz$Row.names
+prs_scz$Row.names <- NULL
+
+png("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/figures/corrplot_pearson_cor_SCZ2_PRS_different_thetas.png", type = "cairo")
+res <- cor(prs_scz)  # generate correlation matrix
+corrplot(res, method = "circle", col = viridis(200, direction = -1))  # generate correlation plot
+dev.off()
+```
+
+## Check association to Dx
+
+```{r}
+prs_scz$Dx <- NULL
+prs_scz <- t(prs_scz)
+mapping <- pData[, c("IID", "Dx")]
+mapping[mapping$Dx == "BPD" | mapping$Dx == "MDD", "Dx"] <- "SCZ" # change BPD and MDD to SCZ
+# relevel disease (Dx) to control (CTL)
+mapping$Dx <- factor(mapping$Dx, levels = c("CTL", "SCZ"))
+rownames(mapping) <- mapping$IID
+# generate design matrix
+design <- model.matrix(~ Dx, mapping)
+head(design)
+# get top DE genes
+fit <- lmFit(prs_scz, design)
+fit2 <- eBayes(fit)
+top.hits <- topTable(fit2, coef = "DxSCZ")
+top.hits
+```
+
 
 # Load data
 
@@ -76,11 +147,31 @@ prs.cross.disorder <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmorte
 gr.score <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/4_TRPS/03_TRPS.txt", sep = "\t", header = T, stringsAsFactors = F, select = c("IID", "gr_score"))
 gr.score <- gr.score[!startsWith(gr.score$IID, "MD") & !endsWith(gr.score$IID, "ZNP")]
 gr.score <- gr.score[gr.score$IID %in% pData$IID]
-pData <- read.csv2("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/pData.csv", sep = ";", header = T, stringsAsFactors = F)
-head(pData)
 ```
 
 # Plots
+
+```{r}
+# load data
+prs.scz2 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/test/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_scz2_filtered_PRS_LDpred_p1.0000e+00.txt", sep = ",", header = T, stringsAsFactors = F)
+# Add diagnosis column to the PRS
+prs.scz2 <- merge(prs.scz2, pData, by = "IID", all.x = T)
+head(prs.scz2)
+# get six colors (for plots)
+col <- viridis(20)
+prs.scz2 <- as.data.frame(prs.scz2)
+prs.scz2$Dx <- as.factor(prs.scz2$Dx)
+prs.scz2$Dx <- factor(prs.scz2$Dx, levels = c("CTL", "MDD", "BPD", "SCZ"))
+prs.scz2$PRS <- as.numeric(prs.scz2$PRS)
+ggplot(prs.scz2, aes(x = Dx, y = PRS, fill = Dx)) + 
+  geom_boxplot() + 
+  scale_fill_manual(values = c(col[3], col[6], col[11], col[17]), name = "Diagnosis") +
+  ggtitle("PRS based on SCZ2 summary statistic") + 
+  ylab("p-value derived effect prs") +
+  theme_grey(base_size = 18) +
+  theme(plot.title = element_text(hjust = 0.75), axis.title.x = element_blank(), axis.title.y = element_text(size=20))
+```
+
 
 ```{r echo = F}
 # Add diagnosis column to the PRS
@@ -338,7 +429,7 @@ Für alle PRS:
 
 ```{r, echo = F}
 # save only IID and PRS columns
-pData.new <- pData[, c("IID", "PRS_SCZ2", "PRS_MDD2", "PRS_BIP", "PRS_ADHD", "PRS_ASD", "PRS_BIPvsSCZ", "PRS_BIPSCZvsCTL", "PRS_GRScore", "PRS_EA", "PRS_CD")]
+pData.new <- pData[, c("IID", "PRS_SCZ2", "PRS_MDD2", "PRS_BIP", "PRS_ADHD", "PRS_ASD", "PRS_BIPSCZvsCTL", "PRS_GRScore", "PRS_EA", "PRS_CD")]
 # Remove all rows including an NA in any column and remove the IID column 
 pData.new <- pData.new[complete.cases(pData.new),]
 # set IIDs as rownames and remove IID column afterwards

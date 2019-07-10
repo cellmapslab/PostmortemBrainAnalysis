@@ -51,19 +51,19 @@ awk 'NR>1 {$2="chr"$1":"$3} 1' OFS="\t" ${out_genotypes}/2.1_sumstats_liftover_a
 # 2.1.4 BIPvsSCZ
 # ---------------
 # 1) Remove all deletions (D), insertions (I) and other strange alleles (<CN0>, <CN2>, <INS..:>) in the BIPvsSCZ summary statistic file
-awk '{ if (!index($2, "D") && !index($2, "I") && !index($2, "<")) { print $0; } }' OFS="\t" ${sum_stats_path}/BIP+SCZ/BDvsSCZ.sumstats > ${out_genotypes}/2.1_sumstats_liftover_and_removed_D_I/BDvsSCZ.sumstats
+awk '{ if (!index($2, "D") && !index($2, "I") && !index($2, "<")) { print $0; } }' OFS="\t" ${sum_stats_path}/BIP+SCZ/BDvsSCZ.sumstats > ${out_genotypes}/2.1_sumstats_liftover_and_removed_D_I/BIPvsSCZ.sumstats
 # 2) Change all SNP IDs in the summary statistic file to following example format: chr:pos, e.g. chr10:10001753 & leave first line untouched
-awk 'NR>1 {$2="chr"$1":"$3} 1' OFS="\t" ${out_genotypes}/2.1_sumstats_liftover_and_removed_D_I/BDvsSCZ.sumstats > ${out_genotypes}/2.2_sumstats_changed_IDs/BDvsSCZ.sumstats
+awk 'NR>1 {$2="chr"$1":"$3} 1' OFS="\t" ${out_genotypes}/2.1_sumstats_liftover_and_removed_D_I/BIPvsSCZ.sumstats > ${out_genotypes}/2.2_sumstats_changed_IDs/BIPvsSCZ.sumstats
 # Remove last two columns (some do not have a value there and plink does not like it...)
-awk 'NR>1 {$12=$13=""} 1' OFS="\t" ${out_genotypes}/2.2_sumstats_changed_IDs/BDvsSCZ.sumstats > ${out_genotypes}/2.2_sumstats_changed_IDs/BDvsSCZ.sumstats2
-mv ${out_genotypes}/2.2_sumstats_changed_IDs/BDvsSCZ.sumstats2 ${out_genotypes}/2.2_sumstats_changed_IDs/BDvsSCZ.sumstats
+awk 'NR>1 {$12=$13=""} 1' OFS="\t" ${out_genotypes}/2.2_sumstats_changed_IDs/BIPvsSCZ.sumstats > ${out_genotypes}/2.2_sumstats_changed_IDs/BIPvsSCZ.sumstats2
+mv ${out_genotypes}/2.2_sumstats_changed_IDs/BDIPvsSCZ.sumstats2 ${out_genotypes}/2.2_sumstats_changed_IDs/BIPvsSCZ.sumstats
 
 # 2.1.5 BIP+SCZvsCONT
 # --------------------
-# 1) Remove all deletions (D), insertions (I) and other strange alleles (<CN0>, <CN2>, <INS..:>) in the SCZ2 summary statistic file
-awk '{ if (!index($2, "D") && !index($2, "I") && !index($2, "<")) { print $0; } }' OFS="\t" ${sum_stats_path}/BIP+SCZ/BDSCZvsCONT.sumstats > ${out_genotypes}/2.1_sumstats_liftover_and_removed_D_I/BDSCZvsCONT.sumstats
+# 1) Remove all deletions (D), insertions (I) and other strange alleles (<CN0>, <CN2>, <INS..:>) in the BIP+SCZ vs CONT summary statistic file
+awk '{ if (!index($2, "D") && !index($2, "I") && !index($2, "<")) { print $0; } }' OFS="\t" ${sum_stats_path}/BIP+SCZ/BDSCZvsCONT.sumstats > ${out_genotypes}/2.1_sumstats_liftover_and_removed_D_I/BIPSCZvsCONT.sumstats
 # 2) Change all SNP IDs in the summary statistic file to following example format: chr:pos, e.g. chr10:10001753 & leave first line untouched
-awk 'NR>1 {$2="chr"$1":"$3} 1' OFS="\t" ${out_genotypes}/2.1_sumstats_liftover_and_removed_D_I/BDSCZvsCONT.sumstats > ${out_genotypes}/2.2_sumstats_changed_IDs/BDSCZvsCONT.sumstats
+awk 'NR>1 {$2="chr"$1":"$3} 1' OFS="\t" ${out_genotypes}/2.1_sumstats_liftover_and_removed_D_I/BIPSCZvsCONT.sumstats > ${out_genotypes}/2.2_sumstats_changed_IDs/BIPSCZvsCONT.sumstats
 
 # 2.1.6 ADHD2017
 # ---------------
