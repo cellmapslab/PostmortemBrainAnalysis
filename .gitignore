@@ -1,5 +1,6 @@
 /04.DEX/*.html
 /04.DEX/01_Preprocessing_cache/*
+/04.DEX/01_Preprocessing_cache/latex/__packages
 *.html
 *.log
 *.Rout
