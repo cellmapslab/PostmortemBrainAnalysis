@@ -1,5 +1,5 @@
 # add installed packages from home path, to the library search path
-.libPaths("/home/icb/karolina.worf/R/x86_64-pc-linux-gnu-library/3.5/")
+.libPaths("/home/icb/karolina.worf/R/x86_64-pc-linux-gnu-library/3.6/")
 
 library(data.table)
 library(huex10sttranscriptcluster.db) # transcript/gene infos for HuEx-1_0-st-v2
@@ -11,7 +11,7 @@ library(rtracklayer)
 ### 1. Gene eQTL Input Files ###
 ################################
 # Load gene expression data
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_core_gene_summaries_filtered_annotated_batch_corrected.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_gene_summaries_annotated_batch_corrected.RData")
 # As we have some missing values in the phenotype data, 33 mds (C1-C10) and 2 Type_of_Death values, 
 # we first need to remove them from the microarrays as well as the phenotype dataset.
 # remove all samples with C1 = NA from phenotype data and gene expression data
@@ -42,36 +42,20 @@ write.table(snpspos, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain
 ### GET GENE POSITIONS ###
 ##########################
 # Map gene symbols to chr, start and end position and save them into a file
-# Get gene symbols from our geneSummaries (microarray gene expression dataset)
-symbols <- as.data.frame(geneSummaries@featureData@data$SYMBOL)
-colnames(symbols) <- "symbols"
-genes <- import.gff("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/annotation_files/gencode.v19.annotation.gtf", format = "gtf")
-#table(genes$type)
-genes <- genes[genes$gene_type == "protein_coding"]  # get only protein-coding genes
-genes <- genes[genes$type == "gene"]  # get only exons from the genes
-genes <- as.data.frame(genes)
-head(genes)
-genes <- genes[, c("gene_name", "seqnames", "start", "end")]
-geneinfo <- merge(symbols, genes, by.x = "symbols", by.y = "gene_name", all.x = T)
-geneinfo <- geneinfo[!duplicated(geneinfo), ]
-# But we have some duplicates (190 genes) now:
-dups <- geneinfo[duplicated(geneinfo$symbols), ]$symbols
-# remove duplicated genes with smaller length (most times one of the genes lies within the other one)
-dup.to.remove <- NULL
-for(gene in dups){
-  length = 0
-  info <- geneinfo[geneinfo$symbols == gene, ]
-  info$length <- info$end - info$start
-  dup.to.remove <- c(dup.to.remove, as.numeric(row.names(info[info$length == min(info$length), ])))
-}
-geneinfo <- geneinfo[!(rownames(geneinfo) %in% dup.to.remove), ]
-geneinfo$chr <- sapply(strsplit(as.character(geneinfo$seqnames),'r'), "[", 2)
-geneinfo <- geneinfo[, c("symbols", "chr", "start", "end")]
-colnames(geneinfo) <- c("geneid", "chr", "start", "end")
+genespos <- geneSummaries@featureData@data[, c("gene_name", "location")]
+genespos$chr <- sapply(strsplit(genespos$location, ':'), "[", 1)
+genespos$chr <- sapply(strsplit(genespos$chr, 'r'), "[", 2)
+genespos$loc <- sapply(strsplit(genespos$location, ':'), "[", 2)
+genespos$start <- sapply(strsplit(genespos$loc, '-'), "[", 1)
+genespos$end <- sapply(strsplit(genespos$loc, '-'), "[", 2)
+genespos <- genespos[, c("gene_name", "chr", "start", "end")]
+colnames(genespos) <- c("geneid", "chr", "start", "end")
+head(genespos)
 # check, if we now really have the same genes with locations
-identical(geneinfo$geneid, unique(sort(symbols$symbols)))
+identical(rownames(genespos), rownames(exprs(geneSummaries)))
 # save data into a file
-write.table(geneinfo, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/gene_locations.txt", col.names = T, row.names = F, sep = "\t", quote = F)
+write.table(genespos, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/gene_locations.txt", col.names = T, row.names = F, sep = "\t", quote = F)
+
 
 ###################
 ### ALL SAMPLES ###
@@ -101,25 +85,24 @@ head(snps)
 # Save SNP data into a new file
 fwrite(snps, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/01_pmb_snps_SCZ_CTL.txt", row.names = T, col.names = T, sep = "\t", quote = F)
 
+
 # 2. Generate Gene Expression Dataset
 # Get Gene expression data
 expr <- exprs(geneSummaries)
-rownames(expr) <- geneSummaries@featureData@data$SYMBOL
+rownames(expr) <- geneSummaries@featureData@data$gene_name
 expr[1:6, 1:6]
 
-# Get only genes also present in the geneinfo dataset and order them the same way
-expr <- expr[rownames(expr) %in% geneinfo$geneid,]
-expr <- expr[order(rownames(expr)), ]
-# check if gene name order is the same
-identical(unique(rownames(expr)), as.character(geneinfo$geneid))# Gene expression: get overlapping samples to snps data
+# check if gene ID order is the same as in genespos
+identical(unique(rownames(expr)), unique(as.character(genespos$geneid)))# Gene expression: get overlapping samples to snps data
 cols <- colnames(snps)  # get new colnames of snps
-expr <- data.table(expr[, colnames(expr) %in% cols], keep.rownames = TRUE)  # get same samples for gene expression dataset
+expr <- data.table(expr[, colnames(expr) %in% cols], keep.rownames = TRUE)  # get same samples for exon expression dataset
 setcolorder(expr, c("rn", sort(colnames(expr)[-1])))
 head(expr)
 identical(colnames(expr)[-1], cols)
 
 # Save gene expression data into a new file
 fwrite(expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/01_pmb_gene_expr_SCZ_CTL.txt", row.names = F, col.names = T, sep = "\t", quote = F)
+
 
 # 3. Generate Covariate Dataset
 # Covariates: get Dx, Sex, Age, pH, PMI, RIN, RIN², Suicide, Type_of_Death, C1, C2, C3, C4 (C1-4: Ancestry information)
@@ -157,7 +140,7 @@ cov2 <- as.data.frame(cov)  # change data.table to data.frame
 rownames(cov2) <- cov2$rn # get rownames
 cov2$rn <- NULL # remove rn column
 cov2 <- as.data.frame(t(cov2)) # transpose data.frame
-scz.samples <- row.names(cov2[cov2$DxSCZ == 1, ]) # get scz samples
+scz.samples <- row.names(cov2[cov2$DxSCZ == 1, ]) # get case samples
 scz.samples
 
 # get all covariates with these samples
@@ -219,7 +202,7 @@ fwrite(ctl.expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.
 ################################
 ### 2. Exon eQTL Input Files ###
 ################################
-# Load gene expression data
+# Load exon expression data
 load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_exon_summaries_annotated_batch_corrected.RData")
 
 # As we have some missing values in the phenotype data, 33 mds (C1-C10) and 2 Type_of_Death values, 

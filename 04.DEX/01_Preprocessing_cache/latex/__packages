@@ -1,6 +1,7 @@
 base
 BiocStyle
 knitr
+BiocManager
 oligoClasses
 BiocGenerics
 S4Vectors
@@ -12,12 +13,9 @@ Biobase
 oligo
 DBI
 pd.huex.1.0.st.v2
-AnnotationDbi
-org.Hs.eg.db
-huex10stprobeset.db
-huex10sttranscriptcluster.db
 GenomeInfoDb
 GenomicRanges
+AnnotationDbi
 GenomicFeatures
 rtracklayer
 matrixStats
@@ -30,7 +28,5 @@ nlme
 mgcv
 genefilter
 sva
-lattice
-mice
 data.table
 dplyr

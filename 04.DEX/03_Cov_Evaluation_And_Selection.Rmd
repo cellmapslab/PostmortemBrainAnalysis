@@ -22,6 +22,13 @@ knitr::opts_chunk$set(warning = F, message = F, cache = T, cache.lazy = F)
 options(stringsAsFactors = T)
 ```
 
+<p>
+**R version**: `r R.version.string`
+<br />
+**Bioconductor version**: `r BiocManager::version()`
+</p>
+
+
 # Load Packages 
 
 ```{r}

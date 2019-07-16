@@ -75,7 +75,7 @@ genepos <- read.table("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brai
 genepos <- genepos[!is.na(genepos$start), ]  # remove NA's
 head(genepos)
 
-# 1. Calculate eQTLS For Complete Data (SCZ + AFF + CTL)
+# 1. Calculate eQTLS For Complete Data (CASE + CTL)
 # Genotype (SNP) file name
 SNP_file_name_all <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/01_pmb_snps_SCZ_CTL.txt"
 # Gene expression file name
@@ -114,6 +114,6 @@ covariates_file_name_ctl <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmorte
 output_file_name_cis_ctl <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/03_pmb_CTL_matrixEQTL_cis_results_transcripts.txt"
 output_file_name_trans_ctl <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/03_pmb_CTL_matrixEQTL_trans_results_transcripts.txt"
 # Run matrixEQTL for cis-eqtls and save them into an RData file
-me.ctl <- run_matrix_eqtl(SNP_file = SNP_file_name_ctl, expression_file = expression_file_name_ctl, cov_file = covariates_file_name_ctl, outfile_cis = output_file_name_cis_ctl, outfile_trans = output_file_name_trans_ctl, cis = 5e-5, trans = 0)
-save(me.ctl, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/03_pmb_CTL_matrixEQTL_transcripts.RData")
+#me.ctl <- run_matrix_eqtl(SNP_file = SNP_file_name_ctl, expression_file = expression_file_name_ctl, cov_file = covariates_file_name_ctl, outfile_cis = output_file_name_cis_ctl, outfile_trans = output_file_name_trans_ctl, cis = 5e-5, trans = 0)
+#save(me.ctl, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/03_pmb_CTL_matrixEQTL_transcripts.RData")
 
