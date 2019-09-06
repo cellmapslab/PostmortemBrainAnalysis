@@ -18,7 +18,7 @@ library(RColorBrewer)
 
 # 2. Load data (all different generated PRS)
 # load, filter and save phenotype data
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/4_affymetrix_exon_microarray_data_after_rma_core_gene_summaries_annotated_combat_batch_corrected.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_gene_summaries_annotated_batch_corrected.RData")
 index <- which(is.na(pData(geneSummaries)$C1))  # remove all samples with C1 = NA
 geneSummaries <- geneSummaries[, -c(index)]
 index <- which(is.na(pData(geneSummaries)$Type_of_Death))  # remove all samples with Type_of_Death = NA
@@ -68,6 +68,32 @@ prs.ea <- merge(prs.ea, pData, by = "IID")
 prs.cd <- merge(prs.cross.disorder, pData, by = "IID")
 prs.gr.score <- merge(gr.score, pData, by = "IID")
 #prs.bmi <- merge(prs.bmi, pData, by = "IID", all.x = T)
+
+
+prs.scz2 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/SCZ2/03_validate/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_scz2_filtered_reverse_weights_PRS_LDpred_p3.0000e-01.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+prs.scz2 <- merge(prs.scz2, pData, by = "IID")
+lm.test <- lm(prs.scz2$PRS ~ prs.scz2$Diagnosis)
+nagelkerke(lm.test)
+summary(lm.test)
+# generate data for boxplot
+prs.scz2.plot <- prs.scz2[, c("PRS", "Dx")]
+cases <- prs.scz2.plot[prs.scz2.plot$Dx != "CTL", ]
+cases$Dx <- as.character(cases$Dx)
+cases$Dx <- "CASE"
+prs.scz2.plot <- rbind(prs.scz2.plot, cases)
+prs.scz2.plot$Dx <- factor(prs.scz2.plot$Dx, levels = c("CTL", "CASE", "MDD", "BPD", "SCZ"))
+# plot boxplots
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/figures/boxplot_PRS_SCZ2_reverse_weights.pdf", width = 12, height = 10)
+ggplot(prs.scz2.plot, aes(x = Dx, y = PRS, fill = Dx)) +
+  scale_x_discrete(labels = c("Controls", "Cases", "Major depression disorder", "Bipolar disorder", "Schizophrenia")) +
+  theme_classic() +
+  theme(text = element_text(size = 26), axis.text.x = element_text(angle = 45, hjust = 1), axis.text = element_text(size = 26), plot.title = element_text(hjust = 0.5), axis.title.x = element_blank()) +
+  geom_boxplot(alpha = 0.7) + 
+  scale_fill_manual(values = viridis(5), guide = F) +
+  ggtitle("PRS based on schizophrenia GWAS summary statistic") + 
+  ylab("Polygenic risk score (PRS)") 
+dev.off()
+
 
 
 prs.test <- fread("/storage/scratch/users/karolina.worf/MPIP/06.Smoothing/output/test4_smoothed_PRS_LDpred_p3.0000e-01.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))

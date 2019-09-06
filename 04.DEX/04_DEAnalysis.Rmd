@@ -79,7 +79,12 @@ library(ggrepel)  # for volcanoplot
 Now, we will load the normalized and batch corrected microarray data summarized to gene, transcript and exon level. 
 
 ```{r, echo = F}
-# Import RMA corrected and annotated Affymetrix microarray data on gene level
+# Import RMA corrected and annotated Affymetrix microarray data on gene level (from probesets)
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_gene_summaries_annotated_batch_corrected.RData")
+geneSummaries2 <- geneSummaries
+dim(geneSummaries2)
+
+# Import RMA corrected and annotated Affymetrix microarray data on gene level (from core transcripts)
 load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_gene_summaries_annotated_batch_corrected.RData")
 dim(geneSummaries)
 
@@ -99,17 +104,20 @@ As we have some missing values in the phenotype data, 26 mds (C1-C10) values, we
 ```{r, echo = F}
 # remove all samples with C1 = NA from phenotype data and gene/transcript/exon expression data
 index <- which(is.na(pData(geneSummaries)$C1))
+geneSummaries2 <- geneSummaries2[, -c(index)]
 geneSummaries <- geneSummaries[, -c(index)]
 transcriptSummaries <- transcriptSummaries[, -c(index)]
 exonSummaries <- exonSummaries[, -c(index)]
 
 # remove all samples with Type_of_Death = NA from phenotype data and gene expression data
 index <- which(is.na(pData(geneSummaries)$Type_of_Death))
+geneSummaries2 <- geneSummaries2[, -c(index)]
 geneSummaries <- geneSummaries[, -c(index)]
 transcriptSummaries <- transcriptSummaries[, -c(index)]
 exonSummaries <- exonSummaries[, -c(index)]
 
 # check dim of geneSummaries (25 rows should be removed)
+dim(geneSummaries2)
 dim(geneSummaries)
 dim(transcriptSummaries)
 dim(exonSummaries)
@@ -121,6 +129,7 @@ Then, we will check if the phenotype data and the microarray data are still in t
 pData <- pData(geneSummaries)
 
 # check if pData and gene/transcript/exonSummaries are identical
+identical(as.character(pData$ShortName), colnames(exprs(geneSummaries2)))
 identical(as.character(pData$ShortName), colnames(exprs(geneSummaries)))
 identical(as.character(pData$ShortName), colnames(exprs(transcriptSummaries)))
 identical(as.character(pData$ShortName), colnames(exprs(exonSummaries)))
@@ -154,10 +163,28 @@ Before, we can start with the differential gene expression analysis, we need to 
 
 ## Gene level 
 
+### Based on coreSummarization
+
 ```{r, echo = F}
 # setting up the data for SVA
 pheno <- pData
 edata <- exprs(geneSummaries)
+mod <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
+mod0 <- model.matrix(~ 1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
+# estimate the number of latent factors
+n.sv <- num.sv(edata, mod, method = "leek")
+# Apply the sva function to extimate surrogate variables:
+svobj <- sva(edata, mod, mod0, n.sv = n.sv)
+```
+
+Here, num.sv estimated only `r n.sv` surrogate variables. 
+
+### Based on probesetSummarization
+
+```{r, echo = F}
+# setting up the data for SVA
+pheno <- pData
+edata <- exprs(geneSummaries2)
 mod <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
 mod0 <- model.matrix(~ 1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
 # estimate the number of latent factors
@@ -173,14 +200,13 @@ Here, num.sv estimated only `r n.sv` surrogate variables.
 ```{r, echo = F}
 # setting up the data for SVA
 pheno <- pData
-edata <- exprs(exonSummaries)
+edata <- exprs(transcriptSummaries)
 mod <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
 mod0 <- model.matrix(~ 1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
 # estimate the number of latent factors
 n.sv <- num.sv(edata, mod, method = "leek")
 # Apply the sva function to extimate surrogate variables:
 svobj <- sva(edata, mod, mod0, n.sv = n.sv)
-pData$SV1_trans <- svobj$sv
 ```
 
 Here, num.sv estimated only `r n.sv` surrogate variables. 
@@ -197,11 +223,16 @@ mod0 <- model.matrix(~ 1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of
 n.sv <- num.sv(edata, mod, method = "leek")
 # Apply the sva function to extimate surrogate variables:
 svobj <- sva(edata, mod, mod0, n.sv = n.sv)
-pData$SV1_ex <- svobj$sv
+pData$SV1 <- svobj$sv
 ```
 
 Here, num.sv estimated only `r n.sv` surrogate variables. 
 
+## Save pData with surrogate variables
+
+```{r}
+save(pData, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_pData_with_surrogate_variables.RData")
+```
 
 # Differential Gene Expression Analysis (LIMMA) - Diagnosis
 
@@ -216,7 +247,7 @@ First, run the linear model with correction for all covariates and generate the 
 design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, pData)
 
 # get top DE genes
-fit <- lmFit(geneSummaries, design)
+fit <- lmFit(geneSummaries2, design)
 fit2 <- eBayes(fit)
 top.hits <- topTable(fit2, coef = "DxSCZ", adjust = "BH", number = Inf)
 head(top.hits)
@@ -247,9 +278,18 @@ dev.off()
 Corrplot between the two hits of FDR < 10%:
 
 ```{r}
+# generate design matrix
+design.res <- model.matrix(Dx ~ Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, pData)
+
+# fit model
+fit.res <- lmFit(geneSummaries, design.res)
+
+# get residuals
+res <- residuals.MArrayLM(fit.res, exprs(geneSummaries))
+
 # generate boxplots with case vs control of the hit genes
 ### EPM2A ###
-epm2a <- exprs(geneSummaries)[row.names(exprs(geneSummaries)) == "2977949", ]
+epm2a <- res[rownames(res) == "ENSG00000112425.9", ]
 epm2a <- t(t(as.data.frame(epm2a)))
 epm2a <- merge(epm2a, pData[, c("ShortName", "Diagnosis")], by.x = "row.names", by.y = "ShortName", all.x = T)
 cases <- epm2a[epm2a$Diagnosis != "CTL", ]
@@ -258,7 +298,7 @@ epm2a[epm2a$Diagnosis != "CTL", "Diagnosis"] <- "CASE"
 epm2a <- rbind(epm2a, cases)
 epm2a$Diagnosis <- factor(epm2a$Diagnosis, levels = c("CTL", "CASE", "MDD", "BPD", "SCZ"))
 # save boxplot of epm2a expression
-pdf("/storage/scratch/users/karolina.worf/MPIP/04.DEX/figures/boxplot_EPM2A_ctl_vs_dis.pdf", width = 7, height = 8)
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/01_boxplot_EPM2A_ctl_vs_dis.pdf", width = 7, height = 8)
 ggplot(na.omit(epm2a), aes(Diagnosis, epm2a, fill = Diagnosis)) + 
   scale_x_discrete(labels = c("Controls", "Cases", "Major depression disorder", "Bipolar disorder", "Schizophrenia")) +
   theme_classic() + 
@@ -273,7 +313,7 @@ ggplot(na.omit(epm2a), aes(Diagnosis, epm2a, fill = Diagnosis)) +
 dev.off()
 
 ### SERTAD4 ###
-sertad4 <- exprs(geneSummaries)[row.names(exprs(geneSummaries)) == "2378325", ]
+sertad4 <- res[row.names(res) == "ENSG00000082497.7", ]
 sertad4 <- t(t(as.data.frame(sertad4)))
 sertad4 <- merge(sertad4, pData[, c("ShortName", "Diagnosis")], by.x = "row.names", by.y = "ShortName", all.x = T)
 cases <- sertad4[sertad4$Diagnosis != "CTL", ]
@@ -282,7 +322,7 @@ sertad4[sertad4$Diagnosis != "CTL", "Diagnosis"] <- "CASE"
 sertad4 <- rbind(sertad4, cases)
 sertad4$Diagnosis <- factor(sertad4$Diagnosis, levels = c("CTL", "CASE", "MDD", "BPD", "SCZ"))
 # save boxplot of sertad4 expression
-pdf("/storage/scratch/users/karolina.worf/MPIP/04.DEX/figures/boxplot_SERTAD4_ctl_vs_dis.pdf", width = 7, height = 8)
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/01_boxplot_SERTAD4_ctl_vs_dis.pdf", width = 7, height = 8)
 ggplot(na.omit(sertad4), aes(Diagnosis, sertad4, fill = Diagnosis)) + 
   scale_x_discrete(labels = c("Controls", "Cases", "Major depression disorder", "Bipolar disorder", "Schizophrenia")) +
   theme_classic() + 
@@ -302,7 +342,7 @@ colnames(epm2a) <- c("samples", "expression", "diagnosis", "gene")
 sertad4$gene <- "SERTAD4"
 colnames(sertad4) <- c("samples", "expression", "diagnosis", "gene")
 both <- rbind(epm2a, sertad4)
-pdf("/storage/scratch/users/karolina.worf/MPIP/04.DEX/figures/boxplot_EPM2A_and_SERTAD4.pdf", width = 12, height = 8)
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/01_boxplot_EPM2A_and_SERTAD4.pdf", width = 12, height = 8)
 p <- ggplot(data = both, aes(x = diagnosis, y = expression)) +
   scale_x_discrete(labels = c("Controls", "Cases", "Major depression disorder", "Bipolar disorder", "Schizophrenia")) +
   theme_classic() +
@@ -316,7 +356,6 @@ dev.off()
 ```
 
 Get significantly differentially expressed genes for all the different covariates (corrected for all the other covariates). 
-
 ```{r, echo = F}
 # Get padj values for all different covariates
 nc = ncol(design) - 1
@@ -334,7 +373,7 @@ limma.res.padj <- limma.res.padj[, c("Diagnosis", "Age", "Sex", "pH", "PMI", "RI
 limma.res.padj.0.05 <- apply(limma.res.padj, 2, function(x) sum(x < 0.1))
 limma.res.gene <- data.frame(sort(limma.res.padj.0.05, decreasing = T))
 # vertical barplot with ggplot2...
-pdf("/storage/scratch/users/karolina.worf/MPIP/04.DEX/figures/barplot_significant_DEA_hits_genes.pdf")
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/01_barplot_significant_DEA_hits_genes.pdf")
 ggplot(limma.res.gene, aes(y = limma.res.gene$sort.limma.res.padj.0.05..decreasing...T., x = reorder(row.names(limma.res.gene), sort.limma.res.padj.0.05..decreasing...T.))) +
   geom_bar(stat = "identity") +
   coord_flip() +
@@ -347,75 +386,18 @@ ggplot(limma.res.gene, aes(y = limma.res.gene$sort.limma.res.padj.0.05..decreasi
 dev.off()
 ```
 
-Get significantly differentially expressed genes for all the different covariates (NOT corrected for all the other covariates). 
-
-```{r, echo = F}
-covars <- c("Dx", "Age", "Sex", "pH", "PMI", "RIN", "RIN2", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4")
-limma.res <- data.frame()
-for (var in covars) {
-  design <- model.matrix(~ var, pData)
-  fit <- lmFit(geneSummaries, design)
-  fit2 <- eBayes(fit)
-  if (var != "Type_of_Death") {
-    limma.res[, var] <- topTable(fit2, adjust = "BH", sort.by = "none", number = Inf, coef = colnames(design)[2])[, 8]
-  } else {
-    tod1 <- topTable(fit2, adjust = "BH", sort.by = "none", number = Inf, coef = colnames(design)[2])[, 8]
-    tod2 <- topTable(fit2, adjust = "BH", sort.by = "none", number = Inf, coef = colnames(design)[3])[, 8]
-    limma.res[, var] <- (tod1 + tod2) / 2
-  }
-}
-
-
-# Get padj values for all different covariates
-# generate design matrix
-design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, pData)
-head(design)
-# get top DE genes
-fit <- lmFit(geneSummaries, design)
-fit2 <- eBayes(fit)
-top.hits <- topTable(fit2, coef = "DxSCZ")
-top.hits
-
-nc = ncol(design) - 1
-limma.res.fc = topTable(fit2, adjust = "BH", sort.by = "none", number = Inf)
-limma.res.padj = limma.res.fc[, 4:(3 + nc)]
-for (i in 1:nc){
-    limma.res.padj[, i] = topTable(fit2, adjust = "BH", sort.by = "none", number = Inf, coef = i + 1)[, 8]
-}
-head(limma.res.padj)
-colnames(limma.res.padj) <- c("Diagnosis", "Age", "Sex", "pH", "PMI", "RIN", "RIN2", "Suicide", "Type_of_Death1", "Type_of_Death2", "C1", "C2", "C3", "C4")
-limma.res.padj$Type_of_Death <- (limma.res.padj$Type_of_Death1 + limma.res.padj$Type_of_Death2) / 2
-limma.res.padj <- limma.res.padj[, c("Diagnosis", "Age", "Sex", "pH", "PMI", "RIN", "RIN2", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4")]
-#pheatmap(as.matrix(limma.res.padj), show_rownames = F)
-# check, how many padj values are < 0.10
-limma.res.padj.0.05 <- apply(limma.res.padj, 2, function(x) sum(x < 0.1))
-limma.res.gene <- data.frame(sort(limma.res.padj.0.05, decreasing = T))
-# vertical barplot with ggplot2...
-pdf("/storage/scratch/users/karolina.worf/MPIP/04.DEX/figures/barplot_significant_DEA_hits_genes.pdf")
-ggplot(limma.res.gene, aes(y = limma.res.gene$sort.limma.res.padj.0.05..decreasing...T., x = reorder(row.names(limma.res.gene), sort.limma.res.padj.0.05..decreasing...T.))) +
-  geom_bar(stat = "identity") +
-  coord_flip() +
-  theme_minimal() +
-  theme(text = element_text(size = 22)) +
-  ylab("# significant hits") +
-  xlab("") +
-  geom_text(size = 7, aes(label = limma.res.gene$sort.limma.res.padj.0.05..decreasing...T.), nudge_y = 120, colour = "dimgray") +
-  scale_y_continuous(expand = c(0.02, 0.01))
-dev.off()
-```
-
-Generate Heatmap of significant hits
+Generate Heatmap of significant hits. **CURRENTLY NOT WORKING!!!**
 
 ```{r, echo = F}
 # 1. Get gene expression for the two genes with FDR < 0.05
 # save mapping of probeid to gene symbol
-hits <- top.hits[top.hits$adj.P.Val < 0.1, "SYMBOL"]
-probeids <- fData(geneSummaries)[fData(geneSummaries)$SYMBOL %in% hits, c("PROBEID", "SYMBOL")]
+hits <- top.hits[top.hits$`FDR estimate` < 0.1, "Gene Symbol"]
+probeids <- fData(geneSummaries)[fData(geneSummaries)$gene_name %in% hits, c("gene_id", "gene_name")]
 # 2. Get gene expression adjusted for all covariates (except Diagnosis)
 all <- data.frame(ShortName = pData$ShortName) 
-for (gene in probeids$SYMBOL) { 
+for (gene in probeids$gene_id) { 
   # 1. Get gene expression of one of the genes (using the probeid)
-  top.gene <- as.data.frame(exprs(geneSummaries)[rownames(exprs(geneSummaries)) == probeids[probeids$SYMBOL == gene, "PROBEID"], ])
+  top.gene <- as.data.frame(exprs(geneSummaries)[rownames(exprs(geneSummaries)) == gene, ])
   # change rownames from probeids to gene symbols
   colnames(top.gene) <- gene
   
@@ -481,7 +463,7 @@ First, run the linear model with correction for all covariates and generate the 
 
 ```{r, echo = F}
 # generate design matrix
-design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1_trans, pData)
+design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, pData)
 
 # get top DE genes
 fit <- lmFit(transcriptSummaries, design)
@@ -512,13 +494,45 @@ text(x, y, fit2$genes$gene_name[ord], cex = 1.2, col = viridis(1))
 dev.off()
 ```
 
+Get significantly differentially expressed transcripts for all the different covariates (corrected for all the other covariates). 
+
+```{r, echo = F}
+# Get padj values for all different covariates
+nc = ncol(design) - 1
+limma.res.fc = topTable(fit2, adjust = "BH", sort.by = "none", number = Inf)
+limma.res.padj = limma.res.fc[, 5:(4 + nc)]
+for (i in 1:nc){
+    limma.res.padj[, i] = topTable(fit2, adjust = "BH", sort.by = "none", number = Inf, coef = i + 1)[, 9]
+}
+head(limma.res.padj)
+colnames(limma.res.padj) <- c("Diagnosis", "Age", "Sex", "pH", "PMI", "RIN", "RIN2", "Suicide", "Type_of_Death1", "Type_of_Death2", "C1", "C2", "C3", "C4")
+limma.res.padj$Type_of_Death <- (limma.res.padj$Type_of_Death1 + limma.res.padj$Type_of_Death2) / 2
+limma.res.padj <- limma.res.padj[, c("Diagnosis", "Age", "Sex", "pH", "PMI", "RIN", "RIN2", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4")]
+#pheatmap(as.matrix(limma.res.padj), show_rownames = F)
+# check, how many padj values are < 0.10
+limma.res.padj.0.05 <- apply(limma.res.padj, 2, function(x) sum(x < 0.1))
+limma.res.transcript <- data.frame(sort(limma.res.padj.0.05, decreasing = T))
+# vertical barplot with ggplot2...
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/01_barplot_significant_DEA_hits_transcripts.pdf")
+ggplot(limma.res.transcript, aes(y = limma.res.transcript$sort.limma.res.padj.0.05..decreasing...T., x = reorder(row.names(limma.res.transcript), sort.limma.res.padj.0.05..decreasing...T.))) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  theme_minimal() +
+  theme(text = element_text(size = 22)) +
+  ylab("# significant hits") +
+  xlab("") +
+  geom_text(size = 7, aes(label = limma.res.transcript$sort.limma.res.padj.0.05..decreasing...T.), nudge_y = 120, colour = "dimgray") +
+  scale_y_continuous(expand = c(0.02, 0.01))
+dev.off()
+```
+
 ## Exon level 
 
 First, run the linear model with correction for all covariates and generate the result table. 
 
 ```{r, echo = F}
 # generate design matrix
-design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1_ex, pData)
+design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 
 # get top DE genes
 fit <- lmFit(exonSummaries, design)
@@ -546,6 +560,71 @@ points(fit2$coef[ord, "DxSCZ"], lp[ord], pch = 16, cex = 0.5, col = viridis(1))
 x <- fit2$coef[ord,"DxSCZ"]
 y <- lp[ord]
 text(x, y, fit2$genes$gene_name[ord], cex = 1.2, col = viridis(1))
+dev.off()
+```
+
+Get significantly differentially expressed genes for all the different covariates. 
+
+```{r, echo = F}
+# Get padj values for all different covariates
+nc = ncol(design) - 1
+limma.res.fc = topTable(fit2, adjust = "BH", sort.by = "none", number = Inf)
+limma.res.padj = limma.res.fc[, 5:(4 + nc)]
+#limma.res.padj
+for (i in 1:nc){
+    limma.res.padj[, i] = topTable(fit2, adjust = "BH", sort.by = "none", number = Inf, coef = i + 1)[, 9]
+}
+head(limma.res.padj)
+colnames(limma.res.padj) <- c("Diagnosis", "Age", "Sex", "pH", "PMI", "RIN", "RIN2", "Suicide", "Type_of_Death1", "Type_of_Death2", "C1", "C2", "C3", "C4", "SV1")
+limma.res.padj$Type_of_Death <- (limma.res.padj$Type_of_Death1 + limma.res.padj$Type_of_Death2) / 2
+limma.res.padj <- limma.res.padj[, c("Diagnosis", "Age", "Sex", "pH", "PMI", "RIN", "RIN2", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4")]
+#pheatmap(as.matrix(limma.res.padj), show_rownames = F)
+# check, how many padj values are < 0.10
+limma.res.padj.0.05 <- apply(limma.res.padj, 2, function(x) sum(x < 0.1))
+limma.res.exon <- as.data.frame(sort(limma.res.padj.0.05, decreasing = T))
+
+# vertical barplot with ggplot2...
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/01_barplot_significant_DEA_hits_exons.pdf")
+ggplot(limma.res.exon, aes(y = limma.res.exon$`sort(limma.res.padj.0.05, decreasing = T)`, x = reorder(row.names(limma.res.exon), `sort(limma.res.padj.0.05, decreasing = T)`))) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  theme_minimal() +
+  theme(text = element_text(size = 22)) +
+  ylab("# significant hits") +
+  xlab("") +
+  geom_text(size = 7, aes(label = limma.res.exon$`sort(limma.res.padj.0.05, decreasing = T)`), nudge_y = 120, colour = "dimgray") +
+  scale_y_continuous(expand = c(0.02, 0.01))
+dev.off()
+```
+
+Now, we combine the barplot of the number of differentially expressed genes, transcripts and exons per covariate (corrected for all other covariates). 
+
+```{r}
+### ALL COMBINED (gene + transcript + exon barplot) ###
+colnames(limma.res.gene) <- "counts"
+limma.res.gene$type <- "gene"
+limma.res.gene$covariates <- row.names(limma.res.gene)
+colnames(limma.res.transcript) <- "counts"
+limma.res.transcript$type <- "transcript"
+limma.res.transcript$covariates <- row.names(limma.res.transcript)
+colnames(limma.res.exon) <- "counts"
+limma.res.exon$type <- "exon"
+limma.res.exon$covariates <- row.names(limma.res.exon)
+limma.res.all <- rbind(limma.res.gene, limma.res.transcript, limma.res.exon)
+limma.res.all$covariates <- as.factor(limma.res.all$covariates)
+limma.res.all$covariates <- factor(limma.res.all$covariates, levels = c("C4", "C3", "C2", "C1", "Type_of_Death","Suicide", "Sex", "RIN2", "RIN", "Diagnosis", "PMI", "pH", "Age"))
+
+# save plot
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/01_barplots_significant_DEA_hits_gene_transcript_exon_combined.pdf")
+p <- ggplot(limma.res.all, aes(y = counts, x = covariates)) +
+  geom_bar(stat = "identity") +
+  coord_flip() + 
+  theme(axis.ticks = element_line(colour = NA), text = element_text(size = 22), panel.background = element_rect(fill = NA), panel.grid.major.x = element_line(colour = "grey"), panel.grid.minor.x = element_line(colour = "grey"), strip.background =element_rect(fill = NA)) +
+  ylab("# significant hits") +
+  xlab("") +
+  geom_text(size = 7, aes(label = limma.res.all$counts), nudge_y = 120, colour = "dimgray") +
+  scale_y_continuous(expand = c(0.02, 0.01))
+p + facet_wrap(~ type, scale = "free_x") + theme(panel.spacing = unit(2, "lines"))
 dev.off()
 ```
 
@@ -638,10 +717,7 @@ First, we will check if we can find any hidden batch effects.
 
 ```{r, echo = F}
 # setting up the data for SVA
-pheno <- pData
-edata <- exprs(geneSummaries)
 mod <- model.matrix(~ PRS.MDD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
-mod0 <- model.matrix(~ 1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
 # estimate the number of latent factors
 n.sv <- num.sv(edata, mod, method = "leek")
 # Apply the sva function to extimate surrogate variables:
@@ -689,10 +765,7 @@ First, we will check if we can find any hidden batch effects.
 
 ```{r, echo = F}
 # setting up the data for SVA
-pheno <- pData
-edata <- exprs(geneSummaries)
 mod <- model.matrix(~ PRS.BIP + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
-mod0 <- model.matrix(~ 1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
 # estimate the number of latent factors
 n.sv <- num.sv(edata, mod, method = "leek")
 # Apply the sva function to extimate surrogate variables:
@@ -740,10 +813,7 @@ First, we will check if we can find any hidden batch effects.
 
 ```{r, echo = F}
 # setting up the data for SVA
-pheno <- pData
-edata <- exprs(geneSummaries)
 mod <- model.matrix(~ PRS.CD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
-mod0 <- model.matrix(~ 1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
 # estimate the number of latent factors
 n.sv <- num.sv(edata, mod, method = "leek")
 # Apply the sva function to extimate surrogate variables:
@@ -793,10 +863,8 @@ First, we will check if we can find any hidden batch effects.
 
 ```{r, echo = F}
 # setting up the data for SVA
-pheno <- pData
 edata <- exprs(transcriptSummaries)
 mod <- model.matrix(~ PRS.SCZ + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
-mod0 <- model.matrix(~ 1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
 # estimate the number of latent factors
 n.sv <- num.sv(edata, mod, method = "leek")
 # Apply the sva function to estimate surrogate variables:
@@ -844,10 +912,7 @@ First, we will check if we can find any hidden batch effects.
 
 ```{r, echo = F}
 # setting up the data for SVA
-pheno <- pData
-edata <- exprs(transcriptSummaries)
 mod <- model.matrix(~ PRS.MDD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
-mod0 <- model.matrix(~ 1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
 # estimate the number of latent factors
 n.sv <- num.sv(edata, mod, method = "leek")
 # Apply the sva function to extimate surrogate variables:
@@ -895,10 +960,7 @@ First, we will check if we can find any hidden batch effects.
 
 ```{r, echo = F}
 # setting up the data for SVA
-pheno <- pData
-edata <- exprs(transcriptSummaries)
 mod <- model.matrix(~ PRS.BIP + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
-mod0 <- model.matrix(~ 1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
 # estimate the number of latent factors
 n.sv <- num.sv(edata, mod, method = "leek")
 # Apply the sva function to extimate surrogate variables:
@@ -946,10 +1008,7 @@ First, we will check if we can find any hidden batch effects.
 
 ```{r, echo = F}
 # setting up the data for SVA
-pheno <- pData
-edata <- exprs(transcriptSummaries)
 mod <- model.matrix(~ PRS.CD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
-mod0 <- model.matrix(~ 1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
 # estimate the number of latent factors
 n.sv <- num.sv(edata, mod, method = "leek")
 # Apply the sva function to extimate surrogate variables:
@@ -1001,23 +1060,23 @@ First, we will check if we can find any hidden batch effects.
 ```{r, echo = F}
 # setting up the data for SVA
 pheno <- pData
-edata <- exprs(geneSummaries)
+edata <- exprs(exonSummaries)
 mod <- model.matrix(~ PRS.SCZ + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
-mod0 <- model.matrix(~ 1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
 # estimate the number of latent factors
 n.sv <- num.sv(edata, mod, method = "leek")
 # Apply the sva function to estimate surrogate variables:
 svobj <- sva(edata, mod, mod0, n.sv = n.sv)
+pData$SV1.prs.scz <- svobj$sv
 ```
 
-We found 0 surrogate variables, so we can run the DEA with Dx changed to PRS.SCZ:
+We found 1 surrogate variable, so we can run the DEA with Dx changed to PRS.SCZ and include the SV1:
 
 ```{r}
 # generate design matrix for SCZ PRS
-design <- model.matrix(~ PRS.SCZ + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, pData)
+design <- model.matrix(~ PRS.SCZ + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1.prs.scz, pData)
 
 # get top DE genes
-fit <- lmFit(geneSummaries, design)
+fit <- lmFit(exonSummaries, design)
 fit2 <- eBayes(fit)
 top.hits <- topTable(fit2, coef = "PRS.SCZ", adjust = "BH", number = Inf) 
 head(top.hits) 
@@ -1026,15 +1085,15 @@ head(top.hits)
 Save the resulting table into an output file. 
 
 ```{r}
-colnames(top.hits) <- c("Ensembl Gene ID", "Location", "Gene Symbol", "logFC", "Average Expression", "t-statistic", "p-value", "FDR estimate", "B coefficient")
-write.table(top.hits, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/02_differentially_expressed_genes_for_SCZ_PRS.csv", sep = "\t", row.names = F)
+colnames(top.hits) <- c("Ensembl Exon ID", "Location", "Ensembl Gene ID", "Gene Symbol", "logFC", "Average Expression", "t-statistic", "p-value", "FDR estimate", "B coefficient")
+write.table(top.hits, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/02_differentially_expressed_exons_for_SCZ_PRS.csv", sep = "\t", row.names = F)
 ```
 
 Generate a volcano plot for the data:
 
 ```{r}
 # volcano plot
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/02_volcano_plot_differentially_expressed_genes_for_SCZ_PRS.pdf", width = 8, height = 6)
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/02_volcano_plot_differentially_expressed_exons_for_SCZ_PRS.pdf", width = 8, height = 6)
 volcanoplot(fit2, coef = "PRS.SCZ", names = fit2$genes$gene_name, cex = 0.5, cex.axis = 1.5, cex.lab = 1.5, las = 1)
 lp <- -log10(fit2$p.value[,"PRS.SCZ"])
 ord <- order(lp, decreasing = TRUE)[1:10]
@@ -1051,24 +1110,22 @@ First, we will check if we can find any hidden batch effects.
 
 ```{r, echo = F}
 # setting up the data for SVA
-pheno <- pData
-edata <- exprs(geneSummaries)
 mod <- model.matrix(~ PRS.MDD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
-mod0 <- model.matrix(~ 1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
 # estimate the number of latent factors
 n.sv <- num.sv(edata, mod, method = "leek")
 # Apply the sva function to extimate surrogate variables:
 svobj <- sva(edata, mod, mod0, n.sv = n.sv)
+pData$SV1.prs.mdd <- svobj$sv
 ```
 
 We found 0 surrogate variables, so we can run the DEA with Dx changed to PRS.MDD:
 
 ```{r}
 # generate design matrix for MDD PRS
-design <- model.matrix(~ PRS.MDD + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, pData)
+design <- model.matrix(~ PRS.MDD + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1.prs.mdd, pData)
 
 # get top DE genes
-fit <- lmFit(geneSummaries, design)
+fit <- lmFit(exonSummaries, design)
 fit2 <- eBayes(fit)
 top.hits <- topTable(fit2, coef = "PRS.MDD", adjust = "BH", number = Inf) 
 head(top.hits) 
@@ -1077,15 +1134,15 @@ head(top.hits)
 Save the resulting table into an output file. 
 
 ```{r}
-colnames(top.hits) <- c("Ensembl Gene ID", "Location", "Gene Symbol", "logFC", "Average Expression", "t-statistic", "p-value", "FDR estimate", "B coefficient")
-write.table(top.hits, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/03_differentially_expressed_genes_for_MDD_PRS.csv", sep = "\t", row.names = F)
+colnames(top.hits) <- c("Ensembl Exon ID", "Location", "Ensembl Gene ID", "Gene Symbol", "logFC", "Average Expression", "t-statistic", "p-value", "FDR estimate", "B coefficient")
+write.table(top.hits, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/03_differentially_expressed_exons_for_MDD_PRS.csv", sep = "\t", row.names = F)
 ```
 
 Generate a volcano plot for the data:
 
 ```{r}
 # volcano plot
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/03_volcano_plot_differentially_expressed_genes_for_MDD_PRS.pdf", width = 8, height = 6)
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/03_volcano_plot_differentially_expressed_exons_for_MDD_PRS.pdf", width = 8, height = 6)
 volcanoplot(fit2, coef = "PRS.MDD", names = fit2$genes$gene_name, cex = 0.5, cex.axis = 1.5, cex.lab = 1.5, las = 1)
 lp <- -log10(fit2$p.value[,"PRS.MDD"])
 ord <- order(lp, decreasing = TRUE)[1:10]
@@ -1102,24 +1159,22 @@ First, we will check if we can find any hidden batch effects.
 
 ```{r, echo = F}
 # setting up the data for SVA
-pheno <- pData
-edata <- exprs(geneSummaries)
 mod <- model.matrix(~ PRS.BIP + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
-mod0 <- model.matrix(~ 1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
 # estimate the number of latent factors
 n.sv <- num.sv(edata, mod, method = "leek")
 # Apply the sva function to extimate surrogate variables:
 svobj <- sva(edata, mod, mod0, n.sv = n.sv)
+pData$SV1.prs.bip <- svobj$sv
 ```
 
 We found 0 surrogate variables, so we can run the DEA with Dx changed to PRS.MDD:
 
 ```{r}
 # generate design matrix for BIP PRS
-design <- model.matrix(~ PRS.BIP + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, pData)
+design <- model.matrix(~ PRS.BIP + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1.prs.bip, pData)
 
 # get top DE genes
-fit <- lmFit(geneSummaries, design)
+fit <- lmFit(exonSummaries, design)
 fit2 <- eBayes(fit)
 top.hits <- topTable(fit2, coef = "PRS.BIP", adjust = "BH", number = Inf) 
 head(top.hits) 
@@ -1128,15 +1183,15 @@ head(top.hits)
 Save the resulting table into an output file. 
 
 ```{r}
-colnames(top.hits) <- c("Ensembl Gene ID", "Location", "Gene Symbol", "logFC", "Average Expression", "t-statistic", "p-value", "FDR estimate", "B coefficient")
-write.table(top.hits, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/04_differentially_expressed_genes_for_BIP_PRS.csv", sep = "\t", row.names = F)
+colnames(top.hits) <- c("Ensembl Exon ID", "Location", "Ensembl Gene ID", "Gene Symbol", "logFC", "Average Expression", "t-statistic", "p-value", "FDR estimate", "B coefficient")
+write.table(top.hits, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/04_differentially_expressed_exons_for_BIP_PRS.csv", sep = "\t", row.names = F)
 ```
 
 Generate a volcano plot for the data:
 
 ```{r}
 # volcano plot
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/04_volcano_plot_differentially_expressed_genes_for_BIP_PRS.pdf", width = 8, height = 6)
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/04_volcano_plot_differentially_expressed_exons_for_BIP_PRS.pdf", width = 8, height = 6)
 volcanoplot(fit2, coef = "PRS.BIP", names = fit2$genes$gene_name, cex = 0.5, cex.axis = 1.5, cex.lab = 1.5, las = 1)
 lp <- -log10(fit2$p.value[,"PRS.BIP"])
 ord <- order(lp, decreasing = TRUE)[1:10]
@@ -1153,24 +1208,22 @@ First, we will check if we can find any hidden batch effects.
 
 ```{r, echo = F}
 # setting up the data for SVA
-pheno <- pData
-edata <- exprs(geneSummaries)
 mod <- model.matrix(~ PRS.CD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
-mod0 <- model.matrix(~ 1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
 # estimate the number of latent factors
 n.sv <- num.sv(edata, mod, method = "leek")
 # Apply the sva function to extimate surrogate variables:
 svobj <- sva(edata, mod, mod0, n.sv = n.sv)
+pData$SV1.prs.cd <- svobj$sv
 ```
 
 We found 0 surrogate variables, so we can run the DEA with Dx changed to PRS.MDD:
 
 ```{r}
 # generate design matrix for Cross-disorder PRS
-design <- model.matrix(~ PRS.CD + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, pData)
+design <- model.matrix(~ PRS.CD + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1.prs.cd, pData)
 
 # get top DE genes
-fit <- lmFit(geneSummaries, design)
+fit <- lmFit(exonSummaries, design)
 fit2 <- eBayes(fit)
 top.hits <- topTable(fit2, coef = "PRS.CD", adjust = "BH", number = Inf) 
 head(top.hits) 
@@ -1179,15 +1232,15 @@ head(top.hits)
 Save the resulting table into an output file. 
 
 ```{r}
-colnames(top.hits) <- c("Ensembl Gene ID", "Location", "Gene Symbol", "logFC", "Average Expression", "t-statistic", "p-value", "FDR estimate", "B coefficient")
-write.table(top.hits, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/05_differentially_expressed_genes_for_CD_PRS.csv", sep = "\t", row.names = F)
+colnames(top.hits) <- c("Ensembl Exon ID", "Location", "Ensembl Gene ID", "Gene Symbol", "logFC", "Average Expression", "t-statistic", "p-value", "FDR estimate", "B coefficient")
+write.table(top.hits, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/05_differentially_expressed_exons_for_CD_PRS.csv", sep = "\t", row.names = F)
 ```
 
 Generate a volcano plot for the data:
 
 ```{r}
 # volcano plot
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/05_volcano_plot_differentially_expressed_genes_for_CD_PRS.pdf", width = 8, height = 6)
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/05_volcano_plot_differentially_expressed_exons_for_CD_PRS.pdf", width = 8, height = 6)
 volcanoplot(fit2, coef = "PRS.CD", names = fit2$genes$gene_name, cex = 0.5, cex.axis = 1.5, cex.lab = 1.5, las = 1)
 lp <- -log10(fit2$p.value[,"PRS.CD"])
 ord <- order(lp, decreasing = TRUE)[1:10]
@@ -1196,146 +1249,6 @@ x <- fit2$coef[ord,"PRS.CD"]
 y <- lp[ord]
 text(x, y, fit2$genes$gene_name[ord], cex = 1.2, col = viridis(1))
 dev.off()
-```
-
-
-
-
-### UNSORTED
-
-## Exon Level 
-
-```{r, echo = F}
-# generate design matrix
-design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1_ex, pData)
-head(design)
-# get top DE genes
-fit <- lmFit(exonSummaries, design)
-fit2 <- eBayes(fit)
-top.hits <- topTable(fit2, coef = "DxSCZ", adjust = "BH", number = Inf)
-head(top.hits)
-length(top.hits[top.hits$P.Value < 0.01, "P.Value"])
-```
-
-Get significantly differentially expressed genes for all the different covariates. 
-
-```{r, echo = F}
-# Get padj values for all different covariates
-nc = ncol(design) - 1
-limma.res.fc = topTable(fit2, adjust = "BH", sort.by = "none", number = Inf)
-limma.res.padj = limma.res.fc[, 5:(4 + nc)]
-#limma.res.padj
-for (i in 1:nc){
-    limma.res.padj[, i] = topTable(fit2, adjust = "BH", sort.by = "none", number = Inf, coef = i + 1)[, 9]
-}
-head(limma.res.padj)
-colnames(limma.res.padj) <- c("Diagnosis", "Age", "Sex", "pH", "PMI", "RIN", "RIN2", "Suicide", "Type_of_Death1", "Type_of_Death2", "C1", "C2", "C3", "C4")
-limma.res.padj$Type_of_Death <- (limma.res.padj$Type_of_Death1 + limma.res.padj$Type_of_Death2) / 2
-limma.res.padj <- limma.res.padj[, c("Diagnosis", "Age", "Sex", "pH", "PMI", "RIN", "RIN2", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4")]
-#pheatmap(as.matrix(limma.res.padj), show_rownames = F)
-# check, how many padj values are < 0.10
-limma.res.padj.0.05 <- apply(limma.res.padj, 2, function(x) sum(x < 0.1))
-limma.res.exon <- as.data.frame(sort(limma.res.padj.0.05, decreasing = T))
-
-# vertical barplot with ggplot2...
-pdf("/storage/scratch/users/karolina.worf/MPIP/04.DEX/figures/barplot_significant_DEA_hits_exons.pdf")
-ggplot(limma.res.exon, aes(y = limma.res.exon$`sort(limma.res.padj.0.05, decreasing = T)`, x = reorder(row.names(limma.res.exon), `sort(limma.res.padj.0.05, decreasing = T)`))) +
-  geom_bar(stat = "identity") +
-  coord_flip() +
-  theme_minimal() +
-  theme(text = element_text(size = 22)) +
-  ylab("# significant hits") +
-  xlab("") +
-  geom_text(size = 7, aes(label = limma.res.exon$`sort(limma.res.padj.0.05, decreasing = T)`), nudge_y = 120, colour = "dimgray") +
-  scale_y_continuous(expand = c(0.02, 0.01))
-dev.off()
-
-### BOTH (gene + exon barplot) ###
-colnames(limma.res.gene) <- "counts"
-limma.res.gene$type <- "gene"
-limma.res.gene$covariates <- row.names(limma.res.gene)
-colnames(limma.res.exon) <- "counts"
-limma.res.exon$type <- "exon"
-limma.res.exon$covariates <- row.names(limma.res.exon)
-limma.res.both <- rbind(limma.res.gene, limma.res.exon)
-limma.res.both$covariates <- as.factor(limma.res.both$covariates)
-limma.res.both$covariates <- factor(limma.res.both$covariates, levels = c("C4", "C3", "C2", "C1", "Type_of_Death","Suicide", "RIN2", "RIN", "Diagnosis", "Sex", "PMI", "pH", "Age"))
-
-# save plot
-pdf("/storage/scratch/users/karolina.worf/MPIP/04.DEX/figures/barplots_significant_DEA_hits_gene_and_exons_combined.pdf")
-p <- ggplot(limma.res.both, aes(y = counts, x = covariates)) +
-  geom_bar(stat = "identity") +
-  coord_flip() + 
-  theme(axis.ticks = element_line(colour = NA), text = element_text(size = 22), panel.background = element_rect(fill = NA), panel.grid.major.x = element_line(colour = "grey"), panel.grid.minor.x = element_line(colour = "grey"), strip.background =element_rect(fill = NA)) +
-  ylab("# significant hits") +
-  xlab("") +
-  geom_text(size = 7, aes(label = limma.res.both$counts), nudge_y = 120, colour = "dimgray") +
-  scale_y_continuous(expand = c(0.02, 0.01))
-p + facet_wrap(~ type, scale = "free_x") + theme(panel.spacing = unit(2, "lines"))
-dev.off()
-```
-
-## Boxplot Suicide vs. No Suicide
-
-Generate boxplot for suicide vs. no suicide in all diagnosis (SCZ, BPD, MDD):
-
-```{r, echo = F, include = F, eval = F, fig.align = 'left', fig.fullwidth = TRUE}
-# 1. Get gene expression for the ten genes
-# save mapping of probeid to gene symbol
-probeids <- geneSummaries@featureData@data[geneSummaries@featureData@data$SYMBOL %in% c("SERTAD4", "HTR1F", "NTN4", "SLC24A2", "BCAT1", "CNGB1", "ESRRG", "CDH6", "SPOCK1", "FBXO9"), c("PROBEID", "SYMBOL")] # using only the 10 hits wihtout suicide as covariate
-#probeids <- geneSummaries@featureData@data[geneSummaries@featureData@data$SYMBOL %in% c("SERTAD4", "EPM2A", "DCUN1D2", "GPLD1", "HTR1F", "NTN4", "SLC24A2", "BCAT1", "CNGB1", "ESRRG", "CDH6", "SPOCK1", "FBXO9", "DUSP10"), c("PROBEID", "SYMBOL")] # using all hits
-
-# 2. Get gene expression adjusted for all covariates (except Suicide and Diagnosis)
-all <- data.frame(ShortName = character(), Expression = numeric(), Gene = character(), stringsAsFactors = FALSE) 
-for (gene in probeids$SYMBOL) { 
-  # 1. Get gene expression of one of the genes (using the probeid)
-  top.gene <- as.data.frame(exprs(geneSummaries)[rownames(exprs(geneSummaries)) == probeids[probeids$SYMBOL == gene, "PROBEID"], ])
-  # change rownames from probeids to gene symbols
-  colnames(top.gene) <- gene
-
-  # Get residuals for every covariate for which we want to adjust (without Suicide and Diagnosis)
-  cov <- c("Sex", "Age", "pH", "PMI", "RIN", "RIN2", "C1", "C2", "C3", "C4")
-  res <- as.list(10)
-  for (name in cov) {
-    # generate design matrix with only one covariate
-    design <- model.matrix(~ get(name), pData)
-    fit <- lmFit(t(top.gene), design)
-    res[[paste("res", name, sep = "_")]] <- fit$coefficients[, 2] * design[, 2] #residuals(fit, top.genes) * design[, 2]
-  }
-
-  # 3. Get gene expression without Suicide removed
-  # gene expression with Suicide AND Diagnosis NOT removed 
-  expr <- top.gene - design[, 1] - res$res_Sex - res$res_Age - res$res_pH - res$res_PMI - res$res_RIN - res$res_RIN2 - res$res_C1 - res$res_C2 - res$res_C3 - res$res_C4
-  # Save data into a data.frame
-  expr <- data.frame(ShortName = rownames(expr), Expression = expr[[1]], Gene = gene)
-  # Add data for all genes together
-  all <- rbind(all, expr)
-}
-# Add Suicide and Diagnosis to the dataset
-all <- merge(all, pData[, c("ShortName", "Diagnosis", "Suicide")], by = "ShortName", all.x = T)
-all$Diagnosis <- factor(all$Diagnosis, levels = c("CTL", "SCZ", "BPD", "MDD"))
-# 3. Generate boxplot for each gene showing the suicide effect
-#png(paste("/home/karolina/Desktop/PhD/MPIP/workspace/Results/boxplot_", gene, "_suicide2.png", sep = ""), width = 10, height = 6, units = 'in', res = 300) 
-p <- ggplot(all, aes(x = Diagnosis, y = Expression)) + 
-  geom_boxplot(aes(fill = Suicide)) +
-  scale_fill_manual(labels = c("No", "Yes"), values = c(viridis(20)[6], viridis(20)[14])) + 
-  theme(axis.title.x = element_blank(), axis.text = element_text(size = 14), axis.title.y = element_text(size = 20), legend.text = element_text(size = 16), legend.title = element_text(size = 18))
-p + facet_wrap(~ Gene, scales = "free_y", ncol = 5) + theme(strip.text.x = element_text(size = 10, face = "bold"), strip.text.y = element_text(size = 12))
-#dev.off()
-
-library(MatrixEQTL)
-  gene <- SlicedData$new()
-  gene$fileDelimiter <- "\t"      # the TAB character
-  gene$fileOmitCharacters <- "NA" # denote missing values;
-  gene$fileSkipRows <- 1          # one row of column labels
-  gene$fileSkipColumns <- 1      # one column of row labels
-  gene$fileSliceSize <- 2000      # read file in pieces of 2,000 rows
-  gene$LoadFile("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/01_pmb_exon_expr_SCZ_CTL.txt")
-  
-for (i in 1:gene$nSlices1) {
-  print(gene$getSlice(i))
-}
-
 ```
 
 

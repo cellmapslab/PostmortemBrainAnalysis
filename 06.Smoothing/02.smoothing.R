@@ -115,3 +115,40 @@ for(i in seq_along(weights.smoothed)){
 head(prs_scz2_2)
 # save new LDpred weights file
 write.table(prs_scz2_2, "/storage/scratch/users/karolina.worf/MPIP/06.Smoothing/output/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_scz2_filtered_eqtl_smoothed2_ALL_cis_LDpred_p3.0000e-01.txt", row.names = F, col.names = T, sep = "    ", quote = F)
+
+
+
+
+#############################
+### TEST: ABSOLUTE VALUES ###
+#############################
+# load SCZ2 PRS weights
+prs_scz2 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/SCZ2/02_LDpred/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_scz2_filtered_LDpred_p3.0000e-01.txt", header = T, stringsAsFactors = F, data.table = F)
+# get absolute value of LDpred weights
+prs_scz2$ldpred_beta_new <- abs(prs_scz2$ldpred_beta)
+# remove old LDpred values
+prs_scz2$ldpred_beta <- NULL
+# change colnames
+colnames(prs_scz2) <- c("chrom", "pos", "sid", "nt1", "nt2", "raw_beta", "ldpred_beta")
+# save new LDpred weights file
+write.table(prs_scz2, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/SCZ2/02_LDpred/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_scz2_filtered_absolute_weights_LDpred_p3.0000e-01.txt", row.names = F, col.names = T, sep = "    ", quote = F)
+
+# 3. Run Validation (get score for each patient)
+#/storage/groups/ccm01/tools/ldpred-master/LDpred.py score --gf /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/SCZ2/00_input/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_scz2_filtered --rf /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/SCZ2/02_LDpred/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_scz2_filtered_absolute_weights --f 0.3 --pf /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/phenotypes.txt --out /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/SCZ2/03_validate/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_scz2_filtered_absolute_weights_PRS &> /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/SCZ2/03_validate/validate.log
+
+
+
+# load SCZ2 PRS weights
+prs_scz2 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/SCZ2/02_LDpred/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_scz2_filtered_LDpred_p3.0000e-01.txt", header = T, stringsAsFactors = F, data.table = F)
+# change directions (+ to - and vice versa) of LDpred weights
+prs_scz2$ldpred_beta_new <- prs_scz2$ldpred_beta * (-1)
+# remove old LDpred values
+prs_scz2$ldpred_beta <- NULL
+# change colnames
+colnames(prs_scz2) <- c("chrom", "pos", "sid", "nt1", "nt2", "raw_beta", "ldpred_beta")
+# save new LDpred weights file
+write.table(prs_scz2, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/SCZ2/02_LDpred/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_scz2_filtered_reverse_weights_LDpred_p3.0000e-01.txt", row.names = F, col.names = T, sep = "    ", quote = F)
+
+# 3. Run Validation (get score for each patient)
+#/storage/groups/ccm01/tools/ldpred-master/LDpred.py score --gf /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/SCZ2/00_input/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_scz2_filtered --rf /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/SCZ2/02_LDpred/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_scz2_filtered_reverse_weights --f 0.3 --pf /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/phenotypes.txt --out /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/SCZ2/03_validate/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_scz2_filtered_reverse_weights_PRS &> /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/SCZ2/03_validate/validate_reverse.log
+

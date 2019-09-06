@@ -256,7 +256,7 @@ rm(index, transcriptIds, probesetIds)
 
 # Gene level 
 
-## Summarization
+## Summarization from transcripts to genes
 
 To summarize the core data to gene level, we need to map the transcript cluster IDs to Ensembl gene IDs. For the mapping to gene IDs we generate a GRanges Object out of the Affymetrix transcript information (chr, start, stop and transcript cluster ID) given in the HuEx file loaded in the **Filtering** section. 
 
@@ -292,11 +292,23 @@ mapping <- mapping[!duplicated(mapping), ] # remove duplicated rows
 expressions <- merge(exprs(coreSummaries), mapping, by.x = "row.names", by.y = "id_internal_huex")
 expressions$Row.names <- NULL # remove Row.names column
 
-# Summarize to gene level using median expression
-exprDt <- data.table(expressions)
-exprDt <- exprDt[, lapply(.SD, median), by = 'gene_id']
-exprsSummarized <- as.matrix(exprDt[, -1])
-rownames(exprsSummarized) <- exprDt$gene_id
+# Summarize to gene level using median expression (by grouping expression by gene ID together and taking colMedian)
+exprDt <- as.data.frame(expressions)
+genenames <- exprDt$gene_id
+exprDt$gene_id <- NULL
+exprs <- exprDt
+
+exprsSummarized <- do.call(rbind, tapply(1:nrow(exprs), genenames, function(i){
+  if(length(i) > 1){
+    apply(exprs[i, ], MARGIN = 2, median)
+  } else {
+    exprs[i, ]
+  }
+}))
+exprsSummarized <- as.matrix(exprsSummarized)
+#exprDt <- exprDt[, lapply(.SD, median), by = 'gene_id']
+#exprsSummarized <- as.matrix(exprDt[, -1])
+#rownames(exprsSummarized) <- exprDt$gene_id
 ```
 
 Now, we build a new ExonFeatureSet including the gene summarized expressions. 
@@ -328,7 +340,7 @@ save(geneSummaries, annoGenes, file = "/storage/groups/ccm01/workspace/MPIP-Dean
 rm(probesets, genes, mapping, exprDt, exprsSummarized, df, data, expressions, coreSummaries)
 ```
 
-## Annotation
+### Annotation
 
 For the annotation we need the Affymetrix Annotation and GENCODE data generated before. As it is not easy to interpret results mapping to multiple genes, we will remove multiple mappings from the dataset and save the annotated data into an RData file.
 
@@ -412,7 +424,7 @@ rm(anno.Genes, genesToRemove, idsToExclude)
 ```
 
 
-## Batch Correction
+### Batch Correction
 
 For the batch correction of the known batches of the microarrays, we will use ComBat from the Surrogate Variable Analysis (SVA) package. We have five batches (1: 64 samples, 2: 86 samples, 3,: 11 samples 4: 3 samples, A: 40 samples) included in the data. A plot as well as a more detailed description is given in the *02_QC_And_Plots.Rmd* script. 
 
@@ -426,7 +438,203 @@ identical(rownames(exprs(geneSummaries)), rownames(exprsCombat))
 exprs(geneSummaries) <- exprsCombat
 dim(geneSummaries)
 save(geneSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_gene_summaries_annotated_batch_corrected.RData")
-rm(geneSummaries)
+rm(geneSummaries, exprsRaw, batch, modCombat, exprsCombat)
+```
+
+
+## Summarization from probesets to genes
+
+To summarize the probeset data to gene level, we need to map the probeset IDs to gene IDs. For the mapping to gene IDs we generate a GRanges Object out of the Affymetrix probeset information (chr, start, stop and probeset ID) given in the HuEx file loaded in the **Filtering** section. 
+
+```{r}
+# Generate GRanges object for the probeset information (with chr, start, stop and probeset id)
+probesets <- GRanges(seqnames = Rle(paste0(huexProbeset$seqname)), 
+                     ranges = IRanges(start = as.numeric(as.character(huexProbeset$start)), 
+                     end = as.numeric(as.character(huexProbeset$stop))),
+                     id_internal_huex = huexProbeset$probeset_id)
+```
+
+For the annotation to gene level, we need the information of all genes Therefore, we load the Gencode file and filter for gene IDs to build our annotation dataset. This generates the necessary probeset ID to gene ID mapping for the annotation in the next section.
+
+```{r}
+# Load Gencode gtf file
+genes <- import.gff("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/annotation_files/gencode.v19.annotation.gtf", format = "gtf")
+# get only protein-coding genes
+genes <- genes[genes$gene_type == "protein_coding"]  
+# get only transcripts from the genes
+genes <- genes[genes$type == "gene"]  
+
+# Merge the probeset ids to gencode annotation by using the overlap of sequence ranges and generate the annotation mapping dataset
+findOverlaps(probesets, genes, ignore.strand = T)
+annoGenes <- mergeByOverlaps(probesets, genes)
+annoGenes <- annoGenes[, c("probesets", "id_internal_huex", "gene_id", "transcript_id", "exon_id", "gene_name")]
+```
+
+To summarize the dataset based on gene IDs, we will first rename the rows of the expression matrix to the gene IDs and summarize using these IDs and the median (NOT median polish!!) of their expressions.
+
+```{r}
+# remove probesets that do not have a gene id mapping
+probesetSummaries <- probesetSummaries[featureNames(probesetSummaries) %in% as.character(annoGenes$id_internal_huex), ]
+
+# get probeset to Ensemble Gene ID mapping
+mapping <- annoGenes[, c("id_internal_huex", "gene_id")]
+mapping <- mapping[!duplicated(mapping), ] # remove duplicated rows
+
+# merge probeset expression matrix with the mapping file (to get gene IDs)
+expressions <- merge(exprs(probesetSummaries), mapping, by.x = "row.names", by.y = "id_internal_huex", all.x = T)
+expressions$Row.names <- NULL # remove Row.names column
+
+# Summarize to gene level using median expression
+exprDt <- as.data.frame(expressions)
+genenames <- exprDt$gene_id
+exprDt$gene_id <- NULL
+exprs <- exprDt
+
+exprsSummarized <- do.call(rbind, tapply(1:nrow(exprs), genenames, function(i){
+  if(length(i) > 1){
+    apply(exprs[i, ], MARGIN = 2, median)
+  } else {
+    exprs[i, ]
+  }
+}))
+exprsSummarized <- as.matrix(exprsSummarized)
+```
+
+Now, we build a new ExonFeatureSet including the gene summarized expressions. 
+
+```{r}
+# generate empty data.frame with rownumbers of exprs_summarized as row names for featureData of the ExpressionSet
+df <- matrix(NA, ncol = 1, nrow = length(rownames(exprsSummarized)))[, -1]
+row.names(df) <- row.names(exprsSummarized)
+data <- AnnotatedDataFrame(as.data.frame(df))
+
+# generate new ExonFeatureSet
+geneSummaries <- new("ExonFeatureSet", 
+                      exprs = exprsSummarized, 
+                      phenoData = phenoData(probesetSummaries), 
+                      featureData = data, 
+                      experimentData = experimentData(probesetSummaries), 
+                      protocolData = protocolData(probesetSummaries), 
+                      annotation = "pd.huex.1.0.st.v2")
+dim(geneSummaries)
+```
+
+Save the gene summarized data into an RData file and remove unnecessary data.
+
+```{r}
+# save data
+save(geneSummaries, annoGenes, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/4_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_gene_summaries.RData")
+
+# remove unnecessary data
+rm(genes, mapping, exprDt, exprsSummarized, df, data, expressions, probesetSummaries)
+```
+
+## Annotation
+
+We need the Affymetrix Annotation and GENCODE data generated before, but first we check if any probeset ID has no gene ID mapping (all probesets have a Gene ID given! => no filtering done here!).
+
+```{r}
+nrow(annoGenes)
+annoGenes <- annoGenes[!is.na(annoGenes$gene_id), ]
+nrow(annoGenes)
+```
+
+Some parts of the data can be mapped to several gene names. As it is not easy to interpret results mapping to multiple genes, we will remove multiple mappings from the dataset and save the annotated data into an RData file (code and text from: https://f1000research.com/articles/5-1384/v2).
+
+```{r}
+annoGenes <- as.data.table(annoGenes)
+
+# get min start and max stop position for one gene
+annoGenes <- annoGenes[, list(chr = probesets.seqnames, 
+                              start = min(probesets.start), 
+                              end = max(probesets.end), 
+                              gene_id = gene_id, 
+                              gene_name = gene_name), by = gene_id]
+# remove duplicated gene_id column (column number 5)
+annoGenes <- annoGenes[, -c(5)]
+
+# paste chr, start and stop together
+annoGenes <- annoGenes[!duplicated(annoGenes), ]
+annoGenes <- annoGenes[ , new := do.call(paste, c(.SD, sep = ":")), .SDcols = -c(1, 4, 5)]
+annoGenes <- annoGenes[ , c(6, 1:5)]
+annoGenes <- annoGenes[ , location := do.call(paste, c(.SD, sep = "-")), .SDcols = -c(2, 3, 4, 6)]
+annoGenes <- annoGenes[ , c(2, 7, 6)]
+
+# NO multiple ID to symbol mapping => no filtering of multiple mapped genes
+annoSummarized <- annoGenes[, .(count = uniqueN(gene_name)), by = gene_id]  # group by Ensmeble gene ID and count number of different gene names
+table(annoSummarized$count) # no multiple mapped genes (NO count > 1)
+
+# now join the expression dataset with the annotation 
+fData(geneSummaries)$gene_id <- rownames(fData(geneSummaries))
+fData(geneSummaries) <- left_join(fData(geneSummaries), annoGenes)
+rownames(fData(geneSummaries)) <- fData(geneSummaries)$gene_id
+length(rownames(fData(geneSummaries)))
+dim(geneSummaries)
+```
+
+Remove genes which are located on the X, Y or M chromosome as they are hard to interpret. 
+
+```{r}
+genesToRemove <- annoGenes[startsWith(annoGenes$location, "chrX") | startsWith(annoGenes$location, "chrY") | startsWith(annoGenes$location, "chrM"), "gene_id"]
+idsToExclude <- (featureNames(geneSummaries) %in% genesToRemove$gene_id)
+geneSummaries <- subset(geneSummaries, !idsToExclude)  # remove genes on chr X, Y and M
+dim(geneSummaries)
+```
+
+Remove genes which have exactly the same expression values in all samples (so called multi-mapped samples). This is a necessary step, as we would count genes multiple times (overlapping genes on the genome) leading to high non-significant FDR (multiple testing) correction values in the differential expression analysis later. Instead of completely removing them, we just keep one of the duplicated rows and merge the gene IDs together (separated by a vertical slash: |). We also do the same for all the annotation information in the feature data (fData) and save everything into a new ExonFeatureSet.
+
+```{r}
+# 1. Remove duplicated rows and merge rownames of duplicated rows together
+expressions <- aggregate(rownames(exprs(geneSummaries)) ~., exprs(geneSummaries), paste, collapse = '|') 
+rownames(expressions) <- expressions$`rownames(exprs(geneSummaries))`  # change rownames to new merged rownames
+expressions$`rownames(exprs(geneSummaries))` <- NULL  # remove rownames column
+
+# 2. Merge the annotation of the merged rownames as well
+annoNew <- data.frame()
+for (rows in rownames(expressions)) {
+  if (grepl("\\|", rows)) {
+    ids <- strsplit(rows, "\\|")
+    idsAnno <- fData(geneSummaries)[rownames(fData(geneSummaries)) %in% ids[[1]], ]
+    idsAnno <- t(data.frame(apply(idsAnno, 2, paste, collapse = "|")))
+    rownames(idsAnno) <- rows
+    annoNew <- rbind(annoNew, idsAnno)
+  } else {
+    annoNew <- rbind(annoNew, fData(geneSummaries)[rownames(fData(geneSummaries)) == rows, ])
+  }
+}
+
+# 3. Generate new ExonFeatureSet
+geneSummaries <- new("ExonFeatureSet", 
+                      exprs = expressions, 
+                      phenoData = phenoData(geneSummaries), 
+                      featureData = AnnotatedDataFrame(annoNew) , 
+                      experimentData = experimentData(geneSummaries), 
+                      protocolData = protocolData(geneSummaries), 
+                      annotation = "pd.huex.1.0.st.v2")
+dim(geneSummaries)
+```
+
+We do not have any NA's in the gene IDs and/or gene symbols, so we do not need to exclude them. Therefore, we can just save the annotated dataset into an RData file:
+
+```{r}
+save(geneSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/5_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_gene_summaries_annotated.RData")
+rm(annoNew, ids, idsAnno, expressions, probesets, annoSummarized, annoGenes, genesToRemove, idsToExclude)
+```
+
+## Batch correction
+
+For the batch correction of the known batches of the microarrays, we will use ComBat from the Surrogate Variable Analysis (SVA) package. We have five batches (1: 64 samples, 2: 86 samples, 3,: 11 samples 4: 3 samples, A: 40 samples) included in the data. A plot as well as a more detailed description is given in the *02_QC_And_Plots.Rmd* script. 
+
+```{r}
+exprsRaw <- as.matrix(oligo::exprs(geneSummaries))
+batch <- as.factor(pData(geneSummaries)$Batch)
+modCombat <- model.matrix(~1, data = pData(geneSummaries))
+exprsCombat <- ComBat(dat = exprsRaw, batch = batch, mod = modCombat, par.prior = TRUE, prior.plots = FALSE)
+identical(rownames(exprs(geneSummaries)), rownames(exprsCombat)) # check if the two matrices are in the same order
+exprs(geneSummaries) <- exprsCombat
+dim(geneSummaries)
+save(geneSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_gene_summaries_annotated_batch_corrected.RData")
+rm(geneSummaries, exprsRaw, batch, modCombat, exprsCombat)
 ```
 
 
@@ -593,7 +801,7 @@ We do not have any NA's in the gene IDs and/or gene symbols, so we do not need t
 
 ```{r}
 save(transcriptSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/5_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_transcript_summaries_annotated.RData")
-rm(annoFiltered, annoSummarized, annoTranscripts, transcriptsToRemove, idsToExclude)
+rm(annoNew, ids, idsAnno, expressions, probesets, annoFiltered, annoSummarized, annoTranscripts, transcriptsToRemove, idsToExclude)
 ```
 
 ## Batch correction
@@ -609,7 +817,7 @@ identical(rownames(exprs(transcriptSummaries)), rownames(exprsCombat)) # check i
 exprs(transcriptSummaries) <- exprsCombat
 dim(transcriptSummaries)
 save(transcriptSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_transcript_summaries_annotated_batch_corrected.RData")
-rm(transcriptSummaries)
+rm(transcriptSummaries, exprsRaw, batch, modCombat, exprsCombat)
 ```
 
 
@@ -787,8 +995,73 @@ identical(rownames(exprs(exonSummaries)), rownames(exprsCombat)) # check if the 
 exprs(exonSummaries) <- exprsCombat
 dim(exonSummaries)
 save(exonSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_exon_summaries_annotated_batch_corrected.RData")
-rm(exonSummaries)
+rm(exonSummaries, exprsRaw, batch, modCombat, exprsCombat)
 ```
+
+
+# Correlation of the different gene summarization methods
+
+Correlation between genes using oligos core (transcript) summarization vs. probeset summarization. Correlation done using all overlapping genes...
+
+```{r}
+# 1. Load geneSummarizations after batch correction
+# based on coreSummarization
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_gene_summaries_annotated_batch_corrected.RData")
+geneSummaries.core <- geneSummaries
+rm(geneSummaries)
+# based on probesetSummarization
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_gene_summaries_annotated_batch_corrected.RData")
+geneSummaries.probesets <- geneSummaries
+rm(geneSummaries)
+
+# 2. get expression and separate collapsed gene IDs
+exprs.core <- as.data.frame(exprs(geneSummaries.core))
+exprs.core$rownames <- rownames(exprs.core)
+exprs.core <- separate_rows(exprs.core, rownames, sep = "\\|")
+exprs.probesets <- as.data.frame(exprs(geneSummaries.probesets))
+exprs.probesets$rownames <- rownames(exprs.probesets)
+exprs.probesets <- separate_rows(exprs.probesets, rownames, sep = "\\|")
+
+# 2. Get all overlapping gene IDs
+overlapping.genes <- intersect(exprs.core$rownames, exprs.probesets$rownames)
+
+# 3. Calculate correlation of all overlapping genes
+res <- as.data.frame(overlapping.genes)
+res$cor <- lapply(overlapping.gene, function(x) cor(as.numeric(exprs.core[exprs.core$rownames == gene, -c(length(exprs.core))]), as.numeric(exprs.probesets[exprs.probesets$rownames == gene, -c(length(exprs.probesets))]), method = "pearson"))
+
+counts <- 0
+for (gene in overlapping.genes) {
+  res <- cor.test(as.numeric(exprs.core[exprs.core$rownames == gene, -c(length(exprs.core))]), as.numeric(exprs.probesets[exprs.probesets$rownames == gene, -c(length(exprs.probesets))]), alternative = "two.sided", method = "pearson")
+  if(abs(res$estimate) >= 0.50){
+    counts <- counts + 1
+  }
+}
+counts
+range(exprs.core[exprs.core$rownames == "ENSG00000214414.5", -c(length(exprs.core))])
+range(exprs.probesets[exprs.probesets$rownames == "ENSG00000214414.5", -c(length(exprs.probesets))])
+t <- rbind(exprs.core[exprs.core$rownames == "ENSG00000214414.5", -c(length(exprs.core))], exprs.probesets[exprs.probesets$rownames == "ENSG00000214414.5",-c(length(exprs.probesets))])
+cor.test(as.numeric(exprs.core[exprs.core$rownames == "ENSG00000214414.5", -c(length(exprs.core))]), as.numeric(exprs.probesets[exprs.probesets$rownames == "ENSG00000214414.5",-c(length(exprs.probesets))]))
+
+write.table(t, file="/home/icb/karolina.worf/ENSG00000214414.csv", sep= ";", row.names = F)
+
+png("/home/icb/karolina.worf/test.png")
+plot(t[1,], t[2,])
+dev.off()
+     
+### overall correlation ###
+# 1. reduce matrices to overlapping genes
+exprs.core <- exprs.core[exprs.core$rownames %in% overlapping.genes, ]
+exprs.probesets <- exprs.probesets[exprs.probesets$rownames %in% overlapping.genes, ]
+
+# 2. same order of both matrices
+exprs.core <- exprs.core[order(exprs.core$rownames), ]
+exprs.probesets <- exprs.probesets[order(exprs.probesets$rownames), ]
+identical(exprs.core$rownames, exprs.probesets$rownames)
+
+# 3. correlation of both matrices
+cor.test(unlist(c(exprs.core[, -c(length(exprs.core))])), unlist(c(exprs.probesets[, -c(length(exprs.probesets))])), alternative = "two.sided", method = "pearson")
+```
+
 
 
 # Session Info

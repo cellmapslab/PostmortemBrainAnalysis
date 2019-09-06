@@ -17,13 +17,17 @@ library(oligo)
 
 # 2. Load data (all different generated PRS)
 # load, filter and save phenotype data
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/4_affymetrix_exon_microarray_data_after_rma_core_gene_summaries_annotated_combat_batch_corrected.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_gene_summaries_annotated_batch_corrected.RData")
 index <- which(is.na(pData(geneSummaries)$C1))  # remove all samples with C1 = NA
 geneSummaries <- geneSummaries[, -c(index)]
 index <- which(is.na(pData(geneSummaries)$Type_of_Death))  # remove all samples with Type_of_Death = NA
 geneSummaries <- geneSummaries[, -c(index)]
 dim(geneSummaries)
 pData <- pData(geneSummaries)
+
+# Add diagnosis column to pData
+pData$Diagnosis <- as.character(pData$Dx)
+pData[pData$Diagnosis != "CTL", "Diagnosis"] <- "CASE"
 
 # load smoothed PRS scores
 # Remember to add a comma "," at the end of the header line (or remove all commas from the rest of the lines) otherwise read.table or fread can not read in the data correctly. 
@@ -36,11 +40,47 @@ prs.scz2.3 <- fread("/storage/scratch/users/karolina.worf/MPIP/06.Smoothing/outp
 # load LD-smoothed SCZ2 PRS (zeros and smoothed weights)
 prs.scz2.4 <- fread("/storage/scratch/users/karolina.worf/MPIP/06.Smoothing/output/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_scz2_filtered_eqtl_smoothed4_PRS_LDpred_p3.0000e-01.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
 
+prs.gene <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Smoothing/results/gene_cis-eqtl_smoothed_PRS_LDpred_p3.0000e-01.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+prs.gene.cases <-  fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Smoothing/results/gene_cis-eqtl_cases_only_smoothed_PRS_LDpred_p3.0000e-01.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+prs.transcript <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Smoothing/results/transcript_cis-eqtl_smoothed_PRS_LDpred_p3.0000e-01.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+prs.transcript.cases <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Smoothing/results/transcript_cis-eqtl_cases_only_smoothed_PRS_LDpred_p3.0000e-01.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+prs.exon <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Smoothing/results/exon_cis-eqtl_smoothed_PRS_LDpred_p3.0000e-01.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+prs.exon.cases <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Smoothing/results/exon_cis-eqtl_cases_only_smoothed_PRS_LDpred_p3.0000e-01.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+prs.gene.negative <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Smoothing/results/negative_gene_cis-eqtl_smoothed_PRS_LDpred_p3.0000e-01.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+
+prs.bios.gene <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Smoothing/results/bios_blood_gene_cis-eqtl_smoothed_PRS_LDpred_p3.0000e-01.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+prs.bios.exon <-  fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Smoothing/results/bios_blood_exon_cis-eqtl_smoothed_PRS_LDpred_p3.0000e-01.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+prs.cmc.gene <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Smoothing/results/cmc_gene_cis-eqtl_smoothed_PRS_LDpred_p3.0000e-01.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+prs.cmc.iso <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Smoothing/results/cmc_isoform_cis-eqtl_smoothed_PRS_LDpred_p3.0000e-01.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+prs.gtex.wb <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Smoothing/results/gtex_wb_gene_cis-eqtl_smoothed_PRS_LDpred_p3.0000e-01.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+prs.gtex.brain <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Smoothing/results/gtex_brains_gene_cis-eqtl_smoothed_PRS_LDpred_p3.0000e-01.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+
+
 # Add diagnosis column to the PRS
 prs.scz2.1 <- merge(prs.scz2.1, pData, by = "IID")
 prs.scz2.2 <- merge(prs.scz2.2, pData, by = "IID")
 prs.scz2.3 <- merge(prs.scz2.3, pData, by = "IID")
 prs.scz2.4 <- merge(prs.scz2.4, pData, by = "IID")
+
+prs.gene <- merge(prs.gene, pData, by = "IID")
+prs.gene.cases <- merge(prs.gene.cases, pData, by = "IID")
+prs.transcript <- merge(prs.transcript, pData, by = "IID")
+prs.transcript.cases <- merge(prs.transcript.cases, pData, by = "IID")
+prs.exon <- merge(prs.exon, pData, by = "IID")
+prs.exon.cases <- merge(prs.exon.cases, pData, by = "IID")
+prs.gene.negative <- merge(prs.gene.negative, pData, by = "IID")
+
+prs.bios.gene <- merge(prs.bios.gene, pData, by = "IID")
+prs.bios.exon <- merge(prs.bios.exon, pData, by = "IID")
+prs.cmc.gene <- merge(prs.cmc.gene, pData, by = "IID")
+prs.cmc.iso <- merge(prs.cmc.iso, pData, by = "IID")
+prs.gtex.wb <- merge(prs.gtex.wb, pData, by = "IID")
+prs.gtex.brain <- merge(prs.gtex.brain, pData, by = "IID")
+
+# get p-value & R²
+lm.smoothed <- lm(prs.gtex.brain$PRS ~ prs.gtex.brain$Diagnosis)
+nagelkerke(lm.smoothed) # for R²
+summary(lm.smoothed) # for p-value
 
 ### 3. Boxplots of different PRS (with diagnosis, sex, age and suicide) ###
 # function: transform data for the plot using the prs + pData dataframe as input
