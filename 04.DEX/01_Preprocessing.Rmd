@@ -51,12 +51,11 @@ This document includes the preprocessing workflow for Affymetrix exon microarray
 
 1. Load data and remove replicates and samples with missing pH values
 2. Data calibration: background correction, normalization and summarization (to core gene and probeset level)
-3. Remove controls and cross-hybridization (cross-hybridization only on probeset level) 
-4. Summarize to gene, exon and transcript level using median
-5. Annotation and removal of multiple mapped exons/transcripts to genes
-6. Remove genes, transcripts and exons lying on chromosome X, Y or M
+3. Remove controls, cross-hybridization (cross-hybridization only on probeset level) and chrX, chrY and chrM
+4. Batch correction using ComBat
+5. Summarize to gene, exon and transcript level using median
+6. Annotation and removal of multiple mapped exons/transcripts to genes
 7. Remove genes, transcripts and exons with duplicated expression values (save info in annotation)
-8. Batch correction using ComBat
 
 Below you can find the list of packages that are required by the workflow. 
 
@@ -187,18 +186,24 @@ rm(rawData)
 
 # Filtering
 
-Before, we can continue with our analysis, we need to filter the core data for controls and the probeset data for controls and cross-hybridization probes. Therefore, we download the "HuEx-1_0-st-v2 Transcript Cluster Annotations, CSV, Release 36 (95 MB, 7/6/16)" and the "HuEx-1_0-st-v2 Probeset Annotations, CSV Format, Release 36 (58 MB, 7/6/16)" (filename after unzipping: HuEx-1_0-st-v2.na36.hg19.transcript.csv, HuEx-1_0-st-v2.na36.hg19.probeset.csv) under the "Current NetAffx Annotation Files" section on the Affymetrix support website (http://www.affymetrix.com/support/technical/byproduct.affx?product=huexon-st). These files contain all the neccessary information for the Affymetrix HuEx-1_0-st-v2 microarrays. All transcript cluster IDs and probeset IDs, without a sequence start and stop information, are removed from the datasets. 
+Before, we can continue with our analysis, we need to filter controls, cross-hybridization probes and probes on chromosome X, Y and M. Therefore, we download the "HuEx-1_0-st-v2 Transcript Cluster Annotations, CSV, Release 36 (95 MB, 7/6/16)" and the "HuEx-1_0-st-v2 Probeset Annotations, CSV Format, Release 36 (58 MB, 7/6/16)" (filename after unzipping: HuEx-1_0-st-v2.na36.hg19.transcript.csv, HuEx-1_0-st-v2.na36.hg19.probeset.csv) under the "Current NetAffx Annotation Files" section on the Affymetrix support website (http://www.affymetrix.com/support/technical/byproduct.affx?product=huexon-st). These files contain all the neccessary information for the Affymetrix HuEx-1_0-st-v2 microarrays. All transcript cluster IDs and probeset IDs, without a sequence start and stop information, are removed from the datasets. 
 
 ```{r}
 # Load Affymetrix Huex1.0stv2 transcript/gene annotation file (downloaded from the Affymetrix website)
 huexGene <- read.csv("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/HuEx-1_0-st-v2/HuEx-1_0-st-v2.na36.hg19.transcript.csv", comment.char = "#")
 # remove ids with no start and stop information
 huexGene <- huexGene[huexGene$start != "---",]
+# remove ids without strand
+huexGene <- huexGene[huexGene$strand != "---", ]
+huexGene$strand <- droplevels(huexGene$strand)
 
 # Load Affymetrix Huex1.0stv2 probeset annotation file (downloaded from the Affymetrix website)
 huexProbeset <- read.csv("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/HuEx-1_0-st-v2/HuEx-1_0-st-v2.na36.hg19.probeset.csv", comment.char = "#")
 # remove ids with no start and stop information
-huexProbeset <- huexProbeset[huexProbeset$start != "---", ]  
+huexProbeset <- huexProbeset[huexProbeset$start != "---", ]
+# remove ids without strand
+huexProbeset <- huexProbeset[huexProbeset$strand != "---", ]
+huexProbeset$strand <- droplevels(huexProbeset$strand)
 ```
 
 ## Remove control data
@@ -223,7 +228,7 @@ probesetSummaries <- probesetSummaries[c(index), ]
 dim(probesetSummaries)
 ```
 
-## Remove crosshybridization data
+## Remove cross-hybridization data
 
 Microarray technology has one weakness: the fact that an RNA target sequence can bind to a short DNA probe that is not its exact complement, which is also called cross-hybridization. In the HuEx file, we also have the information in how many cross-hybridizations a probe is involved. All probes with a cross-hybridisation number of 1 and higher will be removed from the datasets. This is only necessary for the probeset data. For the gene dataset where are no cross-hybridization probes available anymore. 
 
@@ -234,11 +239,81 @@ table(huexProbeset$number_cross_hyb_probes)
 # get all probeset IDs with zero/0 cross-hybridizations
 probesetIds <- huexProbeset[huexProbeset$number_cross_hyb_probes == 0, "probeset_id"]
 
-# remove all probeset types, which are NOT "main" from the probeset summary dataset
+# remove all probesets with cross-hybridization from the probeset summary dataset
 index <- which(rownames(exprs(probesetSummaries)) %in% as.character(probesetIds))
 probesetSummaries <- probesetSummaries[c(index), ]
 dim(probesetSummaries)
 ```
+
+## Remove probesets on chrX, chrY and chrM
+
+```{r}
+# show all chromosomes available
+table(huexGene$seqname)
+table(huexProbeset$seqname)
+
+# get all transcript and probeset IDs with chrX, chrY and chrM
+transcriptIds <- huexGene[huexGene$seqname %in% c("chrX", "chrY", "chrM"), "transcript_cluster_id"]
+probesetIds <- huexProbeset[huexProbeset$seqname %in% c("chrX", "chrY", "chrM"), "probeset_id"]
+
+# remove all transcripts and probesets with chrX, chrY and chrM
+index <- which(!(rownames(exprs(coreSummaries)) %in% as.character(transcriptIds)))
+coreSummaries <- coreSummaries[c(index), ]
+dim(coreSummaries)
+index <- which(!(rownames(exprs(probesetSummaries)) %in% as.character(probesetIds)))
+probesetSummaries <- probesetSummaries[c(index), ]
+dim(probesetSummaries)
+```
+
+## Remove multi-mapped probesets
+
+To remove transcipts and probesets which can be mapped to multiple genes, we first need to load all human genes from Gencode. Then we filter the file for all protein-coding genes and overlap this dataset to our transcript and probeset IDs using their positions. All transcripts and probesets which overlap with more than one gene will be removed from the coreSummaries and probesetSummaries. 
+
+```{r}
+# Load Gencode gtf file
+genes <- import.gff("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/annotation_files/gencode.v19.annotation.gtf", format = "gtf")
+genes <- genes[genes$gene_type == "protein_coding"]  # get only protein-coding genes
+genes <- genes[genes$type == "gene"]  # get only genes (no exons, cds, transcripts etc.)
+```
+
+We will first remove the multi-mapped transcripts from the core transcript Summaries.
+
+```{r}
+# Overlap to transcript IDs using positions
+transcripts <- GRanges(seqnames = Rle(paste0(huexGene$seqname)), 
+                     ranges = IRanges(start = as.numeric(as.character(huexGene$start)), 
+                                      end = as.numeric(as.character(huexGene$stop))), 
+                     strand = huexGene$strand,
+                     id_internal_huex = huexGene$probeset_id)
+annoGenes <- mergeByOverlaps(transcripts, genes)
+annoGenes <- annoGenes[, c("id_internal_huex", "gene_id")]
+IdsToRemove <- unique(annoGenes[duplicated(annoGenes$id_internal_huex) | duplicated(annoGenes$id_internal_huex, fromLast = TRUE), "id_internal_huex"])
+
+# Remove IDs from coreSummaries
+index <- which(!(rownames(exprs(coreSummaries)) %in% as.character(IdsToRemove)))
+coreSummaries <- coreSummaries[c(index), ]
+dim(coreSummaries)
+```
+
+And now, we do the same for the probeset dataset:
+
+```{r}
+# Overlap to probeset IDs using positions
+probesets <- GRanges(seqnames = Rle(paste0(huexProbeset$seqname)), 
+                     ranges = IRanges(start = as.numeric(as.character(huexProbeset$start)), 
+                                      end = as.numeric(as.character(huexProbeset$stop))), 
+                     strand = huexProbeset$strand,
+                     id_internal_huex = huexProbeset$probeset_id)
+annoGenes <- mergeByOverlaps(probesets, genes)
+annoGenes <- annoGenes[, c("id_internal_huex", "gene_id")]
+IdsToRemove <- unique(annoGenes[duplicated(annoGenes$id_internal_huex) | duplicated(annoGenes$id_internal_huex, fromLast = TRUE), "id_internal_huex"])
+
+# Remove IDs from probesetSummaries
+index <- which(!(rownames(exprs(probesetSummaries)) %in% as.character(IdsToRemove)))
+probesetSummaries <- probesetSummaries[c(index), ]
+dim(probesetSummaries)
+```
+
 
 ## Save data
 
@@ -254,6 +329,40 @@ rm(index, transcriptIds, probesetIds)
 ```
 
 
+# Batch correction
+
+For the batch correction of the known batches of the microarrays, we will use ComBat from the Surrogate Variable Analysis (SVA) package. We have five batches (1: 64 samples, 2: 86 samples, 3,: 11 samples 4: 3 samples, A: 40 samples) included in the data. A plot as well as a more detailed description is given in the *02_QC_And_Plots.Rmd* script. The bach correction is done twice: 1) for the summarization based on core transcripts and 2) for the summarization on probeset level. 
+
+## coreSummaries
+
+```{r}
+exprsRaw <- as.matrix(exprs(coreSummaries))
+batch <- as.factor(pData(coreSummaries)$Batch)
+modCombat <- model.matrix(~1, data = pData(coreSummaries))
+exprsCombat <- ComBat(dat = exprsRaw, batch = batch, mod = modCombat, par.prior = TRUE, prior.plots = FALSE)
+# check if the two matrices are in the same order
+identical(rownames(exprs(coreSummaries)), rownames(exprsCombat)) 
+exprs(coreSummaries) <- exprsCombat
+dim(coreSummaries)
+save(coreSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/4_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_batch_corrected.RData")
+rm(coreSummaries, exprsRaw, batch, modCombat, exprsCombat)
+```
+
+
+## probesetSummaries
+
+```{r}
+exprsRaw <- as.matrix(oligo::exprs(probesetSummaries))
+batch <- as.factor(pData(probesetSummaries)$Batch)
+modCombat <- model.matrix(~1, data = pData(probesetSummaries))
+exprsCombat <- ComBat(dat = exprsRaw, batch = batch, mod = modCombat, par.prior = TRUE, prior.plots = FALSE)
+identical(rownames(exprs(probesetSummaries)), rownames(exprsCombat)) # check if the two matrices are in the same order
+exprs(probesetSummaries) <- exprsCombat
+dim(probesetSummaries)
+save(probesetSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/4_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected.RData")
+rm(probesetSummaries, exprsRaw, batch, modCombat, exprsCombat)
+```
+
 # Gene level 
 
 ## Summarization from transcripts to genes
@@ -264,6 +373,7 @@ To summarize the core data to gene level, we need to map the transcript cluster 
 transcripts <- GRanges(seqnames = Rle(paste0(huexGene$seqname)), 
                        ranges = IRanges(start = as.numeric(as.character(huexGene$start)), 
                                         end = as.numeric(as.character(huexGene$stop))), 
+                       strand = huexGene$strand,
                        id_internal_huex = huexGene$transcript_cluster_id)
 ```
 
@@ -286,7 +396,7 @@ To summarize the dataset based on gene IDs, we will first rename the rows of the
 ```{r}
 # get probeset to Entrez gene ID mapping
 mapping <- annoGenes[, c("id_internal_huex", "gene_id")]
-mapping <- mapping[!duplicated(mapping), ] # remove duplicated rows
+#mapping <- mapping[!duplicated(mapping), ] # remove duplicated rows
 
 # merge core expression matrix with the mapping file (to get gene IDs)
 expressions <- merge(exprs(coreSummaries), mapping, by.x = "row.names", by.y = "id_internal_huex")
@@ -306,9 +416,6 @@ exprsSummarized <- do.call(rbind, tapply(1:nrow(exprs), genenames, function(i){
   }
 }))
 exprsSummarized <- as.matrix(exprsSummarized)
-#exprDt <- exprDt[, lapply(.SD, median), by = 'gene_id']
-#exprsSummarized <- as.matrix(exprDt[, -1])
-#rownames(exprsSummarized) <- exprDt$gene_id
 ```
 
 Now, we build a new ExonFeatureSet including the gene summarized expressions. 
@@ -334,10 +441,10 @@ Save the gene summarized data into an RData file and remove unnecessary data.
 
 ```{r}
 # save data
-save(geneSummaries, annoGenes, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/4_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_gene_summaries.RData")
+save(geneSummaries, annoGenes, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/5_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_batch_corrected_gene_summaries.RData")
 
 # remove unnecessary data
-rm(probesets, genes, mapping, exprDt, exprsSummarized, df, data, expressions, coreSummaries)
+rm(genes, mapping, exprDt, exprsSummarized, df, data, expressions, coreSummaries)
 ```
 
 ### Annotation
@@ -419,26 +526,8 @@ dim(geneSummaries)
 We do not have any NA's in the gene IDs and/or gene symbols, so we do not need to exclude them. Therefore, we can just save the annotated dataset into an RData file:
 
 ```{r}
-save(geneSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/5_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_gene_summaries_annotated.RData")
+save(geneSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_batch_corrected_gene_summaries_annotated.RData")
 rm(anno.Genes, genesToRemove, idsToExclude)
-```
-
-
-### Batch Correction
-
-For the batch correction of the known batches of the microarrays, we will use ComBat from the Surrogate Variable Analysis (SVA) package. We have five batches (1: 64 samples, 2: 86 samples, 3,: 11 samples 4: 3 samples, A: 40 samples) included in the data. A plot as well as a more detailed description is given in the *02_QC_And_Plots.Rmd* script. 
-
-```{r}
-exprsRaw <- as.matrix(exprs(geneSummaries))
-batch <- as.factor(pData(geneSummaries)$Batch)
-modCombat <- model.matrix(~1, data = pData(geneSummaries))
-exprsCombat <- ComBat(dat = exprsRaw, batch = batch, mod = modCombat, par.prior = TRUE, prior.plots = FALSE)
-# check if the two matrices are in the same order
-identical(rownames(exprs(geneSummaries)), rownames(exprsCombat)) 
-exprs(geneSummaries) <- exprsCombat
-dim(geneSummaries)
-save(geneSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_gene_summaries_annotated_batch_corrected.RData")
-rm(geneSummaries, exprsRaw, batch, modCombat, exprsCombat)
 ```
 
 
@@ -451,7 +540,9 @@ To summarize the probeset data to gene level, we need to map the probeset IDs to
 probesets <- GRanges(seqnames = Rle(paste0(huexProbeset$seqname)), 
                      ranges = IRanges(start = as.numeric(as.character(huexProbeset$start)), 
                      end = as.numeric(as.character(huexProbeset$stop))),
-                     id_internal_huex = huexProbeset$probeset_id)
+                     strand = huexProbeset$strand,
+                     id_internal_huex = huexProbeset$probeset_id,
+                     gene_assignment = huexProbeset$gene_assignment)
 ```
 
 For the annotation to gene level, we need the information of all genes Therefore, we load the Gencode file and filter for gene IDs to build our annotation dataset. This generates the necessary probeset ID to gene ID mapping for the annotation in the next section.
@@ -467,7 +558,7 @@ genes <- genes[genes$type == "gene"]
 # Merge the probeset ids to gencode annotation by using the overlap of sequence ranges and generate the annotation mapping dataset
 findOverlaps(probesets, genes, ignore.strand = T)
 annoGenes <- mergeByOverlaps(probesets, genes)
-annoGenes <- annoGenes[, c("probesets", "id_internal_huex", "gene_id", "transcript_id", "exon_id", "gene_name")]
+annoGenes <- annoGenes[, c("probesets", "id_internal_huex", "gene_id", "transcript_id", "exon_id", "gene_name", "gene_assignment")]
 ```
 
 To summarize the dataset based on gene IDs, we will first rename the rows of the expression matrix to the gene IDs and summarize using these IDs and the median (NOT median polish!!) of their expressions.
@@ -478,7 +569,7 @@ probesetSummaries <- probesetSummaries[featureNames(probesetSummaries) %in% as.c
 
 # get probeset to Ensemble Gene ID mapping
 mapping <- annoGenes[, c("id_internal_huex", "gene_id")]
-mapping <- mapping[!duplicated(mapping), ] # remove duplicated rows
+#mapping <- mapping[!duplicated(mapping), ] # remove duplicated rows
 
 # merge probeset expression matrix with the mapping file (to get gene IDs)
 expressions <- merge(exprs(probesetSummaries), mapping, by.x = "row.names", by.y = "id_internal_huex", all.x = T)
@@ -523,7 +614,7 @@ Save the gene summarized data into an RData file and remove unnecessary data.
 
 ```{r}
 # save data
-save(geneSummaries, annoGenes, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/4_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_gene_summaries.RData")
+save(geneSummaries, annoGenes, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/5_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_gene_summaries.RData")
 
 # remove unnecessary data
 rm(genes, mapping, exprDt, exprsSummarized, df, data, expressions, probesetSummaries)
@@ -572,15 +663,6 @@ length(rownames(fData(geneSummaries)))
 dim(geneSummaries)
 ```
 
-Remove genes which are located on the X, Y or M chromosome as they are hard to interpret. 
-
-```{r}
-genesToRemove <- annoGenes[startsWith(annoGenes$location, "chrX") | startsWith(annoGenes$location, "chrY") | startsWith(annoGenes$location, "chrM"), "gene_id"]
-idsToExclude <- (featureNames(geneSummaries) %in% genesToRemove$gene_id)
-geneSummaries <- subset(geneSummaries, !idsToExclude)  # remove genes on chr X, Y and M
-dim(geneSummaries)
-```
-
 Remove genes which have exactly the same expression values in all samples (so called multi-mapped samples). This is a necessary step, as we would count genes multiple times (overlapping genes on the genome) leading to high non-significant FDR (multiple testing) correction values in the differential expression analysis later. Instead of completely removing them, we just keep one of the duplicated rows and merge the gene IDs together (separated by a vertical slash: |). We also do the same for all the annotation information in the feature data (fData) and save everything into a new ExonFeatureSet.
 
 ```{r}
@@ -617,24 +699,8 @@ dim(geneSummaries)
 We do not have any NA's in the gene IDs and/or gene symbols, so we do not need to exclude them. Therefore, we can just save the annotated dataset into an RData file:
 
 ```{r}
-save(geneSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/5_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_gene_summaries_annotated.RData")
+save(geneSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_gene_summaries_annotated.RData")
 rm(annoNew, ids, idsAnno, expressions, probesets, annoSummarized, annoGenes, genesToRemove, idsToExclude)
-```
-
-## Batch correction
-
-For the batch correction of the known batches of the microarrays, we will use ComBat from the Surrogate Variable Analysis (SVA) package. We have five batches (1: 64 samples, 2: 86 samples, 3,: 11 samples 4: 3 samples, A: 40 samples) included in the data. A plot as well as a more detailed description is given in the *02_QC_And_Plots.Rmd* script. 
-
-```{r}
-exprsRaw <- as.matrix(oligo::exprs(geneSummaries))
-batch <- as.factor(pData(geneSummaries)$Batch)
-modCombat <- model.matrix(~1, data = pData(geneSummaries))
-exprsCombat <- ComBat(dat = exprsRaw, batch = batch, mod = modCombat, par.prior = TRUE, prior.plots = FALSE)
-identical(rownames(exprs(geneSummaries)), rownames(exprsCombat)) # check if the two matrices are in the same order
-exprs(geneSummaries) <- exprsCombat
-dim(geneSummaries)
-save(geneSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_gene_summaries_annotated_batch_corrected.RData")
-rm(geneSummaries, exprsRaw, batch, modCombat, exprsCombat)
 ```
 
 
@@ -712,7 +778,7 @@ Save the transcript summarized data into an RData file and remove unnecessary da
 
 ```{r}
 # save data
-save(transcriptSummaries, annoTranscripts, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/4_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_transcript_summaries.RData")
+save(transcriptSummaries, annoTranscripts, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/5_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_transcript_summaries.RData")
 
 # remove unnecessary data
 rm(genes, mapping, exprDt, exprsSummarized, df, data, expressions, probesetSummaries)
@@ -755,15 +821,6 @@ length(rownames(fData(transcriptSummaries)))
 dim(transcriptSummaries)
 ```
 
-Remove transcripts which are located on the X, Y or M chromosome as they are hard to interpret. 
-
-```{r}
-transcriptsToRemove <- annoTranscripts[startsWith(annoTranscripts$location, "chrX") | startsWith(annoTranscripts$location, "chrY") | startsWith(annoTranscripts$location, "chrM"), "transcript_id"]
-idsToExclude <- (featureNames(transcriptSummaries) %in% transcriptsToRemove$transcript_id)
-transcriptSummaries <- subset(transcriptSummaries, !idsToExclude)  # remove transcripts on chr X, Y and M
-dim(transcriptSummaries)
-```
-
 Remove transcripts which have exactly the same expression values in all samples (so called multi-mapped samples). This is a necessary step, as we would count transcripts multiple times (mostly transcripts of the same gene) leading to high non-significant FDR (multiple testing) correction values in the differential expression analysis later. Instead of completely removing them, we just keep one of the duplicated rows and merge the gene, transcript, exon IDs together (separated by a vertical slash: |). We also do the same for all the annotation information in the feature data (fData) and save everything into a new ExonFeatureSet.
 
 ```{r}
@@ -800,24 +857,8 @@ dim(transcriptSummaries)
 We do not have any NA's in the gene IDs and/or gene symbols, so we do not need to exclude them. Therefore, we can just save the annotated dataset into an RData file:
 
 ```{r}
-save(transcriptSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/5_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_transcript_summaries_annotated.RData")
+save(transcriptSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_transcript_summaries_annotated.RData")
 rm(annoNew, ids, idsAnno, expressions, probesets, annoFiltered, annoSummarized, annoTranscripts, transcriptsToRemove, idsToExclude)
-```
-
-## Batch correction
-
-For the batch correction of the known batches of the microarrays, we will use ComBat from the Surrogate Variable Analysis (SVA) package. We have five batches (1: 64 samples, 2: 86 samples, 3,: 11 samples 4: 3 samples, A: 40 samples) included in the data. A plot as well as a more detailed description is given in the *02_QC_And_Plots.Rmd* script. 
-
-```{r}
-exprsRaw <- as.matrix(oligo::exprs(transcriptSummaries))
-batch <- as.factor(pData(transcriptSummaries)$Batch)
-modCombat <- model.matrix(~1, data = pData(transcriptSummaries))
-exprsCombat <- ComBat(dat = exprsRaw, batch = batch, mod = modCombat, par.prior = TRUE, prior.plots = FALSE)
-identical(rownames(exprs(transcriptSummaries)), rownames(exprsCombat)) # check if the two matrices are in the same order
-exprs(transcriptSummaries) <- exprsCombat
-dim(transcriptSummaries)
-save(transcriptSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_transcript_summaries_annotated_batch_corrected.RData")
-rm(transcriptSummaries, exprsRaw, batch, modCombat, exprsCombat)
 ```
 
 
@@ -890,7 +931,7 @@ We save the data again into an RData file.
 
 ```{r}
 # save data
-save(exonSummaries, annoExons, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/4_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_exon_summaries.RData")
+save(exonSummaries, annoExons, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/5_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_exon_summaries.RData")
 
 # remove unnecessary data
 rm(huexProbeset, genes, mapping, exprDt, exprsSummarized, df, data, expressions)
@@ -932,15 +973,6 @@ rownames(fData(exonSummaries)) <- fData(exonSummaries)$exon_id
 dim(exonSummaries)
 ```
 
-Remove exons which are located on the X, Y or M chromosome as they are hard to interpret. 
-
-```{r}
-exonsToRemove <- annoExons[startsWith(annoExons$location, "chrX") | startsWith(annoExons$location, "chrY") | startsWith(annoExons$location, "chrM"), "exon_id"]
-idsToExclude <- (featureNames(exonSummaries) %in% exonsToRemove$exon_id)
-exonSummaries <- subset(exonSummaries, !idsToExclude)  # remove exons on chr X, Y and M
-dim(exonSummaries)
-```
-
 Remove exons which have exactly the same expression values in all samples (so called multi-mapped samples). This is a necessary step, as we would count transcripts multiple times (mostly exons of the same gene) leading to high non-significant FDR (multiple testing) correction values in the differential expression analysis later. Instead of completely removing them, we just keep one of the duplicated rows and merge the gene, transcript, exon IDs together (separated by a vertical slash: |). We also do the same for all the annotation information in the feature data (fData) and save everything into a new ExonFeatureSet.
 
 ```{r}
@@ -978,24 +1010,8 @@ This reduced number of exons makes sense. Citation from the abstract of the publ
 We do not have any NA's in the gene IDs and/or gene symbols, so we do not need to exclude them. Therefore, we can just save the annotated dataset into an RData file:
 
 ```{r}
-save(exonSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/5_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_exon_summaries_annotated.RData")
+save(exonSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_exon_summaries_annotated.RData")
 rm(annoFiltered, annoSummarized, annoExons, exonsToRemove, idsToExclude)
-```
-
-## Batch correction
-
-For the batch correction of the known batches (different generation times of the samples) of the microarrays, we will use ComBat from the Surrogate Variable Analysis (SVA) package. We have five batches (1: 64 samples, 2: 86 samples, 3,: 11 samples 4: 3 samples, A: 40 samples) included in the data. A plot as well as a more detailed description is given in the *02_QC_And_Plots.Rmd* script. 
-
-```{r}
-exprsRaw <- as.matrix(exprs(exonSummaries))
-batch <- as.factor(pData(exonSummaries)$Batch)
-modCombat <- model.matrix(~1, data = pData(exonSummaries))
-exprsCombat <- ComBat(dat = exprsRaw, batch = batch, mod = modCombat, par.prior = TRUE, prior.plots = FALSE)
-identical(rownames(exprs(exonSummaries)), rownames(exprsCombat)) # check if the two matrices are in the same order
-exprs(exonSummaries) <- exprsCombat
-dim(exonSummaries)
-save(exonSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_exon_summaries_annotated_batch_corrected.RData")
-rm(exonSummaries, exprsRaw, batch, modCombat, exprsCombat)
 ```
 
 
