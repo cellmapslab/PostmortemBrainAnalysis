@@ -52,10 +52,10 @@ This document includes the preprocessing workflow for Affymetrix exon microarray
 1. Load data and remove replicates and samples with missing pH values
 2. Data calibration: background correction, normalization and summarization (to core gene and probeset level)
 3. Remove controls, cross-hybridization (cross-hybridization only on probeset level) and chrX, chrY and chrM
-4. Batch correction using ComBat
+4. Find hidden factors (SVA) and do batch correction using ComBat
 5. Summarize to gene, exon and transcript level using median
 6. Annotation and removal of multiple mapped exons/transcripts to genes
-7. Remove genes, transcripts and exons with duplicated expression values (save info in annotation)
+7. Reduce genes, transcripts and exons with duplicated expression values (save info in annotation)
 
 Below you can find the list of packages that are required by the workflow. 
 
@@ -190,20 +190,14 @@ Before, we can continue with our analysis, we need to filter controls, cross-hyb
 
 ```{r}
 # Load Affymetrix Huex1.0stv2 transcript/gene annotation file (downloaded from the Affymetrix website)
-huexGene <- read.csv("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/HuEx-1_0-st-v2/HuEx-1_0-st-v2.na36.hg19.transcript.csv", comment.char = "#")
+huexGene <- fread("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/HuEx-1_0-st-v2/HuEx-1_0-st-v2.na36.hg19.transcript.csv", skip = 22, header = T, stringsAsFactors = F, data.table = F)
 # remove ids with no start and stop information
 huexGene <- huexGene[huexGene$start != "---",]
-# remove ids without strand
-huexGene <- huexGene[huexGene$strand != "---", ]
-huexGene$strand <- droplevels(huexGene$strand)
 
 # Load Affymetrix Huex1.0stv2 probeset annotation file (downloaded from the Affymetrix website)
-huexProbeset <- read.csv("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/HuEx-1_0-st-v2/HuEx-1_0-st-v2.na36.hg19.probeset.csv", comment.char = "#")
+huexProbeset <- fread("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/HuEx-1_0-st-v2/HuEx-1_0-st-v2.na36.hg19.probeset.csv", skip = 22, header = T, stringsAsFactors = F, data.table = F)
 # remove ids with no start and stop information
 huexProbeset <- huexProbeset[huexProbeset$start != "---", ]
-# remove ids without strand
-huexProbeset <- huexProbeset[huexProbeset$strand != "---", ]
-huexProbeset$strand <- droplevels(huexProbeset$strand)
 ```
 
 ## Remove control data
@@ -274,6 +268,7 @@ To remove transcipts and probesets which can be mapped to multiple genes, we fir
 genes <- import.gff("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/annotation_files/gencode.v19.annotation.gtf", format = "gtf")
 genes <- genes[genes$gene_type == "protein_coding"]  # get only protein-coding genes
 genes <- genes[genes$type == "gene"]  # get only genes (no exons, cds, transcripts etc.)
+genes <- genes[genes$source == "HAVANA"] # get only HAVANA genes
 ```
 
 We will first remove the multi-mapped transcripts from the core transcript Summaries.
@@ -302,7 +297,6 @@ And now, we do the same for the probeset dataset:
 probesets <- GRanges(seqnames = Rle(paste0(huexProbeset$seqname)), 
                      ranges = IRanges(start = as.numeric(as.character(huexProbeset$start)), 
                                       end = as.numeric(as.character(huexProbeset$stop))), 
-                     strand = huexProbeset$strand,
                      id_internal_huex = huexProbeset$probeset_id)
 annoGenes <- mergeByOverlaps(probesets, genes)
 annoGenes <- annoGenes[, c("id_internal_huex", "gene_id")]
@@ -345,7 +339,7 @@ identical(rownames(exprs(coreSummaries)), rownames(exprsCombat))
 exprs(coreSummaries) <- exprsCombat
 dim(coreSummaries)
 save(coreSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/4_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_batch_corrected.RData")
-rm(coreSummaries, exprsRaw, batch, modCombat, exprsCombat)
+rm(exprsRaw, batch, modCombat, exprsCombat)
 ```
 
 
@@ -360,8 +354,114 @@ identical(rownames(exprs(probesetSummaries)), rownames(exprsCombat)) # check if 
 exprs(probesetSummaries) <- exprsCombat
 dim(probesetSummaries)
 save(probesetSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/4_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected.RData")
-rm(probesetSummaries, exprsRaw, batch, modCombat, exprsCombat)
+rm(exprsRaw, batch, modCombat, exprsCombat)
 ```
+
+
+# Hidden Batch Effects
+
+For the hidden batch effects, we also will use SVA. Here, we first need to reduce the datasets to samples with complete phenotype data (from 204 samples to 169 samples). Then, we evaluate the number of SV required for the data. The package SVA provides a method, which helps to choose this number. As received surrogate variables will be integrated as a covariate into our design matrix for the differential expression analysis, we will include found surrogate variates into the pData of the summaries.
+
+## Remove samples with missing values
+
+As we have some missing values in the phenotype data, 26 mds (C1-C10) values, we first need to remove them from the microarrays as well as the phenotype dataset.
+
+```{r, echo = F}
+# remove all samples with C1 = NA 
+index <- which(is.na(pData(coreSummaries)$C1))
+coreSummaries <- coreSummaries[, -c(index)]
+probesetSummaries <- probesetSummaries[, -c(index)]
+
+# remove all samples with Type_of_Death = NA 
+index <- which(is.na(pData(coreSummaries)$Type_of_Death))
+coreSummaries <- coreSummaries[, -c(index)]
+probesetSummaries <- probesetSummaries[, -c(index)]
+
+# check dim of Summaries (from 204 samples 25 rows should be removed = 169 samples left)
+dim(coreSummaries)
+dim(probesetSummaries)
+
+# check if pData and gene/transcript/exonSummaries are identical
+identical(as.character(pData$ShortName), colnames(exprs(geneSummaries2)))
+identical(as.character(pData$ShortName), colnames(exprs(geneSummaries)))
+
+# remove unnecessary data
+rm(index)
+```
+
+## Complement Phenotype Data
+
+```{r}
+# add original Dx as Diagnosis column to pData
+pData(coreSummaries)["Diagnosis"] <- pData(coreSummaries)$Dx
+pData(probesetSummaries)["Diagnosis"] <- pData(probesetSummaries)$Dx
+
+# change BPD and MDD diagnosis (Dx) to SCZ
+pData(coreSummaries)$Dx <- as.character(pData(coreSummaries)$Dx) # change factor column to character
+pData(coreSummaries)[pData(coreSummaries)$Dx == "BPD" | pData(coreSummaries)$Dx == "MDD", "Dx"] <- "SCZ" # change BPD and MDD to SCZ
+pData(coreSummaries)[, c("Sex", "Dx", "Suicide")] <- lapply(pData(coreSummaries)[, c("Sex", "Dx", "Suicide")], factor)
+pData(probesetSummaries)$Dx <- as.character(pData(probesetSummaries)$Dx) # change factor column to character
+pData(probesetSummaries)[pData(probesetSummaries)$Dx == "BPD" | pData(probesetSummaries)$Dx == "MDD", "Dx"] <- "SCZ" # change BPD and MDD to SCZ
+pData(probesetSummaries)[, c("Sex", "Dx", "Suicide")] <- lapply(pData(probesetSummaries)[, c("Sex", "Dx", "Suicide")], factor)
+
+# relevel disease (Dx) to control (CTL)
+pData(coreSummaries)$Dx <- factor(pData(coreSummaries)$Dx, levels = c("CTL", "SCZ"))
+pData(probesetSummaries)$Dx <- factor(pData(probesetSummaries)$Dx, levels = c("CTL", "SCZ"))
+
+# add quadratic RIN 
+pData(coreSummaries)["RIN2"] <- pData(coreSummaries)$RIN^2
+pData(probesetSummaries)["RIN2"] <- pData(probesetSummaries)$RIN^2
+```
+
+## coreSummaries
+
+Now, we can check the dataset for hidden factors considering all covariates we will use in the differential gene expression analysis.
+
+```{r}
+# setting up the data for SVA
+pheno <- pData(coreSummaries)
+index <- c(which(is.na(pData(coreSummaries)$Type_of_Death)), which(is.na(pData(coreSummaries)$C1)))
+edata <- exprs(coreSummaries)[, -c(index)]
+mod <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
+mod0 <- model.matrix(~ 1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
+# estimate the number of latent factors
+n.sv <- num.sv(edata, mod, method = "leek")
+# Apply the sva function to extimate surrogate variables:
+svobj <- sva(edata, mod, mod0, n.sv = n.sv) 
+# => NO surrogate variables found
+# remve unnecessary data
+rm(pheno, index, edata, mod, mod0, n.sv, svobj)
+# save dataset
+save(coreSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/5_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_batch_corrected_SVA.RData")
+```
+
+Here, num.sv estimated `r n.sv` surrogate variables. As we did not find any  surrogate variables, we do not need to include anything in the pData of the coreSummaries.
+
+## probesetSummaries
+
+Now, we can check the dataset for hidden factors considering all covariates we will use in the differential gene expression analysis.
+
+```{r}
+# setting up the data for SVA
+pheno <- pData(coreSummaries)
+index <- c(which(is.na(pData(coreSummaries)$Type_of_Death)), which(is.na(pData(coreSummaries)$C1)))
+edata <- exprs(coreSummaries)[, -c(index)]
+mod <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
+mod0 <- model.matrix(~ 1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
+# estimate the number of latent factors
+n.sv <- num.sv(edata, mod, method = "leek")
+# Apply the sva function to extimate surrogate variables:
+svobj <- sva(edata, mod, mod0, n.sv = n.sv) 
+# 1 surrogate variable found => add to pData
+pData(probesetSummaries)$SV1 <- svobj$sv
+# remove unnecessary
+rm(pheno, index, edata, mod, mod0, n.sv, svobj)
+# save dataset
+save(probesetSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/5_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA.RData")
+```
+
+Here, num.sv estimated `r n.sv` surrogate variables. As we found one surrogate variable, we will include it for further analyses in the pData of the probesetSummaries.
+
 
 # Gene level 
 
@@ -372,19 +472,13 @@ To summarize the core data to gene level, we need to map the transcript cluster 
 ```{r}
 transcripts <- GRanges(seqnames = Rle(paste0(huexGene$seqname)), 
                        ranges = IRanges(start = as.numeric(as.character(huexGene$start)), 
-                                        end = as.numeric(as.character(huexGene$stop))), 
-                       strand = huexGene$strand,
+                                        end = as.numeric(as.character(huexGene$stop))),
                        id_internal_huex = huexGene$transcript_cluster_id)
 ```
 
 For the annotation to gene level, we need the information for all genes. Therefore, we load the Gencode file and filter for gene IDs to build our annotation dataset. This generates the necessary transcript cluster ID to Ensembl gene ID mapping for the annotation in the next section.
 
 ```{r}
-# Load Gencode gtf file
-genes <- import.gff("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/annotation_files/gencode.v19.annotation.gtf", format = "gtf")
-genes <- genes[genes$gene_type == "protein_coding"]  # get only protein-coding genes
-genes <- genes[genes$type == "gene"]  # get only genes (no exons, cds, transcripts etc.)
-
 # Merge the transcript ids to gencode annotation by using the overlap of sequence ranges and generate the annotation mapping dataset
 findOverlaps(transcripts, genes, ignore.strand = T)
 annoGenes <- mergeByOverlaps(transcripts, genes)
@@ -441,7 +535,7 @@ Save the gene summarized data into an RData file and remove unnecessary data.
 
 ```{r}
 # save data
-save(geneSummaries, annoGenes, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/5_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_batch_corrected_gene_summaries.RData")
+save(geneSummaries, annoGenes, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_batch_corrected_SVA_gene_summaries.RData")
 
 # remove unnecessary data
 rm(genes, mapping, exprDt, exprsSummarized, df, data, expressions, coreSummaries)
@@ -526,7 +620,7 @@ dim(geneSummaries)
 We do not have any NA's in the gene IDs and/or gene symbols, so we do not need to exclude them. Therefore, we can just save the annotated dataset into an RData file:
 
 ```{r}
-save(geneSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_batch_corrected_gene_summaries_annotated.RData")
+save(geneSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
 rm(anno.Genes, genesToRemove, idsToExclude)
 ```
 
@@ -540,7 +634,6 @@ To summarize the probeset data to gene level, we need to map the probeset IDs to
 probesets <- GRanges(seqnames = Rle(paste0(huexProbeset$seqname)), 
                      ranges = IRanges(start = as.numeric(as.character(huexProbeset$start)), 
                      end = as.numeric(as.character(huexProbeset$stop))),
-                     strand = huexProbeset$strand,
                      id_internal_huex = huexProbeset$probeset_id,
                      gene_assignment = huexProbeset$gene_assignment)
 ```
@@ -548,13 +641,6 @@ probesets <- GRanges(seqnames = Rle(paste0(huexProbeset$seqname)),
 For the annotation to gene level, we need the information of all genes Therefore, we load the Gencode file and filter for gene IDs to build our annotation dataset. This generates the necessary probeset ID to gene ID mapping for the annotation in the next section.
 
 ```{r}
-# Load Gencode gtf file
-genes <- import.gff("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/annotation_files/gencode.v19.annotation.gtf", format = "gtf")
-# get only protein-coding genes
-genes <- genes[genes$gene_type == "protein_coding"]  
-# get only transcripts from the genes
-genes <- genes[genes$type == "gene"]  
-
 # Merge the probeset ids to gencode annotation by using the overlap of sequence ranges and generate the annotation mapping dataset
 findOverlaps(probesets, genes, ignore.strand = T)
 annoGenes <- mergeByOverlaps(probesets, genes)
@@ -614,7 +700,7 @@ Save the gene summarized data into an RData file and remove unnecessary data.
 
 ```{r}
 # save data
-save(geneSummaries, annoGenes, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/5_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_gene_summaries.RData")
+save(geneSummaries, annoGenes, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries.RData")
 
 # remove unnecessary data
 rm(genes, mapping, exprDt, exprsSummarized, df, data, expressions, probesetSummaries)
@@ -699,7 +785,7 @@ dim(geneSummaries)
 We do not have any NA's in the gene IDs and/or gene symbols, so we do not need to exclude them. Therefore, we can just save the annotated dataset into an RData file:
 
 ```{r}
-save(geneSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_gene_summaries_annotated.RData")
+save(geneSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
 rm(annoNew, ids, idsAnno, expressions, probesets, annoSummarized, annoGenes, genesToRemove, idsToExclude)
 ```
 
@@ -726,7 +812,9 @@ genes <- import.gff("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_br
 # get only protein-coding genes
 genes <- genes[genes$gene_type == "protein_coding"]  
 # get only transcripts from the genes
-genes <- genes[genes$type == "transcript"]  
+genes <- genes[genes$type == "transcript"]
+# get only transcripts from source HAVANA
+genes <- genes[genes$source == "HAVANA"]
 
 # Merge the probeset ids to gencode annotation by using the overlap of sequence ranges and generate the annotation mapping dataset
 findOverlaps(probesets, genes, ignore.strand = T)
@@ -749,10 +837,19 @@ expressions <- merge(exprs(probesetSummaries), mapping, by.x = "row.names", by.y
 expressions$Row.names <- NULL # remove Row.names column
 
 # Summarize to transcript level using median expression
-exprDt <- data.table(expressions)
-exprDt <- exprDt[, lapply(.SD, median), by = 'transcript_id']
-exprsSummarized <- as.matrix(exprDt[, -1])
-rownames(exprsSummarized) <- exprDt$transcript_id
+exprDt <- as.data.frame(expressions)
+transnames <- exprDt$transcript_id
+exprDt$transcript_id <- NULL
+exprs <- exprDt
+
+exprsSummarized <- do.call(rbind, tapply(1:nrow(exprs), transnames, function(i){
+  if(length(i) > 1){
+    apply(exprs[i, ], MARGIN = 2, median)
+  } else {
+    exprs[i, ]
+  }
+}))
+exprsSummarized <- as.matrix(exprsSummarized)
 ```
 
 Now, we build a new ExonFeatureSet including the transcript summarized expressions. 
@@ -778,7 +875,7 @@ Save the transcript summarized data into an RData file and remove unnecessary da
 
 ```{r}
 # save data
-save(transcriptSummaries, annoTranscripts, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/5_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_transcript_summaries.RData")
+save(transcriptSummaries, annoTranscripts, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_transcript_summaries.RData")
 
 # remove unnecessary data
 rm(genes, mapping, exprDt, exprsSummarized, df, data, expressions, probesetSummaries)
@@ -857,7 +954,7 @@ dim(transcriptSummaries)
 We do not have any NA's in the gene IDs and/or gene symbols, so we do not need to exclude them. Therefore, we can just save the annotated dataset into an RData file:
 
 ```{r}
-save(transcriptSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_transcript_summaries_annotated.RData")
+save(transcriptSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_transcript_summaries_annotated.RData")
 rm(annoNew, ids, idsAnno, expressions, probesets, annoFiltered, annoSummarized, annoTranscripts, transcriptsToRemove, idsToExclude)
 ```
 
@@ -908,10 +1005,19 @@ expressions <- merge(exprs(probesetSummaries), mapping, by.x = "row.names", by.y
 expressions$Row.names <- NULL # remove Row.names column
 
 # Summarize to exon level using median expression
-exprDt <- data.table(expressions)
-exprDt <- exprDt[, lapply(.SD, median), by = 'exon_id']
-exprsSummarized <- as.matrix(exprDt[, -1])
-rownames(exprsSummarized) <- exprDt$exon_id
+exprDt <- as.data.frame(expressions)
+exonnames <- exprDt$exon_id
+exprDt$exon_id <- NULL
+exprs <- exprDt
+
+exprsSummarized <- do.call(rbind, tapply(1:nrow(exprs), exonnames, function(i){
+  if(length(i) > 1){
+    apply(exprs[i, ], MARGIN = 2, median)
+  } else {
+    exprs[i, ]
+  }
+}))
+exprsSummarized <- as.matrix(exprsSummarized)
 ```
 
 Now, we build a new ExonFeatureSet including the exon summarized expressions. 
@@ -931,7 +1037,7 @@ We save the data again into an RData file.
 
 ```{r}
 # save data
-save(exonSummaries, annoExons, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/5_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_exon_summaries.RData")
+save(exonSummaries, annoExons, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_exon_summaries.RData")
 
 # remove unnecessary data
 rm(huexProbeset, genes, mapping, exprDt, exprsSummarized, df, data, expressions)
@@ -1010,7 +1116,7 @@ This reduced number of exons makes sense. Citation from the abstract of the publ
 We do not have any NA's in the gene IDs and/or gene symbols, so we do not need to exclude them. Therefore, we can just save the annotated dataset into an RData file:
 
 ```{r}
-save(exonSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_exon_summaries_annotated.RData")
+save(exonSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_exon_summaries_annotated.RData")
 rm(annoFiltered, annoSummarized, annoExons, exonsToRemove, idsToExclude)
 ```
 
@@ -1019,7 +1125,7 @@ rm(annoFiltered, annoSummarized, annoExons, exonsToRemove, idsToExclude)
 
 Correlation between genes using oligos core (transcript) summarization vs. probeset summarization. Correlation done using all overlapping genes...
 
-```{r}
+```{r, include=FALSE, eval=FALSE, echo=FALSE}
 # 1. Load geneSummarizations after batch correction
 # based on coreSummarization
 load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_gene_summaries_annotated_batch_corrected.RData")

@@ -547,6 +547,72 @@ Now, we will represent the probe intensities in a boxplot graph, where each box 
 ```{r, echo = F}
 colors <- c(replicate(length(pData[pData$File == "9", "File"]), col[2]), replicate(length(pData[pData$File == "a", "File"]), col[5]), replicate(length(pData[pData$File == "M", "File"]), col[3]))
 boxplot(rawData, target = "probeset", ylab = "log2 intensity", xlab = "Samples", las = 2, col = colors, main = "Boxplot of log2-intensities for the raw data")
+
+# boxplot of rawData
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/1_affymetrix_exon_microarray_raw_data.RData")
+colors <- c(replicate(length(pData(rawData)[pData(rawData)$Batch == "1", "Batch"]), viridis(5)[1]), replicate(length(pData(rawData)[pData(rawData)$Batch == "2", "Batch"]), viridis(5)[2]), replicate(length(pData(rawData)[pData(rawData)$Batch == "3", "Batch"]), viridis(5)[3]), replicate(length(pData(rawData)[pData(rawData)$Batch == "4", "Batch"]), viridis(5)[4]), replicate(length(pData(rawData)[pData(rawData)$Batch == "A", "Batch"]), viridis(5)[5]))
+pdf("/home/icb/karolina.worf/1_boxplot_rawData.pdf", width = 15)
+boxplot(rawData, target = "probeset", ylab = "log2 intensity", xlab = "Samples", las = 2, col = colors, main = "Boxplot of raw data")
+dev.off()
+
+# PCA of rawData
+expRaw <- log2(exprs(rawData))	
+PCAraw <- prcomp(t(expRaw), scale = FALSE)
+percentVar <- round(100*PCAraw$sdev^2 / sum(PCAraw$sdev^2), 1)
+sdRatio <- sqrt(percentVar[2] / percentVar[1])
+dataRAW <- data.frame(PC1 = PCAraw$x[,1], PC2 = PCAraw$x[,2], Batch = pData(rawData)$Batch)
+ggplot(dataRAW, aes(PC1, PC2)) +
+  geom_point(aes(color = Age)) +
+  ggtitle("PCA plot of raw data") +
+  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  theme(plot.title = element_text(hjust = 0.5))+
+  coord_fixed(ratio = sdRatio) +
+  scale_fill_viridis()
+ggsave(filename = "/home/icb/karolina.worf/1_pca_rawData.png")
+
+# boxplot of probeset Data before batch correction
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/old/3_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered.RData")
+colors <- c(replicate(length(pData(probesetSummaries)[pData(probesetSummaries)$Batch == "1", "Batch"]), viridis(5)[1]), replicate(length(pData(probesetSummaries)[pData(probesetSummaries)$Batch == "2", "Batch"]), viridis(5)[2]), replicate(length(pData(probesetSummaries)[pData(probesetSummaries)$Batch == "3", "Batch"]), viridis(5)[3]), replicate(length(pData(probesetSummaries)[pData(probesetSummaries)$Batch == "4", "Batch"]), viridis(5)[4]), replicate(length(pData(probesetSummaries)[pData(probesetSummaries)$Batch == "A", "Batch"]), viridis(5)[5]))
+pdf("/home/icb/karolina.worf/2_boxplot_probesetSummaries_before_batch_correction.pdf", width = 15)
+boxplot(probesetSummaries, target = "probeset", ylab = "log2 intensity", xlab = "Samples", col = colors, las = 2, main = "Boxplot probesetSummaries before batch correction")
+dev.off()
+
+# PCA of probesetSummaries before batch correction
+expRaw <- log2(exprs(probesetSummaries))	
+PCAraw <- prcomp(t(expRaw), scale = FALSE)
+percentVar <- round(100*PCAraw$sdev^2 / sum(PCAraw$sdev^2), 1)
+sdRatio <- sqrt(percentVar[2] / percentVar[1])
+dataRAW <- data.frame(PC1 = PCAraw$x[,1], PC2 = PCAraw$x[,2], Batch = pData(probesetSummaries)$Batch)
+ggplot(dataRAW, aes(PC1, PC2)) +
+  geom_point(aes(color = Age)) +
+  ggtitle("PCA plot of raw data") +
+  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  theme(plot.title = element_text(hjust = 0.5))+
+  coord_fixed(ratio = sdRatio) +
+  scale_fill_viridis()
+
+# boxplot of probeset Data after batch correction
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/old/4_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected.RData")
+colors <- c(replicate(length(pData(probesetSummaries)[pData(probesetSummaries)$Batch == "1", "Batch"]), viridis(5)[1]), replicate(length(pData(probesetSummaries)[pData(probesetSummaries)$Batch == "2", "Batch"]), viridis(5)[2]), replicate(length(pData(probesetSummaries)[pData(probesetSummaries)$Batch == "3", "Batch"]), viridis(5)[3]), replicate(length(pData(probesetSummaries)[pData(probesetSummaries)$Batch == "4", "Batch"]), viridis(5)[4]), replicate(length(pData(probesetSummaries)[pData(probesetSummaries)$Batch == "A", "Batch"]), viridis(5)[5]))
+pdf("/home/icb/karolina.worf/2_boxplot_probesetSummaries_after_batch_correction.pdf", width = 15)
+boxplot(probesetSummaries, target = "probeset", ylab = "log2 intensity", xlab = "Samples", col = colors, las = 2, main = "Boxplot probesetSummaries after batch correction")
+dev.off()
+
+# boxplot of core Summaries Data before batch correction
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/old/3_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered.RData")
+colors <- c(replicate(length(pData(coreSummaries)[pData(coreSummaries)$Batch == "1", "Batch"]), viridis(5)[1]), replicate(length(pData(coreSummaries)[pData(coreSummaries)$Batch == "2", "Batch"]), viridis(5)[2]), replicate(length(pData(coreSummaries)[pData(coreSummaries)$Batch == "3", "Batch"]), viridis(5)[3]), replicate(length(pData(coreSummaries)[pData(coreSummaries)$Batch == "4", "Batch"]), viridis(5)[4]), replicate(length(pData(coreSummaries)[pData(coreSummaries)$Batch == "A", "Batch"]), viridis(5)[5]))
+pdf("/home/icb/karolina.worf/3_boxplot_coreSummaries_before_batch_correction.pdf", width = 15)
+boxplot(coreSummaries, target = "core", ylab = "log2 intensity", xlab = "Samples", col = colors, las = 2, main = "Boxplot coreSummaries before batch corr.")
+dev.off()
+
+# boxplot of core Summaries after batch correction
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/old/4_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_batch_corrected.RData")
+colors <- c(replicate(length(pData(coreSummaries)[pData(coreSummaries)$Batch == "1", "Batch"]), viridis(5)[1]), replicate(length(pData(coreSummaries)[pData(coreSummaries)$Batch == "2", "Batch"]), viridis(5)[2]), replicate(length(pData(coreSummaries)[pData(coreSummaries)$Batch == "3", "Batch"]), viridis(5)[3]), replicate(length(pData(coreSummaries)[pData(coreSummaries)$Batch == "4", "Batch"]), viridis(5)[4]), replicate(length(pData(coreSummaries)[pData(coreSummaries)$Batch == "A", "Batch"]), viridis(5)[5]))
+pdf("/home/icb/karolina.worf/3_boxplot_coreSummaries_after_batch_correction.pdf", width = 15)
+boxplot(coreSummaries, target = "core", ylab = "log2 intensity", xlab = "Samples", col = colors, las = 2, main = "Boxplot coreSummaries after batch corr.")
+dev.off()
 ```
 
 Here, we can see that the density distributions of the individual samples are quite different, especially between the samples coming from the first cohort measured in 2009 (orange) compared to the second cohort measured in 2014 (cyan and pink). That is the reason, why we performed the RMA background correction, normalization and summarization step in the preprocessing pipeline. The boxplot for the normalized data will be shown in the next section. 
