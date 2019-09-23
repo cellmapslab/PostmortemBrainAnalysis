@@ -119,6 +119,8 @@ pData <- pData[-(which(pData$Filename %in% replicates)), ]
 celFiles <- unlist(lapply(celFiles, function(x) if(!(strsplit(x, "/")[[1]][9] %in% replicates)) x)) 
 ```
 
+## Read in CEL files
+
 Finally, we can read in the CEL files and check, if they are identical with the order of the filenames in pData.
 
 ```{r, results = 'hide'}
