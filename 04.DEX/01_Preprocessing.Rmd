@@ -208,7 +208,7 @@ rm(rawData)
 
 # Filtering
 
-Before, we can continue with our analysis, we need to filter controls, cross-hybridization probes and probes on chromosome X, Y and M. Therefore, we download the "HuEx-1_0-st-v2 Transcript Cluster Annotations, CSV, Release 36 (95 MB, 7/6/16)" and the "HuEx-1_0-st-v2 Probeset Annotations, CSV Format, Release 36 (58 MB, 7/6/16)" (filename after unzipping: HuEx-1_0-st-v2.na36.hg19.transcript.csv, HuEx-1_0-st-v2.na36.hg19.probeset.csv) under the "Current NetAffx Annotation Files" section on the Affymetrix support website (http://www.affymetrix.com/support/technical/byproduct.affx?product=huexon-st). These files contain all the neccessary information for the Affymetrix HuEx-1_0-st-v2 microarrays. All transcript cluster IDs and probeset IDs, without a sequence start and stop information, are removed from the datasets. 
+Before, we can continue with our analysis, we need to filter controls, cross-hybridization probes and probes on chromosome X, Y and M. Therefore, we download the "HuEx-1_0-st-v2 Transcript Cluster Annotations, CSV, Release 36 (95 MB, 7/6/16)" and the "HuEx-1_0-st-v2 Probeset Annotations, CSV Format, Release 36 (58 MB, 7/6/16)" (filename after unzipping: HuEx-1_0-st-v2.na36.hg19.transcript.csv, HuEx-1_0-st-v2.na36.hg19.probeset.csv) under the "Current NetAffx Annotation Files" section on the Affymetrix support website (http://www.affymetrix.com/support/technical/byproduct.affx?product=huexon-st). These files contain all the neccessary information for the Affymetrix HuEx-1_0-st-v2 microarrays. All transcript cluster IDs and probeset IDs without a sequence start and stop information are removed from the datasets. 
 
 ```{r}
 # Load Affymetrix Huex1.0stv2 transcript/gene annotation file (downloaded from the Affymetrix website)
@@ -242,6 +242,9 @@ dim(coreSummaries)
 index <- which(rownames(exprs(probesetSummaries)) %in% as.character(probesetIds))
 probesetSummaries <- probesetSummaries[c(index), ]
 dim(probesetSummaries)
+
+# remove variables not neccessary anymore (especially as we reuse variable names)
+rm(transcriptIds, probesetIds, index)
 ```
 
 ## Remove cross-hybridization data
@@ -259,6 +262,9 @@ probesetIds <- huexProbeset[huexProbeset$number_cross_hyb_probes == 0, "probeset
 index <- which(rownames(exprs(probesetSummaries)) %in% as.character(probesetIds))
 probesetSummaries <- probesetSummaries[c(index), ]
 dim(probesetSummaries)
+
+# remove variables not neccessary anymore (especially as we reuse variable names)
+rm(probesetIds, index)
 ```
 
 ## Remove probesets on chrX, chrY and chrM
@@ -279,57 +285,10 @@ dim(coreSummaries)
 index <- which(!(rownames(exprs(probesetSummaries)) %in% as.character(probesetIds)))
 probesetSummaries <- probesetSummaries[c(index), ]
 dim(probesetSummaries)
+
+# remove variables not neccessary anymore (especially as we reuse variable names)
+rm(transcriptIds, probesetIds, index)
 ```
-
-## Remove multi-mapped probesets
-
-To remove transcipts and probesets which can be mapped to multiple genes, we first need to load all human genes from Gencode. Then we filter the file for all protein-coding genes and overlap this dataset to our transcript and probeset IDs using their positions. All transcripts and probesets which overlap with more than one gene will be removed from the coreSummaries and probesetSummaries. 
-
-```{r}
-# Load Gencode gtf file
-genes <- import.gff("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/annotation_files/gencode.v19.annotation.gtf", format = "gtf")
-genes <- genes[genes$gene_type == "protein_coding"]  # get only protein-coding genes
-genes <- genes[genes$type == "gene"]  # get only genes (no exons, cds, transcripts etc.)
-genes <- genes[genes$source == "HAVANA"] # get only HAVANA genes
-```
-
-We will first remove the multi-mapped transcripts from the core transcript Summaries.
-
-```{r}
-# Overlap to transcript IDs using positions
-transcripts <- GRanges(seqnames = Rle(paste0(huexGene$seqname)), 
-                     ranges = IRanges(start = as.numeric(as.character(huexGene$start)), 
-                                      end = as.numeric(as.character(huexGene$stop))), 
-                     strand = huexGene$strand,
-                     id_internal_huex = huexGene$probeset_id)
-annoGenes <- mergeByOverlaps(transcripts, genes)
-annoGenes <- annoGenes[, c("id_internal_huex", "gene_id")]
-IdsToRemove <- unique(annoGenes[duplicated(annoGenes$id_internal_huex) | duplicated(annoGenes$id_internal_huex, fromLast = TRUE), "id_internal_huex"])
-
-# Remove IDs from coreSummaries
-index <- which(!(rownames(exprs(coreSummaries)) %in% as.character(IdsToRemove)))
-coreSummaries <- coreSummaries[c(index), ]
-dim(coreSummaries)
-```
-
-And now, we do the same for the probeset dataset:
-
-```{r}
-# Overlap to probeset IDs using positions
-probesets <- GRanges(seqnames = Rle(paste0(huexProbeset$seqname)), 
-                     ranges = IRanges(start = as.numeric(as.character(huexProbeset$start)), 
-                                      end = as.numeric(as.character(huexProbeset$stop))), 
-                     id_internal_huex = huexProbeset$probeset_id)
-annoGenes <- mergeByOverlaps(probesets, genes)
-annoGenes <- annoGenes[, c("id_internal_huex", "gene_id")]
-IdsToRemove <- unique(annoGenes[duplicated(annoGenes$id_internal_huex) | duplicated(annoGenes$id_internal_huex, fromLast = TRUE), "id_internal_huex"])
-
-# Remove IDs from probesetSummaries
-index <- which(!(rownames(exprs(probesetSummaries)) %in% as.character(IdsToRemove)))
-probesetSummaries <- probesetSummaries[c(index), ]
-dim(probesetSummaries)
-```
-
 
 ## Save data
 
@@ -339,9 +298,6 @@ Then, we save the datasets into RData files and remove unnecessary variables:
 save(coreSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/3_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered.RData")
 
 save(probesetSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/3_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered.RData")
-
-# remove unnecessary data
-rm(index, transcriptIds, probesetIds)
 ```
 
 
@@ -363,7 +319,6 @@ dim(coreSummaries)
 save(coreSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/4_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_batch_corrected.RData")
 rm(exprsRaw, batch, modCombat, exprsCombat)
 ```
-
 
 ## probesetSummaries
 
@@ -393,11 +348,13 @@ As we have some missing values in the phenotype data, 26 mds (C1-C10) values, we
 index <- which(is.na(pData(coreSummaries)$C1))
 coreSummaries <- coreSummaries[, -c(index)]
 probesetSummaries <- probesetSummaries[, -c(index)]
+rm(index)  # remove index (as we reuse the variable name beneath)
 
 # remove all samples with Type_of_Death = NA 
 index <- which(is.na(pData(coreSummaries)$Type_of_Death))
 coreSummaries <- coreSummaries[, -c(index)]
 probesetSummaries <- probesetSummaries[, -c(index)]
+rm(index)  # remove index as we do not need this variable anymore
 
 # check dim of Summaries (from 204 samples 25 rows should be removed = 169 samples left)
 dim(coreSummaries)
@@ -406,9 +363,6 @@ dim(probesetSummaries)
 # check if pData and gene/transcript/exonSummaries are identical
 identical(as.character(pData$ShortName), colnames(exprs(geneSummaries2)))
 identical(as.character(pData$ShortName), colnames(exprs(geneSummaries)))
-
-# remove unnecessary data
-rm(index)
 ```
 
 ## coreSummaries
@@ -422,13 +376,12 @@ index <- c(which(is.na(pData(coreSummaries)$Type_of_Death)), which(is.na(pData(c
 edata <- exprs(coreSummaries)[, -c(index)]
 mod <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
 mod0 <- model.matrix(~ 1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
-# estimate the number of latent factors
-n.sv <- num.sv(edata, mod, method = "leek")
-# Apply the sva function to extimate surrogate variables:
-svobj <- sva(edata, mod, mod0, n.sv = n.sv) 
-# => NO surrogate variables found
-# remve unnecessary data
-rm(pheno, index, edata, mod, mod0, n.sv, svobj)
+
+# Apply the sva function to estimate surrogate variables
+n.sv <- num.sv(edata, mod, method = "leek")  # estimate the number of latent factors
+svobj <- sva(edata, mod, mod0, n.sv = n.sv)  # => NO surrogate variables found
+rm(pheno, index, edata, mod, mod0, n.sv, svobj)  # remove unnecessary data
+
 # save dataset
 save(coreSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/5_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_batch_corrected_SVA.RData")
 ```
@@ -446,14 +399,13 @@ index <- c(which(is.na(pData(coreSummaries)$Type_of_Death)), which(is.na(pData(c
 edata <- exprs(coreSummaries)[, -c(index)]
 mod <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
 mod0 <- model.matrix(~ 1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
-# estimate the number of latent factors
-n.sv <- num.sv(edata, mod, method = "leek")
-# Apply the sva function to extimate surrogate variables:
+
+# Apply the sva function to estimate surrogate variables
+n.sv <- num.sv(edata, mod, method = "leek")  # estimate the number of latent factors
 svobj <- sva(edata, mod, mod0, n.sv = n.sv) 
-# 1 surrogate variable found => add to pData
-pData(probesetSummaries)$SV1 <- svobj$sv
-# remove unnecessary
-rm(pheno, index, edata, mod, mod0, n.sv, svobj)
+pData(probesetSummaries)$SV1 <- svobj$sv  # 1 surrogate variable found => add to pData
+rm(pheno, index, edata, mod, mod0, n.sv, svobj)  # remove unnecessary
+
 # save dataset
 save(probesetSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/5_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA.RData")
 ```
