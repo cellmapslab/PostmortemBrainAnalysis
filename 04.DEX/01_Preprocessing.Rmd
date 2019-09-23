@@ -119,9 +119,29 @@ pData <- pData[-(which(pData$Filename %in% replicates)), ]
 celFiles <- unlist(lapply(celFiles, function(x) if(!(strsplit(x, "/")[[1]][9] %in% replicates)) x)) 
 ```
 
+## Complement phenotype data
+
+Complement the phenotype data such that the diagnosis of schizophrena (SCZ), bipolar disorder (BPD) and major depression disorder (MDD) are changed to one case (CASE) only. Also add the quadratic RNA integrity number (RIN2).  
+
+```{r}
+# add original Dx as Diagnosis column to pData
+pData["Diagnosis"] <- pData$Dx
+
+# change BPD and MDD diagnosis (Dx) to SCZ
+pData$Dx <- as.character(pData$Dx) # change factors to characters
+pData[pData$Dx == "SCZ" | pData$Dx == "BPD" | pData$Dx == "MDD", "Dx"] <- "CASE" # change SCZ, BPD and MDD to CASE
+pData[, c("Sex", "Dx", "Suicide")] <- lapply(pData[, c("Sex", "Dx", "Suicide")], factor)
+
+# relevel disease (Dx) to control (CTL)
+pData$Dx <- factor(pData$Dx, levels = c("CTL", "CASE"))
+
+# add quadratic RIN 
+pData["RIN2"] <- pData$RIN^2
+```
+
 ## Read in CEL files
 
-Finally, we can read in the CEL files and check, if they are identical with the order of the filenames in pData.
+Finally, we can read in the CEL files and check if they are identical with the order of the filenames in pData.
 
 ```{r, results = 'hide'}
 rawData <- read.celfiles(celFiles) # affyExpressionFS/ExonFeatureSet
@@ -150,7 +170,7 @@ After every long and time consuming step we will save the generated data into an
 save(rawData, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/1_affymetrix_exon_microarray_raw_data.RData")
 
 # remove unneccessary data
-rm(celFiles, replicates, pData)
+rm(celFiles, pData, replicates)
 ```
 
 
@@ -389,30 +409,6 @@ identical(as.character(pData$ShortName), colnames(exprs(geneSummaries)))
 
 # remove unnecessary data
 rm(index)
-```
-
-## Complement Phenotype Data
-
-```{r}
-# add original Dx as Diagnosis column to pData
-pData(coreSummaries)["Diagnosis"] <- pData(coreSummaries)$Dx
-pData(probesetSummaries)["Diagnosis"] <- pData(probesetSummaries)$Dx
-
-# change BPD and MDD diagnosis (Dx) to SCZ
-pData(coreSummaries)$Dx <- as.character(pData(coreSummaries)$Dx) # change factor column to character
-pData(coreSummaries)[pData(coreSummaries)$Dx == "BPD" | pData(coreSummaries)$Dx == "MDD", "Dx"] <- "SCZ" # change BPD and MDD to SCZ
-pData(coreSummaries)[, c("Sex", "Dx", "Suicide")] <- lapply(pData(coreSummaries)[, c("Sex", "Dx", "Suicide")], factor)
-pData(probesetSummaries)$Dx <- as.character(pData(probesetSummaries)$Dx) # change factor column to character
-pData(probesetSummaries)[pData(probesetSummaries)$Dx == "BPD" | pData(probesetSummaries)$Dx == "MDD", "Dx"] <- "SCZ" # change BPD and MDD to SCZ
-pData(probesetSummaries)[, c("Sex", "Dx", "Suicide")] <- lapply(pData(probesetSummaries)[, c("Sex", "Dx", "Suicide")], factor)
-
-# relevel disease (Dx) to control (CTL)
-pData(coreSummaries)$Dx <- factor(pData(coreSummaries)$Dx, levels = c("CTL", "SCZ"))
-pData(probesetSummaries)$Dx <- factor(pData(probesetSummaries)$Dx, levels = c("CTL", "SCZ"))
-
-# add quadratic RIN 
-pData(coreSummaries)["RIN2"] <- pData(coreSummaries)$RIN^2
-pData(probesetSummaries)["RIN2"] <- pData(probesetSummaries)$RIN^2
 ```
 
 ## coreSummaries
