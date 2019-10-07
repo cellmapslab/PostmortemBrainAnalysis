@@ -122,9 +122,9 @@ states <- c("1_TssA", "2_TssAFlnk", "3_TxFlnk", "4_Tx", "5_TxWk", "6_EnhG", "7_E
 
 # 2.4.1 annotation to ChromHMM Brain
 for (state in states) {
-  overlap <- paste0("ChromHMM_blood_", state, "_SNP_overlap")
-  pval <- paste0("ChromHMM_blood_", state, "_SNP_pVal")
-  or <- paste0("ChromHMM_blood_", state, "_SNP_or")
+  overlap <- paste0("ChromHMM_brain_", state, "_SNP_overlap")
+  pval <- paste0("ChromHMM_brain_", state, "_SNP_pVal")
+  or <- paste0("ChromHMM_brain_", state, "_SNP_or")
   results[c(overlap, pval, or), "Gene"] <- annotatePublicData(eqtls.gene.gr, hmm.brain[hmm.brain$name == state], perm, background.gr)
   print(paste0("Done gene: ", state))
   results[c(overlap, pval, or), "Gene_cases"] <- annotatePublicData(eqtls.gene.cases.gr, hmm.brain[hmm.brain$name == state], perm, background.gr)

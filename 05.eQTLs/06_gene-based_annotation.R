@@ -6,6 +6,7 @@ suppressPackageStartupMessages({
   library(data.table)
   library(GenomicRanges)
   library(tidyr)
+  library(oligo)
 })
 
 ### 1. LOAD eQTL results ###
@@ -65,7 +66,7 @@ bios.exon.gr <- GRanges(seqnames = bios.exon$ExonChr,
                         exon_id = bios.exon$ExonId,
                         gene_name = bios.exon$GeneName)  # generate GRanges object
 bios.exon.gr <- bios.exon.gr[!duplicated(bios.exon.gr)]  # remove duplicated rows: 171,889 => 105,097 exons
-mcols(bios.exon.gr) <- dplyr::select(bios.exon.gr, -c(ExonChr, ExonCenterChrPos, ExonId, GeneName))  # add all other columns to the dataset
+#mcols(bios.exon.gr) <- dplyr::select(bios.exon.gr, -c(ExonChr, ExonCenterChrPos, ExonId, GeneName))  # add all other columns to the dataset
 seqlevelsStyle(bios.exon.gr) <- "UCSC"
 rm(bios.exon)
 
@@ -122,33 +123,33 @@ rm(brains, filename, data, i, gtex.brains)
 
 ### 2.3 Load background data ###
 ### 2.3.1 Load all genes (for which we calculated eQTLs)
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_gene_summaries_annotated_batch_corrected.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
 fData(geneSummaries) <- separate_rows(fData(geneSummaries), c(gene_id, location, gene_name), sep = "\\|")
 genes <- GRanges(seqnames = unlist(lapply(fData(geneSummaries)$location, function(x) strsplit(x, ":")[[1]][1])),
                  ranges = unlist(lapply(fData(geneSummaries)$location, function(x) strsplit(x, ":")[[1]][2])),
                  gene_id = fData(geneSummaries)$gene_id,
                  gene_name = fData(geneSummaries)$gene_name)
-genes <- genes[!duplicated(genes)]  # 14,048 genes
+genes <- genes[!duplicated(genes)]  # 17,447 genes
 rm(geneSummaries)
 
 # 2.3.2 Load all transcripts (for which we calculated eQTLs)
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_transcript_summaries_annotated_batch_corrected.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_transcript_summaries_annotated.RData")
 fData(transcriptSummaries) <- separate_rows(fData(transcriptSummaries), c(transcript_id, location, gene_id, gene_name), sep = "\\|")
 transcripts <- GRanges(seqnames = unlist(lapply(fData(transcriptSummaries)$location, function(x) strsplit(x, ":")[[1]][1])),
                  ranges = unlist(lapply(fData(transcriptSummaries)$location, function(x) strsplit(x, ":")[[1]][2])),
                  transcript_id = fData(transcriptSummaries)$transcript_id,
                  gene_name = fData(transcriptSummaries)$gene_name)
-transcripts <- transcripts[!duplicated(transcripts)]  # 116,543 transcripts
+transcripts <- transcripts[!duplicated(transcripts)]  # 100,750 transcripts
 rm(transcriptSummaries)
 
 # 2.3.3 Load all exons (for which we calculated eQTLs)
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_exon_summaries_annotated_batch_corrected.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_exon_summaries_annotated.RData")
 fData(exonSummaries) <- separate_rows(fData(exonSummaries), c(exon_id, location, gene_id, gene_name), sep = "\\|")
 exons <- GRanges(seqnames = unlist(lapply(fData(exonSummaries)$location, function(x) strsplit(x, ":")[[1]][1])),
                  ranges = unlist(lapply(fData(exonSummaries)$location, function(x) strsplit(x, ":")[[1]][2])),
                  exon_id = fData(exonSummaries)$exon_id,
                  gene_name = fData(exonSummaries)$gene_name)
-exons <- exons[!duplicated(exons)]  # 265,429 exons
+exons <- exons[!duplicated(exons)]  # 242,443 exons
 rm(exonSummaries)
 
 ### 2.4 Annotation ###

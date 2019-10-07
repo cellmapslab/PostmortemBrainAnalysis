@@ -69,7 +69,7 @@ First, we will load all cis-eQTL datasets and filter them for only significant h
 
 ```{r}
 # cases and controls cis-eQTLs genes
-data <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/01_pmb_CASE_CTL_matrixEQTL_cis_results_genes.txt", header = T, stringsAsFactors = F)
+data <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/01_pmb_CASE_CTL_matrixEQTL_cis_results_genes_probeset.txt", header = T, stringsAsFactors = F)
 cis.genes.all <- data[data$FDR < 0.05,  ]  # filter for only eQTLs with adjusted p-value (FDR) < 0.05
 
 # cases and controls cis-eQTLs transcripts
@@ -81,7 +81,7 @@ data <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQT
 cis.exons.all <- data[data$FDR < 0.05,   ]  # filter for only eQTLs with adjusted p-value (FDR) < 0.05
 
 # only cases cis-eQTLs genes
-data <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/02_pmb_CASE_only_matrixEQTL_cis_results_genes.txt", header = T, stringsAsFactors = F)
+data <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/02_pmb_CASE_only_matrixEQTL_cis_results_genes_probeset.txt", header = T, stringsAsFactors = F)
 cis.genes.cases <- data[data$FDR < 0.05,   ]  # filter for only eQTLs with adjusted p-value (FDR) < 0.05
 
 # only cases cis-eQTLs transcripts
@@ -125,7 +125,7 @@ rm(genes)
 Load transcript positions and save the necessary information:
 
 ```{r}
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_transcript_summaries_annotated_batch_corrected.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_transcript_summaries_annotated.RData")
 transpos <- transcriptSummaries@featureData@data
 transpos$location <- gsub("-", "..", transpos$location)
 rm(transcriptSummaries)
@@ -134,7 +134,7 @@ rm(transcriptSummaries)
 Load exon positions and save the necessary information:
 
 ```{r}
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_exon_summaries_annotated_batch_corrected.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_exon_summaries_annotated.RData")
 exonspos <- exonSummaries@featureData@data
 exonspos$location <- gsub("-", "..", exonspos$location)
 rm(exonSummaries)
@@ -165,9 +165,9 @@ For some genes, transcripts and exons the IDs are not uniquely identifiable, e.g
 cis.genes.all <- separate_rows(cis.genes.all, gene, sep = "\\|")
 # add info to gene eqtl data (cases vs. controls) and save it into a file
 eqtls.gene <- merge(cis.genes.all, snpspos, by = "SNP", all.x = T)
-eqtls.gene <- merge(eqtls.gene, genespos, by.x = "gene", by.y = "Gene_symbol", all.x = T)
+eqtls.gene <- merge(eqtls.gene, genespos, by.x = "gene", by.y = "Gene", all.x = T)
 eqtls.gene <- eqtls.gene[complete.cases(eqtls.gene), ]
-eqtls.gene <- eqtls.gene[, c("SNP", "Gene", "gene", "beta", "t-stat", "p-value", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "Gene_location", "Gene_strand")]
+eqtls.gene <- eqtls.gene[, c("SNP", "gene", "Gene_symbol", "beta", "t-stat", "p-value", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "Gene_location", "Gene_strand")]
 eqtls.gene$eQTL_type <- "cis" 
 colnames(eqtls.gene) <- c("SNP", "Gene", "Gene_symbol", "Beta", "Test_statistic", "p-value", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "Gene_location",  "Gene_strand", "eQTL_type")
 eqtls.gene <- eqtls.gene[order(eqtls.gene$FDR),]
@@ -182,11 +182,11 @@ write.table(eqtls.gene, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmo
 cis.genes.cases <- separate_rows(cis.genes.cases, gene, sep = "\\|")
 # add info to gene eqtl data (only cases) and save it into a file
 eqtls.gene.cases <- merge(cis.genes.cases, snpspos, by = "SNP", all.x = T)
-eqtls.gene.cases <- merge(eqtls.gene.cases, genespos, by.x = "gene", by.y = "Gene_symbol", all.x = T)
+eqtls.gene.cases <- merge(eqtls.gene.cases, genespos, by.x = "gene", by.y = "Gene", all.x = T)
 eqtls.gene.cases <- eqtls.gene.cases[complete.cases(eqtls.gene.cases), ]
-eqtls.gene.cases <- eqtls.gene.cases[, c("SNP", "Gene", "gene", "beta", "t-stat", "p-value", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "Gene_location", "Gene_strand")]
+eqtls.gene.cases <- eqtls.gene.cases[, c("SNP", "gene", "Gene_symbol", "beta", "t-stat", "p-value", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "Gene_location", "Gene_strand")]
 eqtls.gene.cases$eQTL_type <- "cis" 
-colnames(eqtls.gene.cases) <- c("SNP", "Gene", "Gene_symbol", "Beta", "Test_statistic", "p-value", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "Gene_location",  "Gene_strand", "eQTL_type")
+colnames(eqtls.gene.cases) <- c("SNP", "Gene", "Gene_symbol", "Beta", "Test_statistic", "p-value", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2","Gene_location",  "Gene_strand", "eQTL_type")
 eqtls.gene.cases <- eqtls.gene.cases[order(eqtls.gene.cases$FDR),]
 head(eqtls.gene.cases)
 write.table(eqtls.gene.cases, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/hits/pmb_cis-eQTL_gene_hits_cases_only.txt", row.names = F, quote = F, dec = ".", sep = " ")
@@ -205,7 +205,7 @@ eqtls.transcript <- merge(cis.transcripts.all, snpspos, by = "SNP", all.x = T)
 eqtls.transcript <- merge(eqtls.transcript, transpos, by.x = "gene", by.y = "transcript_id", all.x = T)
 eqtls.transcript <- merge(eqtls.transcript, genespos, by.x = "gene_id", by.y = "Gene", all.x = T)
 eqtls.transcript <- eqtls.transcript[complete.cases(eqtls.transcript), ]
-eqtls.transcript <- eqtls.transcript[, c("SNP", "gene", "beta", "t-stat", "p-value", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "location", "gene_id", "gene_name", "Gene_location", "Gene_strand")]
+eqtls.transcript <- eqtls.transcript[, c("SNP", "gene", "beta", "t-stat", "p-value", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "location", "gene_id",  "gene_name", "Gene_location", "Gene_strand")]
 colnames(eqtls.transcript) <- c("SNP", "Transcript", "Beta", "Test_statistic", "pvalue", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "Transcript_location", "Gene", "Gene_symbol", "Gene_location", "Gene_strand")
 eqtls.transcript$eQTL_type <- "cis" 
 eqtls.transcript <- eqtls.transcript[order(eqtls.transcript$FDR),]
@@ -309,24 +309,24 @@ dev.off()
 
 ## Combined boxplots of top exon eQTL
 
-Find top exon hit without gene hit => nr. 1 top hit with SNP rs1264942 and exon ENSE00001231633.1 of gene NCALD
+Find top exon hit without gene hit => nr. 1 top hit with SNP rs505460 and exon ENSE00001231633.1 of gene NCALD
 
 ```{r}
 # unoverlapping genes
-no.overlap = setdiff(eqtls.exon$Gene_symbol, eqtls.gene$Gene_symbol)
-length(no.overlap) # 3744
+no.overlap <- setdiff(eqtls.exon$Gene_symbol, eqtls.gene$Gene_symbol)
+length(no.overlap) # 3490
 # overlapping genes
-overlap = intersect(eqtls.exon$Gene_symbol, eqtls.gene$Gene_symbol)
-length(overlap) # 40% (n = 344) of 860 unique eQTL genes have an exon hit, while 3744 eQTL genes are only found with exons
+overlap <- intersect(eqtls.exon$Gene_symbol, eqtls.gene$Gene_symbol)
+length(overlap) # 40% (n = 613) of 860 unique eQTL genes have an exon hit, while 3744 eQTL genes are only found with exons
 # plot 2 Bsp overlap vs. non
-exon.only = eqtls.exon[eqtls.exon$Gene_symbol %in% no.overlap, ]
+exon.only <- eqtls.exon[eqtls.exon$Gene_symbol %in% no.overlap, ]
 # get top hit
 exon.only[which.min(exon.only$FDR), ]
 
 # load necessary mapping and expression data
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_gene_summaries_annotated_batch_corrected.RData")
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_exon_summaries_annotated_batch_corrected.RData")
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_transcript_summaries_annotated_batch_corrected.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_transcript_summaries_annotated.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_exon_summaries_annotated.RData")
 huex <- fread("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/HuEx-1_0-st-v2/HuEx-1_0-st-v2.na36.hg19.probeset.csv", data.table = F, skip = 22)
 huex <- huex[huex$start != "---", ]  # remove ids with no start and stop information
 gene.code <- as.data.frame(import.gff("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/annotation_files/gencode.v19.annotation.gtf", format = "gtf"))
@@ -353,10 +353,10 @@ exon.exprs$`204` <- NULL
 gt <- merge(gene.exprs, transcript.exprs, by = "row.names")
 gte <- merge(gt, exon.exprs, by.x = "Row.names", by.y = "row.names")
 head(gte)
-save(gte, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/NCALD_gene_transcript_exon_expression.RData") 
+save(gte, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/NCALD_rs505460_gene_transcript_exon_expression.RData") 
 
 # snp data
-system(paste0("/storage/groups/ccm01/tools/PLINK/plink --bfile /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/preprocessed_genotypes/1.2_merged_chr/pmb_info06_all_chr_maf0.05_merged --snp rs1264942 --recode --tab --out NCALD_SNPs"))
+system(paste0("/storage/groups/ccm01/tools/PLINK/plink --bfile /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/preprocessed_genotypes/1.2_merged_chr/pmb_info06_all_chr_maf0.05_merged --snp rs505460 --recode --tab --out NCALD_SNPs"))
 snp <- read.delim("NCALD_SNPs.ped", head = T)
 pheno <- pData(geneSummaries)[, c("IID","Dx")]
 
@@ -367,13 +367,13 @@ save(exp.p.snp, file <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_br
 # Generate plot
 plot.data <- melt(exp.p.snp, id.vars = "A.A", measure.vars = c("ENSG00000104490.13", grep("ENS", colnames(exp.p.snp), value = T)))
 plot.data <- plot.data[plot.data$A.A != "0 0",]
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/03_boxplots_NCALD_gene_transcript_exon_expression_snp.pdf")
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/03_boxplots_NCALD_rs505460_gene_transcript_exon_expression_snp.pdf")
 ggplot(na.omit(plot.data), aes(A.A, value)) +
   geom_boxplot() + facet_wrap(~variable, scales = "free") +
   theme(strip.text = element_text(size = 4.1), axis.text = element_text(size = 9), 
         axis.title.x = element_text(size = 16),
         axis.title.y = element_text(size = 16)) +
-  xlab("rs662145") + ylab("gene expression")
+  xlab("rs505460") + ylab("expression")
 dev.off()
 ```
 

@@ -375,7 +375,7 @@ mod0 <- model.matrix(~ 1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of
 # Apply the sva function to estimate surrogate variables
 n.sv <- num.sv(edata, mod, method = "leek")  # estimate the number of latent factors
 svobj <- sva(edata, mod, mod0, n.sv = n.sv)  # => NO surrogate variables found
-rm(pheno, index, edata, mod, mod0, n.sv, svobj)  # remove unnecessary data
+rm(pheno, index, edata, mod, mod0, svobj)  # remove unnecessary data
 
 # save dataset
 save(coreSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/5_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_batch_corrected_SVA.RData")
@@ -398,7 +398,7 @@ mod0 <- model.matrix(~ 1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of
 n.sv <- num.sv(edata, mod, method = "leek")  # estimate the number of latent factors
 svobj <- sva(edata, mod, mod0, n.sv = n.sv) 
 pData(probesetSummaries)$SV1 <- svobj$sv  # 1 surrogate variable found => add to pData
-rm(pheno, edata, mod, mod0, n.sv, svobj)  # remove unnecessary
+rm(pheno, edata, mod, mod0, svobj)  # remove unnecessary
 
 # save dataset
 save(probesetSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/5_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA.RData")
@@ -1105,6 +1105,7 @@ This reduced number of exons makes sense. Citation from the abstract of the publ
 We do not have any NA's in the gene IDs and/or gene symbols, so we do not need to exclude them. Therefore, we can just save the annotated dataset into an RData file:
 
 ```{r}
+dim(exonSummaries)
 save(exonSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_exon_summaries_annotated.RData")
 rm(annoFiltered, annoSummarized, annoExons, exonsToRemove, idsToExclude)
 ```

@@ -1,5 +1,5 @@
-# Load locally installed packages for R version 3.5
-.libPaths("/home/icb/karolina.worf/R/x86_64-pc-linux-gnu-library/3.5/")
+# Load locally installed packages for R version 3.6
+.libPaths("/home/icb/karolina.worf/R/x86_64-pc-linux-gnu-library/3.6/")
 
 # load packages
 suppressPackageStartupMessages({
@@ -9,11 +9,14 @@ suppressPackageStartupMessages({
   library(TxDb.Hsapiens.UCSC.hg19.knownGene)
   library(ChIPseeker)
   library(org.Hs.eg.db)
+  library(dplyr)
+  library(ggplot2)
 })
 
 ### 1. LOAD eQTL results ###
 # cis-eQTLs of cases and controls (ALL) in genes, transcripts and exons
 eqtls.gene <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/hits/pmb_cis-eQTL_gene_hits_cases_vs_controls.txt", header = T, stringsAsFactors = F)
+length(eqtls.gene$SNP)
 eqtls.transcript <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/hits/pmb_cis-eQTL_transcript_hits_cases_vs_controls.txt", header = T, stringsAsFactors = F)
 eqtls.exon <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/hits/pmb_cis-eQTL_exon_hits_cases_vs_controls.txt", header = T, stringsAsFactors = F)
 
@@ -21,6 +24,16 @@ eqtls.exon <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/
 eqtls.gene.cases <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/hits/pmb_cis-eQTL_gene_hits_cases_only.txt", header = T, stringsAsFactors = F)
 eqtls.transcript.cases <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/hits/pmb_cis-eQTL_transcript_hits_cases_only.txt", header = T, stringsAsFactors = F)
 eqtls.exon.cases <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/hits/pmb_cis-eQTL_exon_hits_cases_only.txt", header = T, stringsAsFactors = F)
+
+# get cases only unique eQTLs
+unique.eqtl.ids <- setdiff(eqtls.exon.cases[, c("SNP", "Exon")], eqtls.exon[, c("SNP", "Exon")])
+eqtls.exon.cases <- as.data.frame(eqtls.exon.cases)
+
+eqtls.exon.cases.unique <- data.frame()
+for (i in 1:length(unique.eqtl.ids$SNP)) {
+  eqtls.exon.cases.unique <- rbind(eqtls.exon.cases.unique, filter(eqtls.exon.cases, SNP %in% unique.eqtl.ids[i, "SNP"] & Exon %in% unique.eqtl.ids[i, "Exon"]))
+}
+head(eqtls.exon.cases.unique)
 
 ### 2. Transform eQTL data into SNP-based GRanges objects ###
 # Gene eQTLs
@@ -53,34 +66,15 @@ eqtls.exon.cases.gr <- GRanges(seqnames = eqtls.exon.cases$SNP_location, snp_id 
 eqtls.exon.cases.gr <- eqtls.exon.cases.gr[!duplicated(eqtls.exon.cases.gr)]  # 79,108 SNPs
 seqlevelsStyle(eqtls.exon.cases.gr) <- "UCSC"
 
+# Exon cases unique eQTLs
+eqtls.exon.cases.unique.gr <- GRanges(seqnames = eqtls.exon.cases.unique$SNP_location, snp_id = eqtls.exon.cases.unique$SNP)
+eqtls.exon.cases.unique.gr <- eqtls.exon.cases.gr[!duplicated(eqtls.exon.cases.unique.gr)]  # 79,108 SNPs
+seqlevelsStyle(eqtls.exon.cases.unique.gr) <- "UCSC"
+
 # remove unnecessary data
 rm(eqtls.gene, eqtls.gene.cases, eqtls.transcript, eqtls.transcript.cases, eqtls.exon, eqtls.exon.cases)
 
 # 3. LOAD public data
-# BIOS whole blood gene eQTL SNPs
-bios.gene <- fread("/storage/groups/ccm01/datasets/2019_BIOS_QTL_browser/eQTL_results/gene_level_eQTLs.txt", sep = "\t")
-bios.gene[, length(bios.gene)] <- NULL # remove last column
-bios.gene <- bios.gene[bios.gene$FDR < 0.05, ]  # filter for eQTLs with FDR < 0.05
-bios.gene.gr <- GRanges(seqnames = bios.gene$SNPChr,
-                        ranges = IRanges(start = as.numeric(as.character(bios.gene$SNPChrPos)), 
-                                         end = as.numeric(as.character(bios.gene$SNPChrPos))),
-                        snp_id = bios.gene$SNPName)  # generate GRanges object
-bios.gene.gr <- bios.gene.gr[!duplicated(bios.gene.gr)]  # remove duplicated rows: 5,526,636 => 1,957,252 SNPs
-seqlevelsStyle(bios.gene.gr) <- "UCSC"
-rm(bios.gene)
-
-# BIOS whole blood exon eQTL SNPs
-bios.exon <- fread("/storage/groups/ccm01/datasets/2019_BIOS_QTL_browser/eQTL_results/exon_level_eQTLs_independent_effects.txt", sep = "\t")
-bios.exon[, length(bios.exon)] <- NULL # remove last column
-bios.exon <- bios.exon[bios.exon$FDR < 0.05, ]  # filter for eQTLs with FDR < 0.05
-bios.exon.gr <- GRanges(seqnames = bios.exon$SNPChr,
-                        ranges = IRanges(start = as.numeric(as.character(bios.exon$SNPChrPos)), 
-                                         end = as.numeric(as.character(bios.exon$SNPChrPos))),
-                        snp_id = bios.exon$SNPName)  # generate GRanges object
-bios.exon.gr <- bios.exon.gr[!duplicated(bios.exon.gr)]  # remove duplicated rows: 5,526,636 => 1,957,252 SNPs
-seqlevelsStyle(bios.exon.gr) <- "UCSC"
-rm(bios.exon)
-
 # CMC (Fromer et al.) gene eQTLs
 cmc.gene <- fread("/storage/groups/ccm01/datasets/2019_CMC_Fromer_et_al/eQTL/CMC_MSSM-Penn-Pitt_DLPFC_Analysis_eQTL-adjustedSVA.txt")
 cmc.gene <- cmc.gene[cmc.gene$FDR < 0.05, ]  # filter for FDR <= 0.05
@@ -97,6 +91,34 @@ cmc.iso.gr <- GRanges(seqnames = cmc.iso$SNP_location,
 cmc.iso.gr <- cmc.iso.gr[!duplicated(cmc.iso.gr)]  # remove duplicated rows: 2,199,772 => 1,342,767 SNPs
 rm(cmc.iso)
 
+### GTEx Whole Blood
+gtex.wb <- fread("/storage/groups/ccm01/datasets/2018_GTExv7_cis_eQTL/GTEx_Analysis_v7_eQTL/Whole_Blood.v7.egenes.txt")
+gtex.wb <- gtex.wb[gtex.wb$qval < 0.05, ] # filter for FDR < 0.05 (qvalue)
+gtex.wb.gr <- GRanges(seqnames = gtex.wb$chr, 
+                      ranges = IRanges(start = as.numeric(as.character(gtex.wb$pos)), 
+                                       end = as.numeric(as.character(gtex.wb$pos))),
+                      snp_id = gtex.wb$rs_id_dbSNP147_GRCh37p13)  # generate GRanges object only with gene ID, name and location
+gtex.wb.gr <- gtex.wb.gr[!duplicated(gtex.wb.gr)]  # remove duplicated rows: 8,663 genes (no duplicates)
+seqlevelsStyle(gtex.wb.gr) <- "UCSC"
+rm(gtex.wb)
+
+### GTEx Brain (all brain tissues)
+brains <- c("Brain_Amygdala.v7.egenes.txt", "Brain_Anterior_cingulate_cortex_BA24.v7.egenes.txt", "Brain_Caudate_basal_ganglia.v7.egenes.txt", "Brain_Cerebellar_Hemisphere.v7.egenes.txt", "Brain_Cerebellum.v7.egenes.txt", "Brain_Cortex.v7.egenes.txt", "Brain_Frontal_Cortex_BA9.v7.egenes.txt", "Brain_Hippocampus.v7.egenes.txt", "Brain_Hypothalamus.v7.egenes.txt", "Brain_Nucleus_accumbens_basal_ganglia.v7.egenes.txt", "Brain_Putamen_basal_ganglia.v7.egenes.txt", "Brain_Spinal_cord_cervical_c-1.v7.egenes.txt", "Brain_Substantia_nigra.v7.egenes.txt")
+gtex.brains <- data.frame()
+for (i in brains) {
+  filename <- paste0("/storage/groups/ccm01/datasets/2018_GTExv7_cis_eQTL/GTEx_Analysis_v7_eQTL/", i)
+  data <- fread(filename)
+  data <- data[data$qval < 0.05, ]  # filter for significant hits
+  gtex.brains <- rbind(gtex.brains, data) # merge different brain files together
+}
+gtex.brains.gr <- GRanges(seqnames = gtex.brains$chr, 
+                          ranges = IRanges(start = as.numeric(as.character(gtex.brains$pos)), 
+                                           end = as.numeric(as.character(gtex.brains$pos))),
+                          snp_id = gtex.brains$rs_id_dbSNP147_GRCh37p13)  # generate GRanges object only with gene ID, name and location
+gtex.brains.gr <- gtex.brains.gr[!duplicated(gtex.brains.gr)]  # remove duplicated rows: 58,589 => 17,373 genes
+seqlevelsStyle(gtex.brains.gr) <- "UCSC"
+rm(brains, filename, data, i, gtex.brains)
+
 
 # 4. Annotate data
 as.gene <- annotatePeak(unique(eqtls.gene.gr), TxDb = TxDb.Hsapiens.UCSC.hg19.knownGene, annoDb = "org.Hs.eg.db", verbose = F)
@@ -105,10 +127,11 @@ as.transcript <- annotatePeak(unique(eqtls.transcript.gr), TxDb = TxDb.Hsapiens.
 as.transcript.cases <- annotatePeak(unique(eqtls.transcript.cases.gr), TxDb = TxDb.Hsapiens.UCSC.hg19.knownGene, annoDb = "org.Hs.eg.db", verbose = F)
 as.exon <- annotatePeak(unique(eqtls.exon.gr), TxDb = TxDb.Hsapiens.UCSC.hg19.knownGene, annoDb = "org.Hs.eg.db", verbose = F)
 as.exon.cases <- annotatePeak(unique(eqtls.exon.cases.gr), TxDb = TxDb.Hsapiens.UCSC.hg19.knownGene, annoDb = "org.Hs.eg.db", verbose = F)
-as.bios <- annotatePeak(unique(bios.gene.gr), TxDb = TxDb.Hsapiens.UCSC.hg19.knownGene, annoDb = "org.Hs.eg.db", verbose = F)
-as.bios.exon <- annotatePeak(unique(bios.exon.gr), TxDb = TxDb.Hsapiens.UCSC.hg19.knownGene, annoDb = "org.Hs.eg.db", verbose = F)
+as.exon.cases.unique <- annotatePeak(unique(eqtls.exon.cases.unique.gr), TxDb = TxDb.Hsapiens.UCSC.hg19.knownGene, annoDb = "org.Hs.eg.db", verbose = F)
 as.cmc <- annotatePeak(unique(cmc.gene.gr), TxDb = TxDb.Hsapiens.UCSC.hg19.knownGene, annoDb = "org.Hs.eg.db", verbose = F)
 as.cmc.iso <- annotatePeak(unique(cmc.iso.gr), TxDb = TxDb.Hsapiens.UCSC.hg19.knownGene, annoDb = "org.Hs.eg.db", verbose = F)
+as.gtex.wb <- annotatePeak(unique(gtex.wb.gr), TxDb = TxDb.Hsapiens.UCSC.hg19.knownGene, annoDb = "org.Hs.eg.db", verbose = F)
+as.gtex.brain <- annotatePeak(unique(gtex.brains.gr), TxDb = TxDb.Hsapiens.UCSC.hg19.knownGene, annoDb = "org.Hs.eg.db", verbose = F)
 
 # 1.4 Plot the annotations
 # 1.4.1 Combine all annotations
@@ -118,14 +141,15 @@ genomic.annotation <- bind_rows(Gene = as.gene@annoStat,
                                 Transcript_cases = as.transcript.cases@annoStat,
                                 Exon = as.exon@annoStat,
                                 Exon_cases = as.exon.cases@annoStat,
-                                Bios = as.bios@annoStat,
-                                Bios_exon = as.bios.exon@annoStat,
+                                Exon_cases_unique = as.exon.cases.unique@annoStat,
                                 CMC = as.cmc@annoStat,
                                 CMC_iso = as.cmc.iso@annoStat,
+                                GTEx_blood = as.gtex.wb@annoStat,
+                                GTEx_brain = as.gtex.brain@annoStat,
                                 .id = 'Type')
 genomic.annotation$Type <- as.factor(genomic.annotation$Type)
 # relevel to gene, transcript, exon order
-genomic.annotation$Type <- factor(genomic.annotation$Type, levels = c("CMC_iso", "CMC", "Bios_exon", "Bios", "Exon_cases", "Exon", "Transcript_cases", "Transcript", "Gene_cases", "Gene"))
+genomic.annotation$Type <- factor(genomic.annotation$Type, levels = c("GTEx_brain", "GTEx_blood", "CMC_iso", "CMC", "Exon_cases_unique", "Exon_cases", "Exon", "Transcript_cases", "Transcript", "Gene_cases", "Gene"))
 
 # 1.4.2 Plot Annotations as stacked barplot
 ggplot(genomic.annotation, aes(Type, Frequency, fill = Feature)) + 
@@ -136,4 +160,6 @@ ggplot(genomic.annotation, aes(Type, Frequency, fill = Feature)) +
   theme_minimal() +
   theme(text = element_text(size = 22))
 ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/02_Barplot_stacked_eqtl_annotations.pdf", height = 8, width = 11)
+
+genomic.annotation
 

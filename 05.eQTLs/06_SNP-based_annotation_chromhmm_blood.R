@@ -118,29 +118,29 @@ perm <- 10000
 
 # ChromHMM states
 states <- c("1_TssA", "2_TssAFlnk", "3_TxFlnk", "4_Tx", "5_TxWk", "6_EnhG", "7_Enh", "8_ZNF/Rpts", "9_Het", "10_TssBiv", "11_BivFlnk", "12_EnhBiv", "13_ReprPC", "14_ReprPCWk", "15_Quies")
-#interesting.codes <- unique(hmm.blood$name)
+interesting.codes <- unique(hmm.blood$name)
 
 # 2.4.1 annotation to ChromHMM Blood
-#for (state in states) {
-#  overlap <- paste0("ChromHMM_blood_", state, "_SNP_overlap")
-#  pval <- paste0("ChromHMM_blood_", state, "_SNP_pVal")
-#  or <- paste0("ChromHMM_blood_", state, "_SNP_or")
-#  results[c(overlap, pval, or), "Gene"] <- annotatePublicData(eqtls.gene.gr, hmm.blood[hmm.blood$name == state], perm, background.gr)
-#  print(paste0("Done gene: ", state))
-#  results[c(overlap, pval, or), "Gene_cases"] <- annotatePublicData(eqtls.gene.cases.gr, hmm.blood[hmm.blood$name == state], perm, background.gr)
-#  print(paste0("Done gene cases only: ", state))
-#  results[c(overlap, pval, or), "Transcript"] <- annotatePublicData(eqtls.transcript.gr, hmm.blood[hmm.blood$name == state], perm, background.gr)
-#  print(paste0("Done gtranscript: ", state))
-#  results[c(overlap, pval, or), "Transcript_cases"] <- annotatePublicData(eqtls.transcript.cases.gr, hmm.blood[hmm.blood$name == state], perm, background.gr)
-#  print(paste0("Done transcript cases only: ", state))
-#  results[c(overlap, pval, or), "Exon"] <- annotatePublicData(eqtls.exon.gr, hmm.blood[hmm.blood$name == state], perm, background.gr)
-#  print(paste0("Done exon: ", state))
-#  results[c(overlap, pval, or), "Exon_cases"] <- annotatePublicData(eqtls.exon.cases.gr, hmm.blood[hmm.blood$name == state], perm, background.gr)
-#  print(paste0("Done exon cases only: ", state))
-#}
+for (state in states) {
+  overlap <- paste0("ChromHMM_blood_", state, "_SNP_overlap")
+  pval <- paste0("ChromHMM_blood_", state, "_SNP_pVal")
+  or <- paste0("ChromHMM_blood_", state, "_SNP_or")
+  results[c(overlap, pval, or), "Gene"] <- annotatePublicData(eqtls.gene.gr, hmm.blood[hmm.blood$name == state], perm, background.gr)
+  print(paste0("Done gene: ", state))
+  results[c(overlap, pval, or), "Gene_cases"] <- annotatePublicData(eqtls.gene.cases.gr, hmm.blood[hmm.blood$name == state], perm, background.gr)
+  print(paste0("Done gene cases only: ", state))
+  results[c(overlap, pval, or), "Transcript"] <- annotatePublicData(eqtls.transcript.gr, hmm.blood[hmm.blood$name == state], perm, background.gr)
+  print(paste0("Done gtranscript: ", state))
+  results[c(overlap, pval, or), "Transcript_cases"] <- annotatePublicData(eqtls.transcript.cases.gr, hmm.blood[hmm.blood$name == state], perm, background.gr)
+  print(paste0("Done transcript cases only: ", state))
+  results[c(overlap, pval, or), "Exon"] <- annotatePublicData(eqtls.exon.gr, hmm.blood[hmm.blood$name == state], perm, background.gr)
+  print(paste0("Done exon: ", state))
+  results[c(overlap, pval, or), "Exon_cases"] <- annotatePublicData(eqtls.exon.cases.gr, hmm.blood[hmm.blood$name == state], perm, background.gr)
+  print(paste0("Done exon cases only: ", state))
+}
 
 # 2.4.6 write results into a file
-#write.table(results, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/pmb_cis-eQTL_annotation_results_10000_permutations_ChromHMM_blood.tsv", row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")
+write.table(results, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/pmb_cis-eQTL_annotation_results_10000_permutations_ChromHMM_blood.tsv", row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")
 
 results <- data.frame()
 perm <- 10000
