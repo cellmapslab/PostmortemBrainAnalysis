@@ -17,4 +17,9 @@ Following analyses will be performed:
   - Pre-processing of genotype, gene expression and covariate data
   - Run MatrixEQTL
   - Evaluate and plot results
-6. **Co-expression analysis**
+  - LD clumping
+  - eQTL annotation and resampling
+6. **Smoothing**
+  - Generate trans-eQTLs
+  - Filter, reweight and filter & reweight PRS using eQTLs or public data
+7. **Co-expression analysis**
