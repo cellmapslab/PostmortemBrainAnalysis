@@ -1048,14 +1048,14 @@ Some parts of the data can be mapped to several gene names. As it is not easy to
 annoExons <- as.data.table(annoExons)
 
 # get min start and max stop position for one exon
-annoExons <- annoExons[, list(chr = probesets.seqnames, start = min(probesets.start), end = max(probesets.end), gene_id = gene_id, gene_name = gene_name), by = exon_id]
+annoExons <- annoExons[, list(chr = probesets.seqnames, start = min(probesets.start), end = max(probesets.end), transcript_id = transcript_id, gene_id = gene_id, gene_name = gene_name), by = exon_id]
 
 # paste chr, start and stop together
 annoExons <- annoExons[!duplicated(annoExons), ]
-annoExons <- annoExons[ , new := do.call(paste, c(.SD, sep = ":")), .SDcols = -c(1, 4, 5, 6)]
-annoExons <- annoExons[ , c(7, 1:6)]
-annoExons <- annoExons[ , location := do.call(paste, c(.SD, sep = "-")), .SDcols = -c(2, 3, 4, 6, 7)]
-annoExons <- annoExons[ , c(2, 8, 6, 7)]
+annoExons <- annoExons[ , new := do.call(paste, c(.SD, sep = ":")), .SDcols = -c(1, 4, 5, 6, 7)]
+annoExons <- annoExons[ , c(8, 1:7)]
+annoExons <- annoExons[ , location := do.call(paste, c(.SD, sep = "-")), .SDcols = -c(2, 3, 4, 6, 7, 8)]
+annoExons <- annoExons[ , c(2, 9, 6, 7, 8)]
 
 # now remove exons with multiple gene id mappings
 annoSummarized <- annoExons[, .(count = uniqueN(gene_id)), by = exon_id]  # group by exon and count number of different Ensemble gene ids
@@ -1064,6 +1064,8 @@ idsToExclude <- (featureNames(exonSummaries) %in% annoFiltered$exon_id)
 exonSummaries <- subset(exonSummaries, !idsToExclude)  # remove multi-mapped exons
 fData(exonSummaries)$exon_id <- rownames(fData(exonSummaries))
 fData(exonSummaries) <- left_join(fData(exonSummaries), annoExons)
+# because we included transcript IDs we need to merge them (several transcript IDs per exon possible!)
+fData(exonSummaries) <- as.data.frame(unique(as.data.table(fData(exonSummaries))[, list(location, transcript_id = paste(transcript_id, collapse="|"), gene_id, gene_name), by = exon_id]))
 rownames(fData(exonSummaries)) <- fData(exonSummaries)$exon_id
 dim(exonSummaries)
 ```
@@ -1094,7 +1096,7 @@ for (rows in rownames(expressions)) {
 exonSummaries <- new("ExonFeatureSet", 
                      exprs = expressions, 
                      phenoData = phenoData(exonSummaries), 
-                     featureData = AnnotatedDataFrame(annoNew) , 
+                     featureData = AnnotatedDataFrame(annoNew), 
                      experimentData = experimentData(exonSummaries), 
                      protocolData = protocolData(exonSummaries), 
                      annotation = "pd.huex.1.0.st.v2")
@@ -1107,22 +1109,24 @@ We do not have any NA's in the gene IDs and/or gene symbols, so we do not need t
 ```{r}
 dim(exonSummaries)
 save(exonSummaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_exon_summaries_annotated.RData")
-rm(annoFiltered, annoSummarized, annoExons, exonsToRemove, idsToExclude)
+rm(annoFiltered, annoSummarized, annoExons, idsToExclude)
 ```
 
 
 # Correlation of the different gene summarization methods
 
-Correlation between genes using oligos core (transcript) summarization vs. probeset summarization. Correlation done using all overlapping genes...
+Correlation between genes using oligos core (transcript) summarization vs. probeset summarization. Correlation calculated for all overlapping genes of the two datasets. Once the correlation of all gene expression is calculated and once for each gene (giving the number of genes with a correlation higher than 90%, 80% and 50%).
 
 ```{r, include=FALSE, eval=FALSE, echo=FALSE}
+library(tidyr)
+
 # 1. Load geneSummarizations after batch correction
 # based on coreSummarization
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_gene_summaries_annotated_batch_corrected.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
 geneSummaries.core <- geneSummaries
 rm(geneSummaries)
 # based on probesetSummarization
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_gene_summaries_annotated_batch_corrected.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
 geneSummaries.probesets <- geneSummaries
 rm(geneSummaries)
 
@@ -1139,25 +1143,47 @@ overlapping.genes <- intersect(exprs.core$rownames, exprs.probesets$rownames)
 
 # 3. Calculate correlation of all overlapping genes
 res <- as.data.frame(overlapping.genes)
-res$cor <- lapply(overlapping.gene, function(x) cor(as.numeric(exprs.core[exprs.core$rownames == gene, -c(length(exprs.core))]), as.numeric(exprs.probesets[exprs.probesets$rownames == gene, -c(length(exprs.probesets))]), method = "pearson"))
+res$pearson <- lapply(overlapping.genes, function(x) cor(as.numeric(exprs.core[exprs.core$rownames == x, -c(length(exprs.core))]), as.numeric(exprs.probesets[exprs.probesets$rownames == x, -c(length(exprs.probesets))]), method = "pearson"))
+res$spearman <- lapply(overlapping.genes, function(x) cor(as.numeric(exprs.core[exprs.core$rownames == x, -c(length(exprs.core))]), as.numeric(exprs.probesets[exprs.probesets$rownames == x, -c(length(exprs.probesets))]), method = "spearman"))
+fwrite(res, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/genes_pearson_correlation_core_vs_probeset.csv", sep = ",")
 
-counts <- 0
-for (gene in overlapping.genes) {
-  res <- cor.test(as.numeric(exprs.core[exprs.core$rownames == gene, -c(length(exprs.core))]), as.numeric(exprs.probesets[exprs.probesets$rownames == gene, -c(length(exprs.probesets))]), alternative = "two.sided", method = "pearson")
-  if(abs(res$estimate) >= 0.50){
-    counts <- counts + 1
-  }
-}
-counts
-range(exprs.core[exprs.core$rownames == "ENSG00000214414.5", -c(length(exprs.core))])
-range(exprs.probesets[exprs.probesets$rownames == "ENSG00000214414.5", -c(length(exprs.probesets))])
-t <- rbind(exprs.core[exprs.core$rownames == "ENSG00000214414.5", -c(length(exprs.core))], exprs.probesets[exprs.probesets$rownames == "ENSG00000214414.5",-c(length(exprs.probesets))])
-cor.test(as.numeric(exprs.core[exprs.core$rownames == "ENSG00000214414.5", -c(length(exprs.core))]), as.numeric(exprs.probesets[exprs.probesets$rownames == "ENSG00000214414.5",-c(length(exprs.probesets))]))
+length(res[res$pearson >= 0.5, "pearson"])
+length(res[res$spearman >= 0.5, "spearman"])
 
-write.table(t, file="/home/icb/karolina.worf/ENSG00000214414.csv", sep= ";", row.names = F)
+# Gene IFNA10 (Ensembl ID: ENSG00000186803.3)
+test <- rbind(exprs.core[exprs.core$rownames == "ENSG00000186803.3", -c(length(exprs.core))], exprs.probesets[exprs.probesets$rownames == "ENSG00000186803.3",-c(length(exprs.probesets))])
+# correlation
+cor.test(as.numeric(exprs.core[exprs.core$rownames == "ENSG00000186803.3", -c(length(exprs.core))]), as.numeric(exprs.probesets[exprs.probesets$rownames == "ENSG00000186803.3",-c(length(exprs.probesets))]))
+# plot expressions against each other
+pdf("/home/icb/karolina.worf/plot_expression_core_vs_probeset_IFNA10.pdf")
+plot(t(test), xlab = "expression coreSummaries", ylab = "expression probesetSummaries")
+dev.off()
 
-png("/home/icb/karolina.worf/test.png")
-plot(t[1,], t[2,])
+# Gene FKBP5 (Ensembl ID: ENSG00000096060.10)
+test <- rbind(exprs.core[exprs.core$rownames == "ENSG00000096060.10", -c(length(exprs.core))], exprs.probesets[exprs.probesets$rownames == "ENSG00000096060.10",-c(length(exprs.probesets))])
+# correlation
+cor.test(as.numeric(exprs.core[exprs.core$rownames == "ENSG00000096060.10", -c(length(exprs.core))]), as.numeric(exprs.probesets[exprs.probesets$rownames == "ENSG00000096060.10",-c(length(exprs.probesets))]))
+# plot expressions against each other
+pdf("/home/icb/karolina.worf/plot_expression_core_vs_probeset_FKBP5.pdf")
+plot(t(test), xlab = "expression coreSummaries", ylab = "expression probesetSummaries")
+dev.off()
+
+# Gene SERTAD4 (Ensembl ID: ENSG00000082497.7)
+test <- rbind(exprs.core[exprs.core$rownames == "ENSG00000082497.7", -c(length(exprs.core))], exprs.probesets[exprs.probesets$rownames == "ENSG00000082497.7",-c(length(exprs.probesets))])
+# correlation
+cor.test(as.numeric(exprs.core[exprs.core$rownames == "ENSG00000082497.7", -c(length(exprs.core))]), as.numeric(exprs.probesets[exprs.probesets$rownames == "ENSG00000082497.7",-c(length(exprs.probesets))]))
+# plot expressions against each other
+pdf("/home/icb/karolina.worf/plot_expression_core_vs_probeset_SERTAD4.pdf")
+plot(t(test), xlab = "expression coreSummaries", ylab = "expression probesetSummaries")
+dev.off()
+
+# Gene PTPN4 (Ensembl ID: ENSG00000088179.4)
+test <- rbind(exprs.core[exprs.core$rownames == "ENSG00000088179.4", -c(length(exprs.core))], exprs.probesets[exprs.probesets$rownames == "ENSG00000088179.4",-c(length(exprs.probesets))])
+# correlation
+cor.test(as.numeric(exprs.core[exprs.core$rownames == "ENSG00000088179.4", -c(length(exprs.core))]), as.numeric(exprs.probesets[exprs.probesets$rownames == "ENSG00000088179.4",-c(length(exprs.probesets))]))
+# plot expressions against each other
+pdf("/home/icb/karolina.worf/plot_expression_core_vs_probeset_PTPN4.pdf")
+plot(t(test), xlab = "expression coreSummaries", ylab = "expression probesetSummaries")
 dev.off()
      
 ### overall correlation ###
@@ -1172,6 +1198,7 @@ identical(exprs.core$rownames, exprs.probesets$rownames)
 
 # 3. correlation of both matrices
 cor.test(unlist(c(exprs.core[, -c(length(exprs.core))])), unlist(c(exprs.probesets[, -c(length(exprs.probesets))])), alternative = "two.sided", method = "pearson")
+cor.test(unlist(c(exprs.core[, -c(length(exprs.core))])), unlist(c(exprs.probesets[, -c(length(exprs.probesets))])), alternative = "two.sided", method = "spearman")
 ```
 
 

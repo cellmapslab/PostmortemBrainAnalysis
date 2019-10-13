@@ -1,5 +1,5 @@
-# Load locally installed packages for R version 3.5
-.libPaths("/home/icb/karolina.worf/R/x86_64-pc-linux-gnu-library/3.5/")
+# Load locally installed packages for R version 3.6
+.libPaths("/home/icb/karolina.worf/R/x86_64-pc-linux-gnu-library/3.6/")
 setwd("/storage/scratch/users/karolina.worf/MPIP/06.Smoothing")
 
 # Load packages

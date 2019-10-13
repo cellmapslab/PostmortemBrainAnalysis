@@ -1,6 +1,6 @@
-# Load locally installed packages for R version 3.5
-.libPaths("/home/icb/karolina.worf/R/x86_64-pc-linux-gnu-library/3.5/")
-setwd("/storage/scratch/users/karolina.worf/MPIP/06.Smoothing")
+# Load locally installed packages for R version 3.6
+.libPaths("/home/icb/karolina.worf/R/x86_64-pc-linux-gnu-library/3.6/")
+setwd("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Smoothing")
 
 # Load packages
 library(data.table)
@@ -93,7 +93,7 @@ weights <- prs.scz2[prs.scz2$sid %in% tmp$snp_id, ]
 write.table(weights, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Smoothing/output/exon_cis-eqtl_cases_only_smoothed_LDpred_p3.0000e-01.txt", row.names = F, col.names = T, sep = "    ", quote = F)
 rm(tmp, weights)
 
-# 7. Take only SNPs with gene cis-eQTLs an reverse the weight (multiply with -1)
+# 7. Take only SNPs with gene cis-eQTLs and reverse the weight (multiply with -1)
 tmp <- prs.scz2.gr[overlapsAny(prs.scz2.gr, eqtls.gene.gr)]
 weights <- prs.scz2[prs.scz2$sid %in% tmp$snp_id, ]
 weights$ldpred_beta <-  weights$ldpred_beta * (-1)

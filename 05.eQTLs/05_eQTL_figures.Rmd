@@ -206,7 +206,7 @@ eqtls.transcript <- merge(eqtls.transcript, transpos, by.x = "gene", by.y = "tra
 eqtls.transcript <- merge(eqtls.transcript, genespos, by.x = "gene_id", by.y = "Gene", all.x = T)
 eqtls.transcript <- eqtls.transcript[complete.cases(eqtls.transcript), ]
 eqtls.transcript <- eqtls.transcript[, c("SNP", "gene", "beta", "t-stat", "p-value", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "location", "gene_id",  "gene_name", "Gene_location", "Gene_strand")]
-colnames(eqtls.transcript) <- c("SNP", "Transcript", "Beta", "Test_statistic", "pvalue", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "Transcript_location", "Gene", "Gene_symbol", "Gene_location", "Gene_strand")
+colnames(eqtls.transcript) <- c("SNP", "Transcript", "Beta", "Test_statistic", "p-value", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "Transcript_location", "Gene", "Gene_symbol", "Gene_location", "Gene_strand")
 eqtls.transcript$eQTL_type <- "cis" 
 eqtls.transcript <- eqtls.transcript[order(eqtls.transcript$FDR),]
 head(eqtls.transcript)
@@ -224,7 +224,7 @@ eqtls.transcript.cases <- merge(eqtls.transcript.cases, transpos, by.x = "gene",
 eqtls.transcript.cases <- merge(eqtls.transcript.cases, genespos, by.x = "gene_id", by.y = "Gene", all.x = T)
 eqtls.transcript.cases <- eqtls.transcript.cases[complete.cases(eqtls.transcript.cases), ]
 eqtls.transcript.cases <- eqtls.transcript.cases[, c("SNP", "gene", "beta", "t-stat", "p-value", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "location", "gene_id", "gene_name", "Gene_location", "Gene_strand")]
-colnames(eqtls.transcript.cases) <- c("SNP", "Transcript", "Beta", "Test_statistic", "pvalue", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "Transcript_location", "Gene", "Gene_symbol", "Gene_location", "Gene_strand")
+colnames(eqtls.transcript.cases) <- c("SNP", "Transcript", "Beta", "Test_statistic", "p-value", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "Transcript_location", "Gene", "Gene_symbol", "Gene_location", "Gene_strand")
 eqtls.transcript.cases$eQTL_type <- "cis" 
 eqtls.transcript.cases <- eqtls.transcript.cases[order(eqtls.transcript.cases$FDR),]
 head(eqtls.transcript.cases)
@@ -245,7 +245,7 @@ eqtls.exon <- merge(eqtls.exon, exonspos, by.x = "gene", by.y = "exon_id", all.x
 eqtls.exon <- merge(eqtls.exon, genespos, by.x = "gene_id", by.y = "Gene", all.x = T)
 eqtls.exon <- eqtls.exon[complete.cases(eqtls.exon), ]
 eqtls.exon <- eqtls.exon[, c("SNP", "gene", "beta", "t-stat", "p-value", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "location", "gene_id", "gene_name", "Gene_location", "Gene_strand")]
-colnames(eqtls.exon) <- c("SNP", "Exon", "Beta", "Test_statistic", "pvalue", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "Exon_location", "Gene", "Gene_symbol", "Gene_location", "Gene_strand")
+colnames(eqtls.exon) <- c("SNP", "Exon", "Beta", "Test_statistic", "p-value", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "Exon_location", "Gene", "Gene_symbol", "Gene_location", "Gene_strand")
 eqtls.exon$eQTL_type <- "cis" 
 eqtls.exon <- eqtls.exon[order(eqtls.exon$FDR),]
 head(eqtls.exon)
@@ -263,7 +263,7 @@ eqtls.exon.cases <- merge(eqtls.exon.cases, exonspos, by.x = "gene", by.y = "exo
 eqtls.exon.cases <- merge(eqtls.exon.cases, genespos, by.x = "gene_id", by.y = "Gene", all.x = T)
 eqtls.exon.cases <- eqtls.exon.cases[complete.cases(eqtls.exon.cases), ]
 eqtls.exon.cases <- eqtls.exon.cases[, c("SNP", "gene", "beta", "t-stat", "p-value", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "location", "gene_id", "gene_name", "Gene_location", "Gene_strand")]
-colnames(eqtls.exon.cases) <- c("SNP", "Exon", "Beta", "Test_statistic", "pvalue", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "Exon_location", "Gene", "Gene_symbol", "Gene_location", "Gene_strand")
+colnames(eqtls.exon.cases) <- c("SNP", "Exon", "Beta", "Test_statistic", "p-value", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "Exon_location", "Gene", "Gene_symbol", "Gene_location", "Gene_strand")
 eqtls.exon.cases$eQTL_type <- "cis" 
 eqtls.exon.cases <- eqtls.exon.cases[order(eqtls.exon.cases$FDR),]
 write.table(eqtls.exon.cases, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/hits/pmb_cis-eQTL_exon_hits_cases_only.txt", row.names = F, quote = F, dec = ".", sep = " ")

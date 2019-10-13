@@ -1,5 +1,4 @@
 #!/bin/bash
-#gen_file="/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/genotype_data/pmb_info06_test.gen.gz"
 gen_file="/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/preprocessed_genotypes/1.2_merged_chr/pmb_info06_all_chr_maf0.05_merged.gen.gz"
 sample_file="/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/preprocessed_genotypes/1.2_merged_chr/pmb_info06_all_chr_maf0.05_merged.sample"
 eqtl_samples="/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/eqtl_samples.txt"

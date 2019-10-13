@@ -1,6 +1,6 @@
 #! /bin/bash
 
-# load R version 3.5.1 and its packages
+# load R version 3.6.1 and its packages
 source /storage/groups/ccm01/code/PostmortemBrainAnalysis/06.Smoothing/01_makeenv.sh
 
 file=$1

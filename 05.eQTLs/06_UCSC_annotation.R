@@ -34,6 +34,11 @@ for (i in 1:length(unique.eqtl.ids$SNP)) {
   eqtls.exon.cases.unique <- rbind(eqtls.exon.cases.unique, filter(eqtls.exon.cases, SNP %in% unique.eqtl.ids[i, "SNP"] & Exon %in% unique.eqtl.ids[i, "Exon"]))
 }
 head(eqtls.exon.cases.unique)
+fwrite(eqtls.exon.cases.unique, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/hits/pmb_cis-eQTL_exon_hits_unique_cases_only.txt")
+
+# change back to data.table
+eqtls.exon.cases <- as.data.table(eqtls.exon.cases)
+eqtls.exon.cases.unique <- as.data.table(eqtls.exon.cases.unique)
 
 ### 2. Transform eQTL data into SNP-based GRanges objects ###
 # Gene eQTLs

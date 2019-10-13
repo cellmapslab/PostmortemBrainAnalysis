@@ -3,8 +3,8 @@
 ####################
 # In this R script, we will analyze and plot all generated polygenic risk scores
 
-# 1. Load packages (for own R installation - version 3)
-.libPaths("/home/icb/karolina.worf/R/x86_64-pc-linux-gnu-library/3.5/")
+# 1. Load packages (for own R installation - version 3.6)
+.libPaths("/home/icb/karolina.worf/R/x86_64-pc-linux-gnu-library/3.6/")
 library(viridis) # for colorblind color palette
 library(data.table)
 library(ggplot2)
@@ -17,17 +17,9 @@ library(oligo)
 
 # 2. Load data (all different generated PRS)
 # load, filter and save phenotype data
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_gene_summaries_annotated_batch_corrected.RData")
-index <- which(is.na(pData(geneSummaries)$C1))  # remove all samples with C1 = NA
-geneSummaries <- geneSummaries[, -c(index)]
-index <- which(is.na(pData(geneSummaries)$Type_of_Death))  # remove all samples with Type_of_Death = NA
-geneSummaries <- geneSummaries[, -c(index)]
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
 dim(geneSummaries)
 pData <- pData(geneSummaries)
-
-# Add diagnosis column to pData
-pData$Diagnosis <- as.character(pData$Dx)
-pData[pData$Diagnosis != "CTL", "Diagnosis"] <- "CASE"
 
 # load smoothed PRS scores
 # Remember to add a comma "," at the end of the header line (or remove all commas from the rest of the lines) otherwise read.table or fread can not read in the data correctly. 
@@ -78,7 +70,7 @@ prs.gtex.wb <- merge(prs.gtex.wb, pData, by = "IID")
 prs.gtex.brain <- merge(prs.gtex.brain, pData, by = "IID")
 
 # get p-value & R²
-lm.smoothed <- lm(prs.gtex.brain$PRS ~ prs.gtex.brain$Diagnosis)
+lm.smoothed <- lm(prs.exon$PRS ~ prs.exon$Diagnosis)
 nagelkerke(lm.smoothed) # for R²
 summary(lm.smoothed) # for p-value
 
