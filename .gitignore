@@ -1,9 +1,13 @@
 /04.DEX/*.html
 /04.DEX/01_Preprocessing_cache/*
 /04.DEX/01_Preprocessing_cache/latex/__packages
+/04.DEX/04_DEAnalysis_cache/*
 *.html
 *.log
 *.Rout
 *.RData
 *.RDataTmp
 *.Rhistory
+*.giosave*
+*.out
+/00_Carlos/*
