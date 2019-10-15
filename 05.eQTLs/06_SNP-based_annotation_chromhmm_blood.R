@@ -13,19 +13,20 @@ suppressPackageStartupMessages({
 # We first need to get MAF values for each SNP using PLINK
 # /storage/groups/ccm01/tools/PLINK/plink  --bfile /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/preprocessed_genotypes/1.2_merged_chr/pmb_info06_all_chr_maf0.05_merged --freq
 # Now read in the MAF values for each SNP
-mafs <- read.table("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/plink.frq", header = TRUE)
+mafs <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/plink.frq", data.table=F)
 
 # generate bins of MAF in 0.05 steps
 boundaries <- c(0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 1.0)
 mafs$bin <- discretize(mafs$MAF, method = "fixed", breaks = boundaries, labels=c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11))
 
 # load background SNPs
-snps <- read.table("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/preprocessed_genotypes/1.2_merged_chr/pmb_info06_all_chr_maf0.05_merged.bim", header = F, stringsAsFactors = FALSE) # snp chr pos
+snps <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/preprocessed_genotypes/1.2_merged_chr/pmb_info06_all_chr_maf0.05_merged.bim",data.table=F) # snp chr pos
 snps <- snps[, c("V2", "V4")]
 colnames(snps) <- c("SNP", "POS")
 
 # merge maf with background SNPs
 background <- merge(mafs, snps, by = "SNP")
+background <- background[!duplicated(background$SNP),]  # 6,798,048 SNPs
 
 # save into GRanges object
 background.gr <- GRanges(seqnames = background$CHR,
@@ -35,6 +36,8 @@ background.gr <- GRanges(seqnames = background$CHR,
                          bin = background$bin)
 background.gr <- background.gr[!duplicated(background.gr)]  # 6,798,048 SNPs
 rm(snps, background)
+#@Karo:saveRDS for  background.gr as you might need it again
+#@Karo:dito for all aother granges exon, gene...
 
 ### 2. LOAD eQTL results ###
 # cis-eQTLs of cases and controls (ALL) in genes, transcripts and exons
@@ -66,8 +69,35 @@ eqtls.transcript.cases.gr <- GRanges(seqnames = eqtls.transcript.cases$SNP_locat
 eqtls.transcript.cases.gr <- eqtls.transcript.cases.gr[!duplicated(eqtls.transcript.cases.gr)]  # 16,237 SNPs
 # Exon eQTLs
 eqtls.exon <- merge(eqtls.exon, mafs, by = "SNP")
-eqtls.exon.gr <- GRanges(seqnames = eqtls.exon$SNP_location, snp_id = eqtls.exon$SNP, exon_id = eqtls.exon$Exon, maf = eqtls.exon$MAF, bin = eqtls.exon$bin)
+eqtls.exon.gr <- GRanges(seqnames = eqtls.exon$SNP_location,
+                         snp_id = eqtls.exon$SNP, 
+                         exon_id = eqtls.exon$Exon, 
+                         maf = eqtls.exon$MAF, 
+                         bin = eqtls.exon$bin)
 eqtls.exon.gr <- eqtls.exon.gr[!duplicated(eqtls.exon.gr)]  # 190,570 SNPs
+
+#@Karo: here I get an error: Error in asMethod(object) : 
+  #The character vector to convert to a GRanges object must contain
+  #strings of the form "chr1:2501-2800" or "chr1:2501-2800:+" (".." being
+  #also supported as a separator between the start and end positions).
+  #Strand can be "+", "-", "*", or missing.
+#@Karo: we need to add pos and chr to the GR object like u did it for the background
+#I would do
+eqtls.exon.jka <- merge(eqtls.exon, background, by = "SNP")
+#dim(eqtls.exon.jka )
+#[1] 288551     23
+eqtls.exon.gr.jka <- GRanges(seqnames = eqtls.exon.jka$CHR,
+                         ranges = IRanges(start = as.numeric(as.character(eqtls.exon.jka$POS)), 
+                                          end = as.numeric(as.character(eqtls.exon.jka$POS))),
+                         snp_id = as.character(eqtls.exon.jka$SNP), 
+                         exon_id = eqtls.exon.jka$Exon, 
+                         #maf = eqtls.exon.jka$MAF,
+                         bin = eqtls.exon.jka$bin)
+eqtls.exon.gr.jka <- eqtls.exon.gr.jka[!duplicated(eqtls.exon.gr.jka)]  # 190,371 SNPs ???
+
+
+
+
 # Exon cases eQTLs
 eqtls.exon.cases <- merge(eqtls.exon.cases, mafs, by = "SNP")
 eqtls.exon.cases.gr <- GRanges(seqnames = eqtls.exon.cases$SNP_location, snp_id = eqtls.exon.cases$SNP, exon_id = eqtls.exon.cases$Exon, maf = eqtls.exon.cases$MAF, bin = eqtls.exon.cases$bin)
@@ -82,11 +112,14 @@ hmm <- readRDS("/storage/groups/ccm01/datasets/2019_chromHMM/chromHMM_all_states
 # remove chromosome X, Y and M
 seqlevels(hmm, pruning.mode="coarse") <- setdiff(seqlevels(hmm), c("chrX", "chrY", "chrM"))
 
-# get ChromHMM brain data
+# get ChromHMM brain data --> Brain_Dorsolateral_Prefrontal_Cortex
 hmm.brain <- hmm[hmm$code == "E073"]
 seqlevelsStyle(hmm.brain) <- "NCBI"
 
+#@Karo to compare PFC results to other brain regions I would use all brain regions, maybe leave out blood and comapre it to  Group=="Brain"
+
 # get ChromHMM blood data
+#@Karo: Blood --> has multiple  cell lines --> filter for Group == "Blood & T-cell" or leave out
 hmm.blood <- hmm[hmm$code == "E062"]
 seqlevelsStyle(hmm.blood) <- "NCBI"
 
@@ -106,13 +139,16 @@ seqlevelsStyle(hmm.blood) <- "NCBI"
 annotatePublicData <- function(own, public, nperm, background){ 
   overlap <- sum(overlapsAny(own, public))  # number of overlaps between the two datasets
   # resample nperm times
-  resampling <- lapply(1:3, function(x) sum(sapply(1:11, function(x) sum(overlapsAny(sample(background[background$bin == x], length(own[own$bin == x])), public)))))
+  resampling <- lapply(1:nperm, function(x) #@Karo: hard coded 1:3??? it need to be 10,000-> otherwise u never use 10,000 perm -->
+    sum(sapply(1:11, function(x) sum(overlapsAny(sample(background[background$bin == x], 
+                                                        length(own[own$bin == x])), public)))))
   # IF 0 => echt kleiner als 1e^(-5/6)
-  p.value <- if((sum(resampling >= overlap) / nperm) == 0){ paste("<=", 1/nperm, sep = " ") } else {sum(resampling >= overlap) / nperm}
+  p.value <- if((sum(resampling >= overlap) / nperm) == 0){ paste("<=", 1/nperm, sep = " ") } 
+               else {sum(resampling >= overlap) / nperm}
   or <- overlap/mean(unlist(resampling))
   return(c(as.character(overlap), as.character(p.value), as.character(or))) # return the resampling p-value
 }
-
+##@Karo:I stopped here
 results <- data.frame()
 perm <- 10000
 
