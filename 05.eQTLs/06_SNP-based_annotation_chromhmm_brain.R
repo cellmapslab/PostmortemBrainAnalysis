@@ -7,138 +7,179 @@ suppressPackageStartupMessages({
   library(GenomicRanges)
   library(tidyr)
   library(arules)
+  library(foreach)
+  library(doSNOW)
+  library(S4Vectors)
 })
 
-### 1. Load Background data ###
+# function to generate an eQTL GRanges object (with MAF bins)
+# @param input Input data of which an GRanges object should be made of (e.g. eQTL hits)
+# @param mdata Merging data (e.g. Background SNPs)
+# @param ofile Name for the rds output file of the generated GRanges object 
+GenerateGrangesObject <- function(input, mdata, ofile){
+  # merge with MAF info
+  input <- merge(input, mdata, by = "SNP")
+  # generate GRanges object
+  input.gr <- GRanges(seqnames = input$CHR, 
+                      ranges = IRanges(start = as.numeric(as.character(input$POS)), 
+                                       end = as.numeric(as.character(input$POS))),
+                      snp_id = input$SNP, 
+                      bin = input$bin)
+  # remove duplicates
+  input.gr <- input.gr[!duplicated(input.gr)] 
+  # save GRanges object to an rds file
+  saveRDS(input.gr, file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/RData/", ofile))
+  # return finalized GRanges object
+  return(input.gr)
+}
+
+# function, to calculate the gene annotation to a public dataset, but with respect to the MAF bins
+# @param own Own cis-eQTL data set as GRanges object
+# @param public A public cis-eQTL data set as GRanges object
+# @param nperm Number of permutations (usually a 1000 times)
+# @param background All background genes coming from the gene expression (here: 14,048 unqiue genes)
+annotatePublicData <- function(own, public, nperm, background){ 
+  overlap <- sum(overlapsAny(own, public))  # number of overlaps between the two datasets
+  background.bins <- lapply(1:11, function(x) background[background$bin == x])  # get all background SNPs in MAF bin 1 to 11
+  own.bin.lengths <- sapply(1:11, function(x) length(own[own$bin == x]))  # get length of all 11 MAF bins
+  # resample nperm times
+  resampling <- lapply(1:nperm, function(x)
+    sum(sapply(1:11, function(x)
+      sum(
+        overlapsAny(sample(background.bins[[x]], own.bin.lengths[x]), public)
+       ))))
+  # IF 0 => actually smaller than 1e^(-5/6)
+  p.value <- if((sum(resampling >= overlap) / nperm) == 0){ paste("<=", 1/nperm, sep = " ") } 
+  else {sum(resampling >= overlap) / nperm}
+  or <- overlap/mean(unlist(resampling))
+  return(c(as.character(overlap), as.character(p.value), as.character(or))) # return the resampling p-value
+}
+
+### Load Background data ###
 # We first need to get MAF values for each SNP using PLINK
-# /storage/groups/ccm01/tools/PLINK/plink  --bfile /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/preprocessed_genotypes/1.2_merged_chr/pmb_info06_all_chr_maf0.05_merged --freq
+# /storage/groups/ccm01/tools/PLINK/plink --bfile /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/preprocessed_genotypes/1.2_merged_chr/pmb_info06_all_chr_maf0.05_merged --freq --out /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/annotation/pmb_info06_all_chr_maf0.05_merged_maf_information
 # Now read in the MAF values for each SNP
-mafs <- read.table("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/plink.frq", header = TRUE)
+mafs <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/annotation/pmb_info06_all_chr_maf0.05_merged_maf_information.frq", data.table=F)
 
 # generate bins of MAF in 0.05 steps
 boundaries <- c(0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 1.0)
 mafs$bin <- discretize(mafs$MAF, method = "fixed", breaks = boundaries, labels=c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11))
 
 # load background SNPs
-snps <- read.table("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/preprocessed_genotypes/1.2_merged_chr/pmb_info06_all_chr_maf0.05_merged.bim", header = F, stringsAsFactors = FALSE) # snp chr pos
-snps <- snps[, c("V2", "V4")]
-colnames(snps) <- c("SNP", "POS")
+snps <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/preprocessed_genotypes/1.2_merged_chr/pmb_info06_all_chr_maf0.05_merged.bim", data.table = F, select = c(2, 4), col.names = c("SNP", "POS")) # snp chr pos
 
-# merge maf with background SNPs
-background <- merge(mafs, snps, by = "SNP")
-
-# save into GRanges object
-background.gr <- GRanges(seqnames = background$CHR,
-                         ranges = IRanges(start = as.numeric(as.character(background$POS)), 
-                                          end = as.numeric(as.character(background$POS))),
-                         snp_id = background$SNP, 
-                         bin = background$bin)
-background.gr <- background.gr[!duplicated(background.gr)]  # 6,798,048 SNPs
-rm(snps, background)
-
-### 2. LOAD eQTL results ###
+### LOAD eQTL results ###
 # cis-eQTLs of cases and controls (ALL) in genes, transcripts and exons
-eqtls.gene <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/hits/pmb_cis-eQTL_gene_hits_cases_vs_controls.txt", header = T, stringsAsFactors = F)
-eqtls.transcript <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/hits/pmb_cis-eQTL_transcript_hits_cases_vs_controls.txt", header = T, stringsAsFactors = F)
-eqtls.exon <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/hits/pmb_cis-eQTL_exon_hits_cases_vs_controls.txt", header = T, stringsAsFactors = F)
+eqtls.gene <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_gene_hits_cases_vs_controls.txt", header = T, stringsAsFactors = F)
+eqtls.transcript <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_transcript_hits_cases_vs_controls.txt", header = T, stringsAsFactors = F)
+eqtls.exon <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_exon_hits_cases_vs_controls.txt", header = T, stringsAsFactors = F)
 # cis-eQTLs of cases only in genes, transcripts and exons
-eqtls.gene.cases <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/hits/pmb_cis-eQTL_gene_hits_cases_only.txt", header = T, stringsAsFactors = F)
-eqtls.transcript.cases <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/hits/pmb_cis-eQTL_transcript_hits_cases_only.txt", header = T, stringsAsFactors = F)
-eqtls.exon.cases <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/hits/pmb_cis-eQTL_exon_hits_cases_only.txt", header = T, stringsAsFactors = F)
+eqtls.gene.cases <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_gene_hits_cases_only.txt", header = T, stringsAsFactors = F)
+eqtls.transcript.cases <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_transcript_hits_cases_only.txt", header = T, stringsAsFactors = F)
+eqtls.exon.cases <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_exon_hits_cases_only.txt", header = T, stringsAsFactors = F)
 
-### 3. SNP-based anotation ###
-### 3.1 Transform eQTL data into SNP-based GRanges objects ###
+### SNP-based anotation ###
+# Generate background SNP data as GRanges object ###
+background.gr <- GenerateGrangesObject(input = snps, 
+                                       mdata = mafs, 
+                                       ofile = "background_SNPs_granges_object.rds")
+length(background.gr$snp_id) # 6,798,048
+rm(snps)
+
+# Generate merging file for eQTL data from background SNPs #
+background <- as.data.frame(background.gr)[, c("seqnames", "start", "snp_id", "bin")]
+colnames(background) <- c("CHR", "POS", "SNP", "bin")
+head(background)
+
+### Transform eQTL data into SNP-based GRanges objects ###
 # Gene eQTLs
-eqtls.gene <- merge(eqtls.gene, mafs, by = "SNP")
-eqtls.gene.gr <- GRanges(seqnames = eqtls.gene$SNP_location, snp_id = eqtls.gene$SNP, gene_name = eqtls.gene$Gene_symbol, maf = eqtls.gene$MAF, bin = eqtls.gene$bin)
-eqtls.gene.gr <- eqtls.gene.gr[!duplicated(eqtls.gene.gr)]  # 36,637 SNPs
+eqtls.gene.gr <- GenerateGrangesObject(input = eqtls.gene,
+                                       mdata = background,
+                                       ofile = "pmb_cis-eQTL_gene_hits_cases_vs_controls_granges_object.rds")
+length(eqtls.gene.gr$snp_id) # 52,496 SNPs
 # Gene cases eQTLs
-eqtls.gene.cases <- merge(eqtls.gene.cases, mafs, by = "SNP")
-eqtls.gene.cases.gr <- GRanges(seqnames = eqtls.gene.cases$SNP_location, snp_id = eqtls.gene.cases$SNP, gene_name = eqtls.gene.cases$Gene_symbol, maf = eqtls.gene.cases$MAF, bin = eqtls.gene.cases$bin)
-eqtls.gene.cases.gr <- eqtls.gene.cases.gr[!duplicated(eqtls.gene.cases.gr)]  # 12,605 SNPs
+eqtls.gene.cases.gr <- GenerateGrangesObject(input = eqtls.gene.cases,
+                                             mdata = background,
+                                             ofile = "pmb_cis-eQTL_gene_hits_cases_only_granges_object.rds")
+length(eqtls.gene.cases.gr$snp_id) # 18,944 SNPs
 # Transcript eQTLs
-eqtls.transcript <- merge(eqtls.transcript, mafs, by = "SNP")
-eqtls.transcript.gr <- GRanges(seqnames = eqtls.transcript$SNP_location, snp_id = eqtls.transcript$SNP, transcript_id = eqtls.transcript$Transcript, maf = eqtls.transcript$MAF, bin = eqtls.transcript$bin)
-eqtls.transcript.gr <- eqtls.transcript.gr[!duplicated(eqtls.transcript.gr)]  # 43,039 SNPs
+eqtls.transcript.gr <- GenerateGrangesObject(input = eqtls.transcript,
+                                             mdata = background,
+                                             ofile = "pmb_cis-eQTL_transcript_hits_cases_vs_controls_granges_object.rds")
+length(eqtls.transcript.gr$snp_id) # 112,861 SNPs
 # Transcript cases eQTLs
-eqtls.transcript.cases <- merge(eqtls.transcript.cases, mafs, by = "SNP")
-eqtls.transcript.cases.gr <- GRanges(seqnames = eqtls.transcript.cases$SNP_location, snp_id = eqtls.transcript.cases$SNP, transcript_id = eqtls.transcript.cases$Transcript, maf = eqtls.transcript.cases$MAF, bin = eqtls.transcript.cases$bin)
-eqtls.transcript.cases.gr <- eqtls.transcript.cases.gr[!duplicated(eqtls.transcript.cases.gr)]  # 16,237 SNPs
+eqtls.transcript.cases.gr <- GenerateGrangesObject(input = eqtls.transcript.cases,
+                                                   mdata = background,
+                                                   ofile = "pmb_cis-eQTL_transcript_hits_cases_only_granges_object.rds")
+length(eqtls.transcript.cases.gr$snp_id) # 40,791 SNPs
 # Exon eQTLs
-eqtls.exon <- merge(eqtls.exon, mafs, by = "SNP")
-eqtls.exon.gr <- GRanges(seqnames = eqtls.exon$SNP_location, snp_id = eqtls.exon$SNP, exon_id = eqtls.exon$Exon, maf = eqtls.exon$MAF, bin = eqtls.exon$bin)
-eqtls.exon.gr <- eqtls.exon.gr[!duplicated(eqtls.exon.gr)]  # 190,570 SNPs
+eqtls.exon.gr <- GenerateGrangesObject(input = eqtls.exon,
+                                       mdata = background,
+                                       ofile = "pmb_cis-eQTL_exon_hits_cases_vs_controls_granges_object.rds")
+length(eqtls.exon.gr$snp_id) # 190,313 SNPs
 # Exon cases eQTLs
-eqtls.exon.cases <- merge(eqtls.exon.cases, mafs, by = "SNP")
-eqtls.exon.cases.gr <- GRanges(seqnames = eqtls.exon.cases$SNP_location, snp_id = eqtls.exon.cases$SNP, exon_id = eqtls.exon.cases$Exon, maf = eqtls.exon.cases$MAF, bin = eqtls.exon.cases$bin)
-eqtls.exon.cases.gr <- eqtls.exon.cases.gr[!duplicated(eqtls.exon.cases.gr)]  # 79,108 SNPs
-# remove unnecessary data
-rm(eqtls.gene, eqtls.gene.cases, eqtls.transcript, eqtls.transcript.cases, eqtls.exon, eqtls.exon.cases)
+eqtls.exon.cases.gr <- GenerateGrangesObject(input = eqtls.exon.cases,
+                                             mdata = background,
+                                             ofile = "pmb_cis-eQTL_exon_hits_cases_only_granges_object.rds")
+length(eqtls.exon.cases.gr$snp_id) # 79,524 SNPs
+rm(eqtls.gene, eqtls.transcript, eqtls.exon, eqtls.gene.cases, eqtls.transcript.cases, eqtls.exon.cases, background)
 
-### 2.2 Public data ###
-### 2.2.1 ChromHMM
+### Public data ###
+### ChromHMM ###
+# read data
 hmm <- readRDS("/storage/groups/ccm01/datasets/2019_chromHMM/chromHMM_all_states.Rds")
-
 # remove chromosome X, Y and M
 seqlevels(hmm, pruning.mode="coarse") <- setdiff(seqlevels(hmm), c("chrX", "chrY", "chrM"))
+# load ChromHMM data information
+hmm.info <- read.csv2("/storage/groups/ccm01/datasets/2019_chromHMM/epigenomes.tsv", header = T, stringsAsFactors = F, sep = "\t")
+
+#@Karo to compare PFC results to other brain regions I would use all brain regions, maybe leave out blood and comapre it to  Group=="Brain"
+
+# get ChromHMM brain data --> Brain_Dorsolateral_Prefrontal_Cortex
+#hmm.brain <- hmm[hmm$code == "E073"]
+#seqlevelsStyle(hmm.brain) <- "NCBI"
 
 # get ChromHMM brain data
-hmm.brain <- hmm[hmm$code == "E073"]
+# Blood has multiple  cell lines --> filter for Group == "Blood & T-cell"
+brain <- hmm.info[hmm.info$GROUP == "Brain", "EID"]  # get IDs for all brain related ChromHMM data
+hmm.brain <- hmm[hmm$code %in% brain, ]  # get brain data
 seqlevelsStyle(hmm.brain) <- "NCBI"
-
-# get ChromHMM blood data
-hmm.blood <- hmm[hmm$code == "E062"]
-seqlevelsStyle(hmm.blood) <- "NCBI"
+rm(hmm, hmm.info)
 
 # Test frequency of eQTLs on chromosomes
 #eqtls.chr <- as.data.frame(table(seqnames(eqtls.transcript.cases.gr)))
-#eqtls.bkg <- as.data.frame(table(seqnames(background.gr)))
-#chromosomes <- merge(eqtls.chr, eqtls.bkg, by = "Var1")
+#eqtls.hmm <- as.data.frame(table(seqnames(hmm.brain)))
+#chromosomes <- merge(eqtls.chr, eqtls.hmm, by = "Var1")
 #wilcox.test(chromosomes$Freq.x, chromosomes$Freq.y, alternative = "two.sided")
 
-# 2.4 Annotation
-#################
-# function, to calculate the gene annotation to a public dataset, but with respect to the MAF bins
-# own: own cis-eQTL data set as GRanges object
-# public: a public cis-eQTL data set as GRanges object
-# nperm: number of permutations (usually a 1000 times)
-# background: all background genes coming from the gene expression (here: 14,048 unqiue genes)
-annotatePublicData <- function(own, public, nperm, background){ 
-  overlap <- sum(overlapsAny(own, public))  # number of overlaps between the two datasets
-  # resample nperm times
-  resampling <- lapply(1:3, function(x) sum(sapply(1:11, function(x) sum(overlapsAny(sample(background[background$bin == x], length(own[own$bin == x])), public)))))
-  # IF 0 => echt kleiner als 1e^(-5/6)
-  p.value <- if((sum(resampling >= overlap) / nperm) == 0){ paste("<=", 1/nperm, sep = " ") } else {sum(resampling >= overlap) / nperm}
-  or <- overlap/mean(unlist(resampling))
-  return(c(as.character(overlap), as.character(p.value), as.character(or))) # return the resampling p-value
-}
-
-results <- data.frame()
+### Annotation ###
+# First, set parameters
 perm <- 10000
 
 # ChromHMM states
-states <- c("1_TssA", "2_TssAFlnk", "3_TxFlnk", "4_Tx", "5_TxWk", "6_EnhG", "7_Enh", "8_ZNF/Rpts", "9_Het", "10_TssBiv", "11_BivFlnk", "12_EnhBiv", "13_ReprPC", "14_ReprPCWk", "15_Quies")
-#interesting.codes <- unique(hmm.blood$name)
+states <- names(table(hmm.brain$name))
 
-# 2.4.1 annotation to ChromHMM Brain
-for (state in states) {
-  overlap <- paste0("ChromHMM_brain_", state, "_SNP_overlap")
-  pval <- paste0("ChromHMM_brain_", state, "_SNP_pVal")
-  or <- paste0("ChromHMM_brain_", state, "_SNP_or")
-  results[c(overlap, pval, or), "Gene"] <- annotatePublicData(eqtls.gene.gr, hmm.brain[hmm.brain$name == state], perm, background.gr)
-  print(paste0("Done gene: ", state))
-  results[c(overlap, pval, or), "Gene_cases"] <- annotatePublicData(eqtls.gene.cases.gr, hmm.brain[hmm.brain$name == state], perm, background.gr)
-  print(paste0("Done gene cases only: ", state))
-  results[c(overlap, pval, or), "Transcript"] <- annotatePublicData(eqtls.transcript.gr, hmm.brain[hmm.brain$name == state], perm, background.gr)
-  print(paste0("Done transcript: ", state))
-  results[c(overlap, pval, or), "Transcript_cases"] <- annotatePublicData(eqtls.transcript.cases.gr, hmm.brain[hmm.brain$name == state], perm, background.gr)
-  print(paste0("Done transcript cases only: ", state))
-  results[c(overlap, pval, or), "Exon"] <- annotatePublicData(eqtls.exon.gr, hmm.brain[hmm.brain$name == state], perm, background.gr)
-  print(paste0("Done exon: ", state))
-  results[c(overlap, pval, or), "Exon_cases"] <- annotatePublicData(eqtls.exon.cases.gr, hmm.brain[hmm.brain$name == state], perm, background.gr)
-  print(paste0("Done exon cases only: ", state))
+# 2.4.1 annotation to ChromHMM Brain (parallelized)
+cl <- makeCluster(15)
+registerDoSNOW(cl)
+
+results2 <- foreach (i = seq_along(states), .combine = rbind,
+                     .packages = c("GenomicRanges", "S4Vectors")) %dopar% {
+  results <- data.frame()
+  overlap <- paste0("ChromHMM_brain_", states[i], "_SNP_overlap")
+  pval <- paste0("ChromHMM_brain_", states[i], "_SNP_pVal")
+  or <- paste0("ChromHMM_brain_", states[i], "_SNP_or")
+  hmm.brain.selected <- hmm.brain[hmm.brain$name == states[i]]
+  results[c(overlap, pval, or), "Gene"] <- annotatePublicData(eqtls.gene.gr, hmm.brain.selected, perm, background.gr)
+  results[c(overlap, pval, or), "Gene_cases"] <- annotatePublicData(eqtls.gene.cases.gr, hmm.brain.selected, perm, background.gr)
+  results[c(overlap, pval, or), "Transcript"] <- annotatePublicData(eqtls.transcript.gr, hmm.brain.selected, perm, background.gr)
+  results[c(overlap, pval, or), "Transcript_cases"] <- annotatePublicData(eqtls.transcript.cases.gr, hmm.brain.selected, perm, background.gr)
+  results[c(overlap, pval, or), "Exon"] <- annotatePublicData(eqtls.exon.gr, hmm.brain.selected, perm, background.gr)
+  results[c(overlap, pval, or), "Exon_cases"] <- annotatePublicData(eqtls.exon.cases.gr, hmm.brain.selected, perm, background.gr)
+  results
 }
 
-# 2.4.6 write results into a file
-write.table(results, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/pmb_cis-eQTL_annotation_results_10000_permutations_ChromHMM_brain.tsv", row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")
+stopCluster(cl)
 
+# 2.4.6 write results into a file
+write.table(results2, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/pmb_cis-eQTL_annotation_results_10000_permutations_ChromHMM_brain.tsv", row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")

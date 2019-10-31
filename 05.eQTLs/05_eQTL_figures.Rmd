@@ -69,27 +69,27 @@ First, we will load all cis-eQTL datasets and filter them for only significant h
 
 ```{r}
 # cases and controls cis-eQTLs genes
-data <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/01_pmb_CASE_CTL_matrixEQTL_cis_results_genes_probeset.txt", header = T, stringsAsFactors = F)
+data <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/output/01_pmb_CASE_CTL_matrixEQTL_cis_results_genes_probeset.txt", header = T, stringsAsFactors = F)
 cis.genes.all <- data[data$FDR < 0.05,  ]  # filter for only eQTLs with adjusted p-value (FDR) < 0.05
 
 # cases and controls cis-eQTLs transcripts
-data <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/01_pmb_CASE_CTL_matrixEQTL_cis_results_transcripts.txt", header = T, stringsAsFactors = F)
+data <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/output/01_pmb_CASE_CTL_matrixEQTL_cis_results_transcripts.txt", header = T, stringsAsFactors = F)
 cis.transcripts.all <- data[data$FDR < 0.05,  ]  # filter for only eQTLs with adjusted p-value (FDR) < 0.05
 
 # cases and controls cis-eQTLs exons
-data <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/01_pmb_CASE_CTL_matrixEQTL_cis_results_exons.txt", header = T, stringsAsFactors = F)
+data <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/output/01_pmb_CASE_CTL_matrixEQTL_cis_results_exons.txt", header = T, stringsAsFactors = F)
 cis.exons.all <- data[data$FDR < 0.05,   ]  # filter for only eQTLs with adjusted p-value (FDR) < 0.05
 
 # only cases cis-eQTLs genes
-data <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/02_pmb_CASE_only_matrixEQTL_cis_results_genes_probeset.txt", header = T, stringsAsFactors = F)
+data <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/output/02_pmb_CASE_only_matrixEQTL_cis_results_genes_probeset.txt", header = T, stringsAsFactors = F)
 cis.genes.cases <- data[data$FDR < 0.05,   ]  # filter for only eQTLs with adjusted p-value (FDR) < 0.05
 
 # only cases cis-eQTLs transcripts
-data <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/02_pmb_CASE_only_matrixEQTL_cis_results_transcripts.txt", header = T, stringsAsFactors = F)
+data <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/output/02_pmb_CASE_only_matrixEQTL_cis_results_transcripts.txt", header = T, stringsAsFactors = F)
 cis.transcripts.cases <- data[data$FDR < 0.05,   ]  # filter for only eQTLs with adjusted p-value (FDR) < 0.05
 
 # only cases cis-eQTLs exons
-data <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/02_pmb_CASE_only_matrixEQTL_cis_results_exons.txt", header = T, stringsAsFactors = F)
+data <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/output/02_pmb_CASE_only_matrixEQTL_cis_results_exons.txt", header = T, stringsAsFactors = F)
 cis.exons.cases <- data[data$FDR < 0.05,  ]  # filter for only eQTLs with adjusted p-value (FDR) < 0.05
 rm(data)
 ```
@@ -172,7 +172,7 @@ eqtls.gene$eQTL_type <- "cis"
 colnames(eqtls.gene) <- c("SNP", "Gene", "Gene_symbol", "Beta", "Test_statistic", "p-value", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "Gene_location",  "Gene_strand", "eQTL_type")
 eqtls.gene <- eqtls.gene[order(eqtls.gene$FDR),]
 head(eqtls.gene)
-write.table(eqtls.gene, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/hits/pmb_cis-eQTL_gene_hits_cases_vs_controls.txt", row.names = F, quote = F, dec = ".", sep = " ")
+write.table(eqtls.gene, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_gene_hits_cases_vs_controls.txt", row.names = F, quote = F, dec = ".", sep = " ")
 ```
 
 #### CASES only
@@ -189,7 +189,7 @@ eqtls.gene.cases$eQTL_type <- "cis"
 colnames(eqtls.gene.cases) <- c("SNP", "Gene", "Gene_symbol", "Beta", "Test_statistic", "p-value", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2","Gene_location",  "Gene_strand", "eQTL_type")
 eqtls.gene.cases <- eqtls.gene.cases[order(eqtls.gene.cases$FDR),]
 head(eqtls.gene.cases)
-write.table(eqtls.gene.cases, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/hits/pmb_cis-eQTL_gene_hits_cases_only.txt", row.names = F, quote = F, dec = ".", sep = " ")
+write.table(eqtls.gene.cases, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_gene_hits_cases_only.txt", row.names = F, quote = F, dec = ".", sep = " ")
 ```
 
 
@@ -210,7 +210,7 @@ colnames(eqtls.transcript) <- c("SNP", "Transcript", "Beta", "Test_statistic", "
 eqtls.transcript$eQTL_type <- "cis" 
 eqtls.transcript <- eqtls.transcript[order(eqtls.transcript$FDR),]
 head(eqtls.transcript)
-write.table(eqtls.transcript, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/hits/pmb_cis-eQTL_transcript_hits_cases_vs_controls.txt", row.names = F, quote = F, dec = ".", sep = " ")
+write.table(eqtls.transcript, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_transcript_hits_cases_vs_controls.txt", row.names = F, quote = F, dec = ".", sep = " ")
 ```
 
 #### CASES only
@@ -228,7 +228,7 @@ colnames(eqtls.transcript.cases) <- c("SNP", "Transcript", "Beta", "Test_statist
 eqtls.transcript.cases$eQTL_type <- "cis" 
 eqtls.transcript.cases <- eqtls.transcript.cases[order(eqtls.transcript.cases$FDR),]
 head(eqtls.transcript.cases)
-write.table(eqtls.transcript.cases, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/hits/pmb_cis-eQTL_transcript_hits_cases_only.txt", row.names = F, quote = F, dec = ".", sep = " ")
+write.table(eqtls.transcript.cases, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_transcript_hits_cases_only.txt", row.names = F, quote = F, dec = ".", sep = " ")
 ```
 
 
@@ -249,7 +249,7 @@ colnames(eqtls.exon) <- c("SNP", "Exon", "Beta", "Test_statistic", "p-value", "F
 eqtls.exon$eQTL_type <- "cis" 
 eqtls.exon <- eqtls.exon[order(eqtls.exon$FDR),]
 head(eqtls.exon)
-write.table(eqtls.exon, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/hits/pmb_cis-eQTL_exon_hits_cases_vs_controls.txt", row.names = F, quote = F, dec = ".", sep = " ")
+write.table(eqtls.exon, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_exon_hits_cases_vs_controls.txt", row.names = F, quote = F, dec = ".", sep = " ")
 ```
 
 #### CASES only
@@ -266,7 +266,7 @@ eqtls.exon.cases <- eqtls.exon.cases[, c("SNP", "gene", "beta", "t-stat", "p-val
 colnames(eqtls.exon.cases) <- c("SNP", "Exon", "Beta", "Test_statistic", "p-value", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "Exon_location", "Gene", "Gene_symbol", "Gene_location", "Gene_strand")
 eqtls.exon.cases$eQTL_type <- "cis" 
 eqtls.exon.cases <- eqtls.exon.cases[order(eqtls.exon.cases$FDR),]
-write.table(eqtls.exon.cases, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/hits/pmb_cis-eQTL_exon_hits_cases_only.txt", row.names = F, quote = F, dec = ".", sep = " ")
+write.table(eqtls.exon.cases, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_exon_hits_cases_only.txt", row.names = F, quote = F, dec = ".", sep = " ")
 ```
 
 
@@ -517,7 +517,7 @@ dev.off()
 
 
 ```{r}
-eqtls.exon <- read.table("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/hits/pmb_cis-eQTL_exon_hits_cases_vs_controls.txt", header = TRUE)
+eqtls.exon <- read.table("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_exon_hits_cases_vs_controls.txt", header = TRUE)
 eqtls.exon <- eqtls.exon[eqtls.exon$Gene_symbol == "NCALD", ]
 head(eqtls.exon)
 snps <- GRanges(seqnames = eqtls.exon$SNP_location)
@@ -622,6 +622,66 @@ ggplot(gwas.eqtl.snps, aes(x = log_pvalue, y = log_p)) +
   geom_point(alpha = 0.3) +
   ylab("-log10(P) of GWAS") +
   xlab("-log10(P) of eQTLs")
+```
+
+### eQTLs and GWAS
+
+```{r}
+# load SCZ2 GWAS
+gwas.scz <- fread("/storage/groups/ccm01/datasets/2018_GWAS_summary_statistics/SCZ2/scz2.snp.results.txt")
+gwas.scz <- gwas.scz[gwas.scz$p < 0.05, ]
+gwas.scz.gr <- GRanges(seqnames = gwas.scz$hg19chrc, 
+                       ranges = IRanges(start = as.numeric(as.character(gwas.scz$bp)), 
+                                        end = as.numeric(as.character(gwas.scz$bp))),
+                       snp_id = gwas.scz$snpid)  # generate GRanges object only with gene ID, name and location
+gwas.scz.gr <- gwas.scz.gr[!duplicated(gwas.scz.gr)]  # remove duplicated rows: 8,663 genes (no duplicates)
+seqlevelsStyle(gwas.scz.gr) <- "NCBI"
+rm(gwas.scz)
+
+sum(overlapsAny(eqtls.exon.cases.gr, gwas.scz.gr))
+sum(overlapsAny(eqtls.exon.cases.gr, gwas.scz.gr))/(length(eqtls.exon.cases.gr) / 100)
+
+
+# load BIP-2018 GWAS
+gwas.bpd <- fread("/storage/groups/ccm01/datasets/2018_GWAS_summary_statistics/BIP-2018/daner_PGC_BIP32b_mds7a_0416a")
+gwas.bpd <- gwas.bpd[gwas.bpd$P < 0.05, ]
+gwas.bpd.gr <- GRanges(seqnames = gwas.bpd$CHR, 
+                       ranges = IRanges(start = as.numeric(as.character(gwas.bpd$BP)), 
+                                        end = as.numeric(as.character(gwas.bpd$BP))),
+                       snp_id = gwas.bpd$SNP)  # generate GRanges object only with gene ID, name and location
+gwas.bpd.gr <- gwas.bpd.gr[!duplicated(gwas.bpd.gr)]  # remove duplicated rows: 8,663 genes (no duplicates)
+rm(gwas.bpd)
+
+sum(overlapsAny(eqtls.exon.cases.gr, gwas.bpd.gr))
+sum(overlapsAny(eqtls.exon.cases.gr, gwas.bpd.gr))/(length(eqtls.exon.cases.gr) / 100)
+
+
+# load MDD2 GWAS
+gwas.mdd <- fread("/storage/groups/ccm01/datasets/2018_GWAS_summary_statistics/MDD2/daner_pgc_mdd_meta_align_170228_filtered_incl23andMe")
+gwas.mdd <- gwas.mdd[gwas.mdd$P < 0.05, ]
+gwas.mdd.gr <- GRanges(seqnames = gwas.mdd$CHR, 
+                       ranges = IRanges(start = as.numeric(as.character(gwas.mdd$BP)), 
+                                        end = as.numeric(as.character(gwas.mdd$BP))),
+                       snp_id = gwas.mdd$SNP)  # generate GRanges object only with gene ID, name and location
+gwas.mdd.gr <- gwas.mdd.gr[!duplicated(gwas.mdd.gr)]  # remove duplicated rows: 8,663 genes (no duplicates)
+rm(gwas.mdd)
+
+sum(overlapsAny(eqtls.exon.cases.gr, gwas.mdd.gr))
+sum(overlapsAny(eqtls.exon.cases.gr, gwas.mdd.gr))/(length(eqtls.exon.cases.gr) / 100)
+
+
+# load Cross-disorder GWAS
+gwas.cd <- fread("/storage/groups/ccm01/datasets/2018_GWAS_summary_statistics/Cross_Disorder_Full/pgc.cross.full.2013-03.txt")
+gwas.cd <- gwas.cd[gwas.cd$pval < 0.05, ]
+gwas.cd.gr <- GRanges(seqnames = gwas.cd$hg18chr, 
+                       ranges = IRanges(start = as.numeric(as.character(gwas.cd$bp)), 
+                                        end = as.numeric(as.character(gwas.cd$bp))),
+                       snp_id = gwas.cd$snpid)  # generate GRanges object only with gene ID, name and location
+gwas.cd.gr <- gwas.cd.gr[!duplicated(gwas.cd.gr)]  # remove duplicated rows: 8,663 genes (no duplicates)
+rm(gwas.cd)
+
+sum(overlapsAny(eqtls.exon.gr, gwas.cd.gr))
+sum(overlapsAny(eqtls.exon.gr, gwas.cd.gr))/(length(eqtls.exon.gr) / 100)
 ```
 
 

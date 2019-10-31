@@ -31,7 +31,7 @@ snpspos <- snpspos[, c("V2", "V1", "V4")]
 colnames(snpspos) <- c("snp", "chr", "pos")
 snpspos <- snpspos[!duplicated(snpspos$snp),]
 head(snpspos)
-write.table(snpspos, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/SNP_locations.txt", col.names = T, row.names = F, sep = "\t", quote = F)
+write.table(snpspos, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input/SNP_locations.txt", col.names = T, row.names = F, sep = "\t", quote = F)
 
 ##########################
 ### GET GENE POSITIONS ###
@@ -64,7 +64,7 @@ head(genespos)
 # check, if we now really have the same genes with locations
 identical(as.vector(genespos$geneid), fData(gene.coreSummaries)$gene_id)
 # save data into a file
-write.table(genespos, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/gene_core_locations.txt", col.names = T, row.names = F, sep = "\t", quote = F)
+write.table(genespos, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input/gene_core_locations.txt", col.names = T, row.names = F, sep = "\t", quote = F)
 rm(genes.fdata, row, chr, i, max, min, name)
 
 ###################
@@ -93,7 +93,7 @@ snps <- snps[, order(colnames(snps))]
 identical(sort(colnames(exprs(gene.coreSummaries))), colnames(snps))  # NOT TRUE => Problem!
 head(snps)
 # Save SNP data into a new file
-fwrite(snps, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/01_pmb_snps_CASE_CTL.txt", row.names = T, col.names = T, sep = "\t", quote = F)
+fwrite(snps, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input/01_pmb_snps_CASE_CTL.txt", row.names = T, col.names = T, sep = "\t", quote = F)
 
 
 # 2. Generate gene expression dataset
@@ -111,7 +111,7 @@ head(expr)
 identical(colnames(expr)[-1], cols)
 
 # Save gene expression data into a new file
-fwrite(expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/01_pmb_gene_core_expr_CASE_CTL.txt", row.names = F, col.names = T, sep = "\t", quote = F)
+fwrite(expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input/01_pmb_gene_core_expr_CASE_CTL.txt", row.names = F, col.names = T, sep = "\t", quote = F)
 
 
 # 3. Generate Covariate Dataset
@@ -132,7 +132,7 @@ identical(colnames(cov), colnames(snps))
 cov <- data.table(cov, keep.rownames = T)
 
 # Save covariates into a new file
-fwrite(cov, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/01_pmb_core_cov_CASE_CTL.txt", row.names = F, col.names = T, sep = "\t", quote = F)
+fwrite(cov, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input/01_pmb_core_cov_CASE_CTL.txt", row.names = F, col.names = T, sep = "\t", quote = F)
 
 ##########################
 ### ONLY CASE SAMPLES ###
@@ -152,14 +152,14 @@ case.cov <- subset(cov, , case.cov.samples)
 case.cov <- case.cov[case.cov$rn != "DxCASE"]
 head(case.cov)
 # save covariates into a file
-fwrite(case.cov, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/02_pmb_core_cov_CASE_only.txt", row.names = F, col.names = T, sep = "\t", quote = F)
+fwrite(case.cov, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input/02_pmb_core_cov_CASE_only.txt", row.names = F, col.names = T, sep = "\t", quote = F)
 
 # get all snps with these samples
 case.snps <- subset(snps, , case.samples)
 head(case.snps)
 identical(colnames(case.snps), colnames(case.cov[, -1]))
 # save snps into a file
-fwrite(case.snps, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/02_pmb_snps_CASE_only.txt", row.names = T, col.names = T, sep = "\t", quote = F)
+fwrite(case.snps, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input/02_pmb_snps_CASE_only.txt", row.names = T, col.names = T, sep = "\t", quote = F)
 
 # get gene expression data for these samples
 case.samples <- c("rn", case.samples)
@@ -168,7 +168,7 @@ head(case.expr)
 identical(colnames(case.expr[, -1]), colnames(case.cov[, -1]))
 identical(colnames(case.expr[, -1]), colnames(case.snps))
 # save gene expression into a file
-fwrite(case.expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/02_pmb_gene_core_expr_CASE_only.txt", row.names = F, col.names = T, sep = "\t", quote = F)
+fwrite(case.expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input/02_pmb_gene_core_expr_CASE_only.txt", row.names = F, col.names = T, sep = "\t", quote = F)
 
 ########################
 ### ONLY CTL SAMPLES ###
@@ -187,14 +187,14 @@ ctl.cov <- subset(cov, , ctl.cov.samples)
 ctl.cov <- ctl.cov[ctl.cov$rn != "DxCASE" & ctl.cov$rn != "SuicideY"]
 head(ctl.cov)
 # save covariates into a file
-fwrite(ctl.cov, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/03_pmb_core_cov_CTL_only.txt", row.names = F, col.names = T, sep = "\t", quote = F)
+fwrite(ctl.cov, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input/03_pmb_core_cov_CTL_only.txt", row.names = F, col.names = T, sep = "\t", quote = F)
 
 # get all snps with these samples
 ctl.snps <- subset(snps, , ctl.samples)
 head(ctl.snps)
 identical(colnames(ctl.snps), colnames(ctl.cov[, -1]))
 # save snps into a file
-fwrite(ctl.snps, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/03_pmb_snps_CTL_only.txt", row.names = T, col.names = T, sep = "\t", quote = F)
+fwrite(ctl.snps, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input/03_pmb_snps_CTL_only.txt", row.names = T, col.names = T, sep = "\t", quote = F)
 
 # get gene expression data for these samples
 ctl.samples <- c("rn", ctl.samples)
@@ -203,7 +203,7 @@ head(ctl.expr)
 identical(colnames(ctl.expr[, -1]), colnames(ctl.cov[, -1]))
 identical(colnames(ctl.expr[, -1]), colnames(ctl.snps))
 # save gene expression into a file
-fwrite(ctl.expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/03_pmb_gene_core_expr_CTL_only.txt", row.names = F, col.names = T, sep = "\t", quote = F)
+fwrite(ctl.expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input/03_pmb_gene_core_expr_CTL_only.txt", row.names = F, col.names = T, sep = "\t", quote = F)
 
 
 #####################################################
@@ -251,7 +251,7 @@ head(genespos)
 # check, if we now really have the same genes with locations
 identical(as.vector(genespos$geneid), fData(gene.probesetSummaries)$gene_id)
 # save data into a file
-write.table(genespos, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/gene_probeset_locations.txt", col.names = T, row.names = F, sep = "\t", quote = F)
+write.table(genespos, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input/gene_probeset_locations.txt", col.names = T, row.names = F, sep = "\t", quote = F)
 
 ###################
 ### ALL SAMPLES ###
@@ -270,7 +270,7 @@ head(expr)
 identical(colnames(expr)[-1], cols)
 
 # Save gene probeset expression data into a new file
-fwrite(expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/01_pmb_gene_probeset_expr_CASE_CTL.txt", row.names = F, col.names = T, sep = "\t", quote = F)
+fwrite(expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input/01_pmb_gene_probeset_expr_CASE_CTL.txt", row.names = F, col.names = T, sep = "\t", quote = F)
 
 # 3. Generate Covariate Dataset
 # Covariates: get Dx, Sex, Age, pH, PMI, RIN, RIN², Suicide, Type_of_Death, C1, C2, C3, C4 (C1-4: Ancestry information)
@@ -289,7 +289,7 @@ identical(colnames(cov), colnames(snps))
 cov <- data.table(cov, keep.rownames = T)
 
 # Save covariates into a new file
-fwrite(cov, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/01_pmb_probeset_cov_CASE_CTL.txt", row.names = F, col.names = T, sep = "\t", quote = F)
+fwrite(cov, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input/01_pmb_probeset_cov_CASE_CTL.txt", row.names = F, col.names = T, sep = "\t", quote = F)
 
 
 #########################
@@ -300,7 +300,7 @@ case.gene.probeset.expr <- subset(expr, , case.samples)
 head(case.gene.probeset.expr)
 identical(colnames(case.gene.probeset.expr), colnames(case.expr))
 # savegene probeset expression into a file
-fwrite(case.gene.probeset.expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/02_pmb_gene_probeset_expr_CASE_only.txt", row.names = F, col.names = T, sep = "\t", quote = F)
+fwrite(case.gene.probeset.expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input/02_pmb_gene_probeset_expr_CASE_only.txt", row.names = F, col.names = T, sep = "\t", quote = F)
 
 # get all covariates with these samples
 case.cov.samples <- c("rn", case.samples)
@@ -310,7 +310,7 @@ head(case.cov)
 case.cov <- case.cov[case.cov$rn != "DxCASE"]
 head(case.cov)
 # save covariates into a file
-fwrite(case.cov, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/02_pmb_probeset_cov_CASE_only.txt", row.names = F, col.names = T, sep = "\t", quote = F)
+fwrite(case.cov, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input/02_pmb_probeset_cov_CASE_only.txt", row.names = F, col.names = T, sep = "\t", quote = F)
 
 ########################
 ### ONLY CTL SAMPLES ###
@@ -320,7 +320,7 @@ ctl.gene.probeset.expr <- subset(expr, , ctl.samples)
 head(ctl.gene.probeset.expr)
 identical(colnames(ctl.gene.probeset.expr), colnames(ctl.expr))
 # save gene probeset expression into a file
-fwrite(ctl.gene.probeset.expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/03_pmb_gene_probeset_expr_CTL_only.txt", row.names = F, col.names = T, sep = "\t", quote = F)
+fwrite(ctl.gene.probeset.expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input/03_pmb_gene_probeset_expr_CTL_only.txt", row.names = F, col.names = T, sep = "\t", quote = F)
 
 # get all covariates with these samples
 ctl.cov.samples <- c("rn", ctl.samples)
@@ -330,7 +330,7 @@ head(ctl.cov)
 ctl.cov <- ctl.cov[ctl.cov$rn != "DxCASE" & ctl.cov$rn != "SuicideY"]
 head(ctl.cov)
 # save covariates into a file
-fwrite(ctl.cov, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/03_pmb_probeset_cov_CTL_only.txt", row.names = F, col.names = T, sep = "\t", quote = F)
+fwrite(ctl.cov, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input/03_pmb_probeset_cov_CTL_only.txt", row.names = F, col.names = T, sep = "\t", quote = F)
 
 ######################################
 ### 3. Transcript eQTL Input Files ###
@@ -376,7 +376,7 @@ head(transpos)
 # check, if we now really have the same genes with locations
 identical(as.vector(transpos$transcriptid), as.vector(fData(transcriptSummaries)$transcript_id))
 # save data into a file
-write.table(transpos, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/transcript_locations.txt", col.names = T, row.names = F, sep = "\t", quote = F)
+write.table(transpos, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input/transcript_locations.txt", col.names = T, row.names = F, sep = "\t", quote = F)
 
 ###################
 ### ALL SAMPLES ###
@@ -394,7 +394,7 @@ head(expr)
 identical(colnames(expr)[-1], cols)
 
 # Save transcript expression data into a new file
-fwrite(expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/01_pmb_transcript_expr_CASE_CTL.txt", row.names = F, col.names = T, sep = "\t", quote = F)
+fwrite(expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input/01_pmb_transcript_expr_CASE_CTL.txt", row.names = F, col.names = T, sep = "\t", quote = F)
 
 #########################
 ### ONLY CASE SAMPLES ###
@@ -404,7 +404,7 @@ case.transcript.expr <- subset(expr, , case.samples)
 head(case.transcript.expr)
 identical(colnames(case.transcript.expr), colnames(case.expr))
 # save gene expression into a file
-fwrite(case.transcript.expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/02_pmb_transcript_expr_CASE_only.txt", row.names = F, col.names = T, sep = "\t", quote = F)
+fwrite(case.transcript.expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input/02_pmb_transcript_expr_CASE_only.txt", row.names = F, col.names = T, sep = "\t", quote = F)
 
 ########################
 ### ONLY CTL SAMPLES ###
@@ -413,7 +413,7 @@ fwrite(case.transcript.expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmort
 ctl.transcript.expr <- subset(expr, , ctl.samples)
 head(ctl.transcript.expr)
 # save gene expression into a file
-fwrite(ctl.transcript.expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/03_pmb_transcript_expr_CTL_only.txt", row.names = F, col.names = T, sep = "\t", quote = F)
+fwrite(ctl.transcript.expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input/03_pmb_transcript_expr_CTL_only.txt", row.names = F, col.names = T, sep = "\t", quote = F)
 
 
 ################################
@@ -496,7 +496,7 @@ head(exonspos)
 # check, if we now really have the same exons with locations
 identical(as.vector(exonspos$exonid), rownames(exprs(exonSummaries)))
 # save data into a file
-write.table(exonspos, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/exon_locations.txt", col.names = T, row.names = F, sep = "\t", quote = F)
+write.table(exonspos, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input/exon_locations.txt", col.names = T, row.names = F, sep = "\t", quote = F)
 
 ###################
 ### ALL SAMPLES ###
@@ -513,7 +513,7 @@ head(expr)
 identical(colnames(expr)[-1], cols)
 
 # Save gene expression data into a new file
-fwrite(expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/01_pmb_exon_expr_CASE_CTL.txt", row.names = F, col.names = T, sep = "\t", quote = F)
+fwrite(expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input/01_pmb_exon_expr_CASE_CTL.txt", row.names = F, col.names = T, sep = "\t", quote = F)
 
 #########################
 ### ONLY CASE SAMPLES ###
@@ -524,7 +524,7 @@ head(case.exon.expr)
 identical(colnames(case.exon.expr), colnames(case.expr))
 
 # save gene expression into a file
-fwrite(case.exon.expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/02_pmb_exon_expr_CASE_only.txt", row.names = F, col.names = T, sep = "\t", quote = F)
+fwrite(case.exon.expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input/02_pmb_exon_expr_CASE_only.txt", row.names = F, col.names = T, sep = "\t", quote = F)
 
 
 ########################
@@ -536,4 +536,4 @@ head(ctl.exon.expr)
 identical(colnames(ctl.exon.expr), colnames(ctl.expr))
 
 # save gene expression into a file
-fwrite(ctl.exon.expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input_files/03_pmb_exon_expr_CTL_only.txt", row.names = F, col.names = T, sep = "\t", quote = F)
+fwrite(ctl.exon.expr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input/03_pmb_exon_expr_CTL_only.txt", row.names = F, col.names = T, sep = "\t", quote = F)

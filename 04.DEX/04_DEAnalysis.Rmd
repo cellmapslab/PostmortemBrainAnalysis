@@ -118,20 +118,37 @@ GenerateResultTableExon <- function(fit, variable, file){
 }
 
 # function to generate a vulcano plot for differentially expressed genes
-GenerateVolcanoPlot <- function(fit2, variable, file) {
+GenerateVolcanoPlot <- function(fit, variable, file) {
+  # get all hits
+  hits <- topTable(fit, coef = variable, number = Inf, adjust.method = "BH")
+  total <- nrow(hits)
   # volcano plot
-  pdf(paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/", file), width = 8, height = 6)
-  volcanoplot(fit2, coef = variable, names = fit2$genes$gene_name, cex = 0.5, cex.axis = 1.5, cex.lab = 1.5, las = 1, xlim = c(-2, 2), ylim = c(0, 5))
-  lp <- -log10(fit2$p.value[, variable])
-  ord <- order(lp, decreasing = TRUE)[1:10]
-  points(fit2$coef[ord, variable], lp[ord], pch = 16, cex = 0.5, col = viridis(1))
-  x <- fit2$coef[ord, variable]
-  y <- lp[ord]
-  text(x, y, fit2$genes$gene_name[ord], cex = 1.2, col = viridis(1))
-  dev.off()
+#  pdf(paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/", file), width = 8, height = 6)
+  ggplot(hits, aes(x = logFC, y = -log10(P.Value))) + 
+    theme_bw(base_size = 22) + 
+    geom_point() + 
+    xlim(-2, 2) + 
+    ylim(0, 5) +
+    xlab(bquote(~Log[2]~ "fold change")) +
+    ylab(bquote(~-Log[10]~ italic(P))) +
+    theme(axis.line = element_line(),
+      panel.border = element_blank(),
+      panel.background = element_blank()) +
+    labs(caption = paste0("Total variables: ", total)) +
+    geom_hline(yintercept = -log10(0.00005), linetype = "dashed")
+#  volcanoplot(fit2, coef = variable, names = fit2$genes$gene_name, cex = 0.5, cex.axis = 1.5, cex.lab = 1.5, las = 1, xlim = c(-2, 2), ylim = c(0, 5), bty = "l")
+#  lp <- -log10(fit2$p.value[, variable])
+#  ord <- order(lp, decreasing = TRUE)[1:10]
+#  points(fit2$coef[ord, variable], lp[ord], pch = 16, cex = 0.5, col = viridis(1))
+#  x <- fit2$coef[ord, variable]
+#  y <- lp[ord]
+#  text(x, y, fit2$genes$gene_name[ord], cex = 1.2, col = viridis(1))
+#  dev.off()
 }
 
-# function to plot all differenitally expressed hits for the different covariates corrected for all other covariates as a vertical barplot
+GenerateVolcanoPlot(fit, variable = "DxCASE", file = "1.1_volcano_plot_diff_expr_genes_for_diagnosis.pdf")
+
+# function to plot all differentially expressed hits for the different covariates corrected for all other covariates as a vertical barplot
 GenerateVerticalBarplotOfDiffExprHits <- function(design, fit, from, to, adj, plot.name){
   # Get padj values for all different covariates
   nc <- ncol(design) - 1
@@ -169,7 +186,7 @@ GetExprWithSmallestP <- function(input, summaries){
   min.pval <- res[ , .SD[which.min(`p-value`)], by = `Ensembl Gene ID`]
   # get all transcript IDs with lowest p-value per gene ID
   index <- which(rownames(exprs(summaries)) %in% as.character(c(min.pval[, 2])[[1]]))
-  # reduce transcriptSummaries to these trasnscripts
+  # reduce transcriptSummaries to these transcripts
   summaries <- summaries[c(index), ]
   dim(summaries)
   return(summaries)
