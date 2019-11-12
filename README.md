@@ -6,6 +6,7 @@ Following analyses will be performed:
 2. **Polygenic Risk Score (PRS) calculation**
   - Pre-processing of cohort, genotype data and GWAS summary statistics
   - Run LDpred
+  - Run PRSice-2
   - Evaluate and plot results
 3. **GRScore**
 4. **Differential expression (DE) analysis**
