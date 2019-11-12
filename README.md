@@ -3,17 +3,20 @@ Analysis of postmortem brain samples coming from healthy controls (CTL) and pati
 Following analyses will be performed: 
 
 1. **Genome-Wide Association Study (GWAS)**
+  - Pre-processing of genotype data
+  - GWAS 
+  - Generate Manhattan plots
 2. **Polygenic Risk Score (PRS) calculation**
-  - Pre-processing of cohort, genotype data and GWAS summary statistics
+  - Pre-processing of genotype data, cohort data and GWAS summary statistic files
   - Run LDpred
   - Run PRSice-2
   - Evaluate and plot results
-3. **GRScore**
+3. **GRScore (TRPS)**
 4. **Differential expression (DE) analysis**
   - Pre-processing of Affymetrix microarray data
   - QC and figures
   - Covariate evaluation and selection
-  - DE analysis
+  - DE analysis, evaluation and plotting of results
 5. **eQTL analysis**
   - Pre-processing of genotype, gene expression and covariate data
   - Run MatrixEQTL
