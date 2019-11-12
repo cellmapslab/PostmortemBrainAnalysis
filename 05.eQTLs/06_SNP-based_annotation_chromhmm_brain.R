@@ -127,13 +127,13 @@ rm(eqtls.gene, eqtls.transcript, eqtls.exon, eqtls.gene.cases, eqtls.transcript.
 ### Public data ###
 ### ChromHMM ###
 # read data
-hmm <- readRDS("/storage/groups/ccm01/datasets/2019_chromHMM/chromHMM_all_states.Rds")
+hmm <- readRDS("/storage/groups/ccm01/datasets/2019_ChromHMM/chromHMM_all_states.Rds")
 # remove chromosome X, Y and M
 seqlevels(hmm, pruning.mode="coarse") <- setdiff(seqlevels(hmm), c("chrX", "chrY", "chrM"))
 # load ChromHMM data information
-hmm.info <- read.csv2("/storage/groups/ccm01/datasets/2019_chromHMM/epigenomes.tsv", header = T, stringsAsFactors = F, sep = "\t")
+hmm.info <- read.csv2("/storage/groups/ccm01/datasets/2019_ChromHMM/epigenomes.tsv", header = T, stringsAsFactors = F, sep = "\t")
 
-#@Karo to compare PFC results to other brain regions I would use all brain regions, maybe leave out blood and comapre it to  Group=="Brain"
+state.counts <- as.data.table(table(hmm.brain$name))
 
 # get ChromHMM brain data --> Brain_Dorsolateral_Prefrontal_Cortex
 #hmm.brain <- hmm[hmm$code == "E073"]

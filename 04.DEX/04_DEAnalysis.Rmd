@@ -94,6 +94,7 @@ RunLimma <- function(design, summary){
 GenerateResultTableGene <- function(fit, variable, file){
   top.hits <- topTable(fit, coef = variable, adjust = "BH", number = Inf)
   print(head(top.hits))
+  print(paste0("log2FC range: ", round(min(top.hits$logFC), 2), " until ", round(max(top.hits$logFC), 2)))
   colnames(top.hits) <- c("Ensembl Gene ID", "Location", "Gene Symbol", "logFC", "Average Expression", "t-statistic", "p-value", "FDR estimate", "B coefficient")
   top.hits <- unique(separate_rows(top.hits, `Gene Symbol`, sep = "\\|"))
   write.table(top.hits, file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/", file), sep = "\t", row.names = F)
@@ -101,6 +102,7 @@ GenerateResultTableGene <- function(fit, variable, file){
 GenerateResultTableTranscript <- function(fit, variable, file){
   top.hits <- topTable(fit, coef = variable, adjust = "BH", number = Inf)
   print(head(top.hits))
+  print(paste0("log2FC range: ", round(min(top.hits$logFC), 2), " until ", round(max(top.hits$logFC), 2)))
   colnames(top.hits) <- c("Ensembl Transcript ID", "Location", "Ensembl Gene ID", "Gene Symbol", "logFC", "Average Expression", "t-statistic", "p-value", "FDR estimate", "B coefficient")
   top.hits <- unique(separate_rows(top.hits, `Ensembl Gene ID`, sep = "\\|"))
   top.hits <- unique(separate_rows(top.hits, `Gene Symbol`, sep = "\\|"))
@@ -110,6 +112,7 @@ GenerateResultTableTranscript <- function(fit, variable, file){
 GenerateResultTableExon <- function(fit, variable, file){
   top.hits <- topTable(fit, coef = variable, adjust = "BH", number = Inf)
   print(head(top.hits))
+  print(paste0("log2FC range: ", round(min(top.hits$logFC), 2), " until ", round(max(top.hits$logFC), 2)))
   colnames(top.hits) <- c("Ensembl Exon ID", "Location", "Ensembl Transcript ID", "Ensembl Gene ID", "Gene Symbol", "logFC", "Average Expression", "t-statistic", "p-value", "FDR estimate", "B coefficient")
   top.hits <- unique(separate_rows(top.hits, `Ensembl Gene ID`, sep = "\\|"))
   top.hits <- unique(separate_rows(top.hits, `Gene Symbol`, sep = "\\|"))
@@ -122,31 +125,62 @@ GenerateVolcanoPlot <- function(fit, variable, file) {
   # get all hits
   hits <- topTable(fit, coef = variable, number = Inf, adjust.method = "BH")
   total <- nrow(hits)
-  # volcano plot
-#  pdf(paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/", file), width = 8, height = 6)
-  ggplot(hits, aes(x = logFC, y = -log10(P.Value))) + 
+  # get first hit after FDR 10% for drawing a p-value threshold line
+  index <- if(length(which(hits$adj.P.Val < 0.1)) == 0) 0 else which(hits$adj.P.Val < 0.1)
+  threshold <- hits[index[length(index)] + 1, "P.Value"]
+  ### volcano plot ###
+  # label only significant hits (if more than 10)
+  if(length(index) >= 10){
+    ggplot(hits, aes(x = logFC, y = -log10(P.Value))) + 
     theme_bw(base_size = 22) + 
     geom_point() + 
     xlim(-2, 2) + 
-    ylim(0, 5) +
+    ylim(0, 6) +
     xlab(bquote(~Log[2]~ "fold change")) +
     ylab(bquote(~-Log[10]~ italic(P))) +
     theme(axis.line = element_line(),
       panel.border = element_blank(),
       panel.background = element_blank()) +
     labs(caption = paste0("Total variables: ", total)) +
-    geom_hline(yintercept = -log10(0.00005), linetype = "dashed")
-#  volcanoplot(fit2, coef = variable, names = fit2$genes$gene_name, cex = 0.5, cex.axis = 1.5, cex.lab = 1.5, las = 1, xlim = c(-2, 2), ylim = c(0, 5), bty = "l")
-#  lp <- -log10(fit2$p.value[, variable])
-#  ord <- order(lp, decreasing = TRUE)[1:10]
-#  points(fit2$coef[ord, variable], lp[ord], pch = 16, cex = 0.5, col = viridis(1))
-#  x <- fit2$coef[ord, variable]
-#  y <- lp[ord]
-#  text(x, y, fit2$genes$gene_name[ord], cex = 1.2, col = viridis(1))
-#  dev.off()
+    geom_hline(yintercept = -log10(threshold), linetype = "dashed") + 
+        geom_point(data = hits[index, ], aes(x = logFC, y = -log10(P.Value)), colour = viridis(1), size = 2) +
+    geom_text_repel(data = hits[index[1:10], ], aes(label = gene_name), colour = viridis(1))
+  # else: label hit genes (if some are found) purple and following genes green until a maximum of 10 genes is labeled
+  } else if(length(index) == 1) {
+    ggplot(hits, aes(x = logFC, y = -log10(P.Value))) + 
+    theme_bw(base_size = 22) + 
+    geom_point() + 
+    xlim(-2, 2) + 
+    ylim(0, 6) +
+    xlab(bquote(~Log[2]~ "fold change")) +
+    ylab(bquote(~-Log[10]~ italic(P))) +
+    theme(axis.line = element_line(),
+      panel.border = element_blank(),
+      panel.background = element_blank()) +
+    labs(caption = paste0("Total variables: ", total)) +
+    geom_hline(yintercept = -log10(threshold), linetype = "dashed") + 
+    geom_point(data = hits[1:10, ], aes(x = logFC, y = -log10(P.Value)), colour = viridis(3)[2], size = 2) +
+    geom_text_repel(data = hits[1:10, ], aes(label = gene_name), colour = viridis(3)[2])
+  }  else {
+    ggplot(hits, aes(x = logFC, y = -log10(P.Value))) + 
+    theme_bw(base_size = 22) + 
+    geom_point() + 
+    xlim(-2, 2) + 
+    ylim(0, 6) +
+    xlab(bquote(~Log[2]~ "fold change")) +
+    ylab(bquote(~-Log[10]~ italic(P))) +
+    theme(axis.line = element_line(),
+      panel.border = element_blank(),
+      panel.background = element_blank()) +
+    labs(caption = paste0("Total variables: ", total)) +
+    geom_hline(yintercept = -log10(threshold), linetype = "dashed") + 
+    geom_point(data = hits[index, ], aes(x = logFC, y = -log10(P.Value)), colour = viridis(1), size = 2) +
+    geom_text_repel(data = hits[index, ], aes(label = gene_name), colour = viridis(1)) +
+    geom_point(data = hits[(length(index) + 1):10, ], aes(x = logFC, y = -log10(P.Value)), colour = viridis(3)[2], size = 2) +
+    geom_text_repel(data = hits[(length(index) + 1):10, ], aes(label = gene_name), colour = viridis(3)[2])
+  }
+  ggsave(paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/", file), width = 8, height = 6, units = "in")
 }
-
-GenerateVolcanoPlot(fit, variable = "DxCASE", file = "1.1_volcano_plot_diff_expr_genes_for_diagnosis.pdf")
 
 # function to plot all differentially expressed hits for the different covariates corrected for all other covariates as a vertical barplot
 GenerateVerticalBarplotOfDiffExprHits <- function(design, fit, from, to, adj, plot.name){
@@ -156,12 +190,22 @@ GenerateVerticalBarplotOfDiffExprHits <- function(design, fit, from, to, adj, pl
   limma.res.padj <- limma.res.fc[, from:(to + nc)]
   for (i in 1:nc){
     limma.res.padj[, i] = topTable(fit, adjust = "BH", sort.by = "none", number = Inf, coef = i + 1)[, adj]
+    if(i == nc){
+      limma.res.padj$`Gene Symbol` = topTable(fit, adjust = "BH", sort.by = "none", number = Inf, coef = i + 1)[, adj - 5]
+      limma.res.padj$`Ensembl Gene ID` = topTable(fit, adjust = "BH", sort.by = "none", number = Inf, coef = i + 1)[, adj - 6]
+    }
   }
   #head(limma.res.padj)
-  limma.res.padj <- limma.res.padj[, -c(length(limma.res.padj))]  # remove SV1
-  colnames(limma.res.padj) <- c("Diagnosis", "Age", "Sex", "pH", "PMI", "RIN", "RIN2", "Suicide", "Type_of_Death1", "Type_of_Death2", "C1", "C2", "C3", "C4")
+  limma.res.padj <- limma.res.padj[, -c(length(limma.res.padj) - 2)]  # remove SV1
+  colnames(limma.res.padj) <- c("Diagnosis", "Age", "Sex", "pH", "PMI", "RIN", "RIN2", "Suicide", "Type_of_Death1", "Type_of_Death2", "C1", "C2", "C3", "C4", "Gene Symbol", "Ensembl Gene ID")
   limma.res.padj$Type_of_Death <- (limma.res.padj$Type_of_Death1 + limma.res.padj$Type_of_Death2) / 2
-  limma.res.padj <- limma.res.padj[, c("Diagnosis", "Age", "Sex", "pH", "PMI", "RIN", "RIN2", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4")]
+  limma.res.padj <- limma.res.padj[, c("Diagnosis", "Age", "Sex", "pH", "PMI", "RIN", "RIN2", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4", "Gene Symbol", "Ensembl Gene ID")]
+  # unmerge gene symbols and IDs and get only unique gene symbols/IDs as hits
+  limma.res.padj <- unique(separate_rows(limma.res.padj, `Ensembl Gene ID`, sep = "\\|"))
+  limma.res.padj <- unique(separate_rows(limma.res.padj, `Gene Symbol`, sep = "\\|"))
+  # remove Gene symbols and IDs as we do not need them anymore (just for same results as in result tables)
+  limma.res.padj$`Gene Symbol` <- NULL
+  limma.res.padj$`Ensembl Gene ID` <- NULL
   # check, how many padj values are < 0.10
   limma.res.padj.0.05 <- apply(limma.res.padj, 2, function(x) sum(x < 0.1))
   limma.res.plot <- data.frame(sort(limma.res.padj.0.05, decreasing = T))
@@ -1043,10 +1087,10 @@ Check exon expression for exons found in the cases & control, case only and uniq
 
 ```{r}
 # cases and controls
-data <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/01_pmb_CASE_CTL_matrixEQTL_cis_results_exons.txt", header = T, stringsAsFactors = F)
+data <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/output/01_pmb_CASE_CTL_matrixEQTL_cis_results_exons.txt", header = T, stringsAsFactors = F)
 cis.exons.all <- data[data$FDR < 0.05,   ]  # filter for only eQTLs with adjusted p-value (FDR) < 0.05
 # case only
-data <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/02_pmb_CASE_only_matrixEQTL_cis_results_exons.txt", header = T, stringsAsFactors = F)
+data <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/output/02_pmb_CASE_only_matrixEQTL_cis_results_exons.txt", header = T, stringsAsFactors = F)
 cis.exons.cases <- data[data$FDR < 0.05,  ]  # filter for only eQTLs with adjusted p-value (FDR) < 0.05
 # TODO: unique case only exon eQTLs
 ```

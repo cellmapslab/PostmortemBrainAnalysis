@@ -18,15 +18,12 @@ library(RColorBrewer)
 
 # 2. Load data (all different generated PRS)
 # load, filter and save phenotype data
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_gene_summaries_annotated_batch_corrected.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
 index <- which(is.na(pData(geneSummaries)$C1))  # remove all samples with C1 = NA
-geneSummaries <- geneSummaries[, -c(index)]
-index <- which(is.na(pData(geneSummaries)$Type_of_Death))  # remove all samples with Type_of_Death = NA
-geneSummaries <- geneSummaries[, -c(index)]
 dim(geneSummaries)
 pData <- pData(geneSummaries)
 
-# load PRS LDpred-inf scores. 
+# load PRS LDpred-inf scores
 # Remember to add a comma "," at the end of the header line (or remove all commas from the rest of the lines) otherwise read.table or fread can not read in the data correctly. 
 # load SCZ2 PRS
 prs.scz2 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/SCZ2/03_validate/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_scz2_filtered_PRS_LDpred_p3.0000e-01.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
@@ -54,6 +51,13 @@ gr.score <- gr.score[!startsWith(gr.score$IID, "MD") & !endsWith(gr.score$IID, "
 gr.score <- gr.score[gr.score$IID %in% pData$IID]
 gr.score <- gr.score[, IID:=as.integer(IID)]
 
+# Load P+T (pruning and thresholding) scores
+prs.scz2.pt <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/SCZ2/03_validate_PT/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_scz2_filtered_PRS_P+T_p5.0000e-02.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+prs.mdd2.pt <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/MDD2/03_validate_PT/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_mdd2_filtered_PRS_P+T_p1.0000e+00.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+prs.bip.pt <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/BIP-2018/03_validate_PT/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_bip_filtered_PRS_P+T_p5.0000e-02.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+prs.cd.pt <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/Cross_Disorder/03_validate_PT/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_cd_filtered_PRS_P+T_p5.0000e-02.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+
+
 # Add diagnosis column to the PRS
 pData$Diagnosis <- as.character(pData$Dx)
 pData[pData$Diagnosis != "CTL", "Diagnosis"] <- "CASE"
@@ -69,31 +73,33 @@ prs.cd <- merge(prs.cross.disorder, pData, by = "IID")
 prs.gr.score <- merge(gr.score, pData, by = "IID")
 #prs.bmi <- merge(prs.bmi, pData, by = "IID", all.x = T)
 
+prs.scz2.pt <- merge(prs.scz2.pt, pData, by = "IID")
+prs.mdd2.pt <- merge(prs.mdd2.pt, pData, by = "IID")
+prs.bip.pt <- merge(prs.bip.pt, pData, by = "IID")
+prs.cd.pt <- merge(prs.cd.pt, pData, by = "IID")
 
-prs.scz2 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/SCZ2/03_validate/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_scz2_filtered_reverse_weights_PRS_LDpred_p3.0000e-01.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
-prs.scz2 <- merge(prs.scz2, pData, by = "IID")
-lm.test <- lm(prs.scz2$PRS ~ prs.scz2$Diagnosis)
+lm.test <- lm(prs.scz2.pt$PRS ~ prs.scz2.pt$Diagnosis)
 nagelkerke(lm.test)
 summary(lm.test)
+
 # generate data for boxplot
-prs.scz2.plot <- prs.scz2[, c("PRS", "Dx")]
-cases <- prs.scz2.plot[prs.scz2.plot$Dx != "CTL", ]
-cases$Dx <- as.character(cases$Dx)
-cases$Dx <- "CASE"
-prs.scz2.plot <- rbind(prs.scz2.plot, cases)
-prs.scz2.plot$Dx <- factor(prs.scz2.plot$Dx, levels = c("CTL", "CASE", "MDD", "BPD", "SCZ"))
+prs.bip.pt.plot <- prs.bip.pt[, c("PRS", "Diagnosis")]
+cases <- prs.bip.pt.plot[prs.bip.pt.plot$Diagnosis != "CTL", ]
+cases$Diagnosis <- as.character(cases$Diagnosis)
+cases$Diagnosis <- "CASE"
+prs.bip.pt.plot <- rbind(prs.bip.pt.plot, cases)
+prs.bip.pt.plot$Diagnosis <- factor(prs.bip.pt.plot$Diagnosis, levels = c("CTL", "CASE", "MDD", "BPD", "SCZ"))
 # plot boxplots
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/figures/boxplot_PRS_SCZ2_reverse_weights.pdf", width = 12, height = 10)
-ggplot(prs.scz2.plot, aes(x = Dx, y = PRS, fill = Dx)) +
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/figures/boxplot_PRS_BIP_P+T.pdf", width = 12, height = 10)
+ggplot(prs.bip.pt.plot, aes(x = Diagnosis, y = PRS, fill = Diagnosis)) +
   scale_x_discrete(labels = c("Controls", "Cases", "Major depression disorder", "Bipolar disorder", "Schizophrenia")) +
   theme_classic() +
   theme(text = element_text(size = 26), axis.text.x = element_text(angle = 45, hjust = 1), axis.text = element_text(size = 26), plot.title = element_text(hjust = 0.5), axis.title.x = element_blank()) +
   geom_boxplot(alpha = 0.7) + 
   scale_fill_manual(values = viridis(5), guide = F) +
-  ggtitle("PRS based on schizophrenia GWAS summary statistic") + 
+  ggtitle("PRS based on bipolar disorder GWAS summary statistic") + 
   ylab("Polygenic risk score (PRS)") 
 dev.off()
-
 
 
 prs.test <- fread("/storage/scratch/users/karolina.worf/MPIP/06.Smoothing/output/test4_smoothed_PRS_LDpred_p3.0000e-01.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))

@@ -45,5 +45,8 @@ $tools_path/PLINK/plink --bfile ${out_genotypes}/1.3_merged_chr/pmb_info06_all_c
 cut -f 2 /${out_genotypes}/1.4_dups_removed/pmb_info06_all_chr_maf0.01_IDs_changed_merged_noDup.bim | sort | uniq -d > /${out_genotypes}/1.4_dups_removed/pmb_info06_all_chr_maf0.01_IDs_changed_merged_IDstoRemove.txt
 $tools_path/PLINK/plink --bfile /${out_genotypes}/1.4_dups_removed/pmb_info06_all_chr_maf0.01_IDs_changed_merged_noDup --exclude /${out_genotypes}/1.4_dups_removed/pmb_info06_all_chr_maf0.01_IDs_changed_merged_IDstoRemove.txt --make-bed --out /${out_genotypes}/1.4_dups_removed/pmb_info06_all_chr_maf0.01_IDs_changed_merged_noDup_final
 
+# 1.7 change .bed/.bim/.fam back to .gen/.sample
+$tools_path/PLINK/plink --bfile /${out_genotypes}/1.4_dups_removed/pmb_info06_all_chr_maf0.01_IDs_changed_merged_noDup_final --recode oxford --out /${out_genotypes}/1.4_dups_removed/pmb_info06_all_chr_maf0.01_IDs_changed_merged_noDup_final
+
 echo "Transform genotype data done"
 

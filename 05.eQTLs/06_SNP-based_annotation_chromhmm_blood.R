@@ -127,7 +127,7 @@ rm(eqtls.gene, eqtls.transcript, eqtls.exon, eqtls.gene.cases, eqtls.transcript.
 ### Public data ###
 ### ChromHMM ###
 # read data
-hmm <- readRDS("/storage/groups/ccm01/datasets/2019_chromHMM/chromHMM_all_states.Rds")
+hmm <- readRDS("/storage/groups/ccm01/datasets/2019_ChromHMM/chromHMM_all_states.Rds")
 # remove chromosome X, Y and M
 seqlevels(hmm, pruning.mode="coarse") <- setdiff(seqlevels(hmm), c("chrX", "chrY", "chrM"))
 # load ChromHMM data information
@@ -153,16 +153,16 @@ perm <- 10000
 # ChromHMM states
 states <- names(table(hmm.blood$name))
 
-# 2.4.1 annotation to ChromHMM Blood
+# 2.4.1 annotation to ChromHMM Blood (parallelized)
 cl <- makeCluster(15)
 registerDoSNOW(cl)
 
 results2 <- foreach (i = seq_along(states), .combine = rbind,
                      .packages = c("GenomicRanges", "S4Vectors")) %dopar% {
   results <- data.frame()
-  overlap <- paste0("ChromHMM_blood_", state, "_SNP_overlap")
-  pval <- paste0("ChromHMM_blood_", state, "_SNP_pVal")
-  or <- paste0("ChromHMM_blood_", state, "_SNP_or")
+  overlap <- paste0("ChromHMM_blood_", states[i], "_SNP_overlap")
+  pval <- paste0("ChromHMM_blood_", states[i], "_SNP_pVal")
+  or <- paste0("ChromHMM_blood_", states[i], "_SNP_or")
   hmm.blood.selected <- hmm.blood[hmm.blood$name == states[i]]
   results[c(overlap, pval, or), "Gene"] <- annotatePublicData(eqtls.gene.gr, hmm.blood.selected, perm, background.gr)
   results[c(overlap, pval, or), "Gene_cases"] <- annotatePublicData(eqtls.gene.cases.gr, hmm.blood.selected, perm, background.gr)
