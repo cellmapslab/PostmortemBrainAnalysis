@@ -2,7 +2,7 @@ Analysis of postmortem brain samples coming from healthy controls (CTL) and pati
 
 Following analyses will be performed: 
 
-1. **GWAS**
+1. **Genome-Wide Association Study (GWAS)**
 2. **Polygenic Risk Score (PRS) calculation**
   - Pre-processing of cohort, genotype data and GWAS summary statistics
   - Run LDpred
