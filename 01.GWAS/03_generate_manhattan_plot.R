@@ -4,7 +4,7 @@
 # In this R script, we will generate the manhattan plot for the GWAS results of our dataset.
 
 # 1. Load Packages for own R installation
-.libPaths("/home/icb/karolina.worf/R/x86_64-pc-linux-gnu-library/3.5/")
+.libPaths("/home/icb/karolina.worf/R/x86_64-pc-linux-gnu-library/3.6/")
 # data transformation packages
 library(data.table)
 library(dplyr)

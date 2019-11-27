@@ -230,7 +230,7 @@ GetExprWithSmallestP <- function(input, summaries){
   min.pval <- res[ , .SD[which.min(`p-value`)], by = `Ensembl Gene ID`]
   # get all transcript IDs with lowest p-value per gene ID
   index <- which(rownames(exprs(summaries)) %in% as.character(c(min.pval[, 2])[[1]]))
-  # reduce transcriptSummaries to these transcripts
+  # reduce transcript/exonSummaries to these transcripts/exons
   summaries <- summaries[c(index), ]
   dim(summaries)
   return(summaries)
@@ -276,26 +276,26 @@ Then, we load the four different polygenic risk scores generated on the latest s
 
 ```{r, echo = F}
 # load SCZ2 PRS
-prs.scz2 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/SCZ2/03_validate/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_scz2_filtered_PRS_LDpred-inf.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+prs_scz2 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/PRSice-2/SCZ2/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_scz2_filtered_PRSice-2_PRS.best", sep = " ", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
 
 # load MDD2 PRS
-prs.mdd2 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/MDD2/03_validate/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_mdd2_filtered_PRS_LDpred-inf.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+prs_mdd2 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/PRSice-2/MDD2/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_mdd2_filtered_PRSice-2_PRS.best", sep = " ", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
 
 # load BIP-2018 PRS
-prs.bip <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/BIP-2018/03_validate/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_bip_filtered_PRS_LDpred-inf.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+prs_bip <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/PRSice-2/BIP-2018/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_bip_filtered_PRSice-2_PRS.best", sep = " ", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
 
 # load Cross-disorder PRS
-prs.cross.disorder <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/Cross_Disorder/03_validate/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_cd_filtered_PRS_LDpred-inf.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+prs_cross_disorder <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/PRSice-2/Cross_Disorder/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_cd_filtered_PRSice-2_PRS.best", sep = " ", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
 ```
 
 All loaded PRS are added to the phenotype (pData) information.
 
 ```{r, echo = F}
-pData$PRS.SCZ <- unlist(prs.scz2[prs.scz2$IID %in% pData$IID, "PRS"])
-pData$PRS.MDD <- unlist(prs.mdd2[prs.mdd2$IID %in% pData$IID, "PRS"])
-pData$PRS.BIP <- unlist(prs.bip[prs.bip$IID %in% pData$IID, "PRS"])
-pData$PRS.CD <- unlist(prs.cross.disorder[prs.cross.disorder$IID %in% pData$IID, "PRS"])
-rm(prs.bip, prs.mdd2, prs.scz2, prs.cross.disorder)
+pData$PRS.SCZ <- unlist(prs_scz2[prs_scz2$IID %in% pData$IID, "PRS"])
+pData$PRS.MDD <- unlist(prs_mdd2[prs_mdd2$IID %in% pData$IID, "PRS"])
+pData$prs_bip <- unlist(prs_bip[prs_bip$IID %in% pData$IID, "PRS"])
+pData$PRS.CD <- unlist(prs_cross_disorder[prs_cross_disorder$IID %in% pData$IID, "PRS"])
+rm(prs_bip, prs_mdd2, prs_scz2, prs_cross_disorder)
 ```
 
 
@@ -440,10 +440,10 @@ design <- model.matrix(~ PRS.BIP + Age + Sex + pH + PMI + RIN + RIN2 + Suicide +
 fit <- RunLimma(design, geneSummaries)
 
 # result table
-GenerateResultTableGene(fit, variable = "PRS.BIP", file =  "2.1.3_diff_expr_genes_for_BIP_PRS.csv")
+GenerateResultTableGene(fit, variable = "prs_bip", file =  "2.1.3_diff_expr_genes_for_BIP_PRS.csv")
 
 # volcano plot
-GenerateVolcanoPlot(fit, variable = "PRS.BIP", file = "2.1.3_volcano_plot_diff_expr_genes_for_BIP_PRS.pdf")
+GenerateVolcanoPlot(fit, variable = "prs_bip", file = "2.1.3_volcano_plot_diff_expr_genes_for_BIP_PRS.pdf")
 rm(design, fit)
 ```
 
@@ -600,16 +600,16 @@ rm(design, fit, top.hits)
 
 ```{r, echo = F}
 # generate design matrix
-design <- model.matrix(~ PRS.BIP + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+design <- model.matrix(~ prs_bip + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 
 # differential expression analysis (limma)
 fit <- RunLimma(design, transcriptSummaries)
 
 # result table
-top.hits <- GenerateResultTableTranscript(fit, variable = "PRS.BIP", file =  "2.1.3_diff_expr_transcripts_for_BIP_PRS.csv")
+top.hits <- GenerateResultTableTranscript(fit, variable = "prs_bip", file =  "2.1.3_diff_expr_transcripts_for_BIP_PRS.csv")
 
 # volcano plot
-GenerateVolcanoPlot(fit, variable = "PRS.BIP", file = "2.1.3_volcano_plot_diff_expr_transcripts_for_BIP_PRS.pdf")
+GenerateVolcanoPlot(fit, variable = "prs_bip", file = "2.1.3_volcano_plot_diff_expr_transcripts_for_BIP_PRS.pdf")
 rm(design, fit, top.hits)
 ```
 
@@ -698,16 +698,16 @@ transcriptSummaries.new <- GetExprWithSmallestP(input = "2.1.3_diff_expr_transcr
 dim(transcriptSummaries.new)
 
 # generate design matrix
-design <- model.matrix(~ PRS.BIP + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+design <- model.matrix(~ prs_bip + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 
 # differential expression analysis (limma)
 fit <- RunLimma(design, transcriptSummaries.new)
 
 # result table
-top.hits <- GenerateResultTableTranscript(fit, variable = "PRS.BIP", file =  "2.2.3_diff_expr_transcripts_for_BIP_PRS_new_pvalue_and_fdr.csv")
+top.hits <- GenerateResultTableTranscript(fit, variable = "prs_bip", file =  "2.2.3_diff_expr_transcripts_for_BIP_PRS_new_pvalue_and_fdr.csv")
 
 # volcano plot
-GenerateVolcanoPlot(fit, variable = "PRS.BIP", file = "2.2.3_volcano_plot_diff_expr_transcripts_for_BIP_PRS_new_pvalue_and_fdr.pdf")
+GenerateVolcanoPlot(fit, variable = "prs_bip", file = "2.2.3_volcano_plot_diff_expr_transcripts_for_BIP_PRS_new_pvalue_and_fdr.pdf")
 ```
 
 We still have no hits on the transcript level as shown below:
@@ -938,16 +938,16 @@ rm(design, fit, top.hits)
 
 ```{r, echo = F}
 # generate design matrix for BIP PRS
-design <- model.matrix(~ PRS.BIP + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+design <- model.matrix(~ prs_bip + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 
 # differential expression analysis (limma)
 fit <- RunLimma(design, exonSummaries)
 
 # result table
-top.hits <- GenerateResultTableExon(fit, variable = "PRS.BIP", file =  "2.1.3_diff_expr_exons_for_BIP_PRS.csv")
+top.hits <- GenerateResultTableExon(fit, variable = "prs_bip", file =  "2.1.3_diff_expr_exons_for_BIP_PRS.csv")
 
 # volcano plot
-GenerateVolcanoPlot(fit, variable = "PRS.BIP", file = "2.1.3_volcano_plot_diff_expr_exons_for_BIP_PRS.pdf")
+GenerateVolcanoPlot(fit, variable = "prs_bip", file = "2.1.3_volcano_plot_diff_expr_exons_for_BIP_PRS.pdf")
 rm(design, fit, top.hits)
 ```
 
@@ -1034,16 +1034,16 @@ exonSummaries.new <- GetExprWithSmallestP(input = "2.1.3_diff_expr_exons_for_BIP
 dim(exonSummaries.new)
 
 # generate design matrix
-design <- model.matrix(~ PRS.BIP + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+design <- model.matrix(~ prs_bip + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 
 # differential expression analysis (limma)
 fit <- RunLimma(design, exonSummaries.new)
 
 # result table
-top.hits <- GenerateResultTableExon(fit, variable = "PRS.BIP", file =  "2.2.3_diff_expr_exons_for_BIP_PRS_new_pvalue_and_fdr.csv")
+top.hits <- GenerateResultTableExon(fit, variable = "prs_bip", file =  "2.2.3_diff_expr_exons_for_BIP_PRS_new_pvalue_and_fdr.csv")
 
 # volcano plot
-GenerateVolcanoPlot(fit, variable = "PRS.BIP", file = "2.2.3_volcano_plot_diff_expr_exons_for_BIP_PRS_new_pvalue_and_fdr.pdf")
+GenerateVolcanoPlot(fit, variable = "prs_bip", file = "2.2.3_volcano_plot_diff_expr_exons_for_BIP_PRS_new_pvalue_and_fdr.pdf")
 ```
 
 We have no hits on the exon level for bipolar disorder as shown below:
@@ -1079,6 +1079,13 @@ For the cross-disorder (CD) PRS we can find also hits with FDR < 0.05 (5%) as fo
 2. with FDR < 10%: `r length(top.hits[top.hits$"FDR estimate" < 0.1, "Gene Symbol"])`
 
 Five genes with an FDR < 0.05 (5%):  `r top.hits[top.hits$"FDR estimate" < 0.05, "Gene Symbol"]`
+
+
+## VENN diagrams of hits
+
+```{r}
+
+```
 
 
 ## eQTL hits
@@ -1134,7 +1141,22 @@ Check exon expression for exons found in the cases only eQTL dataset for any dif
 Check exon expression for exons found in the unique cases only dataset for any differentially expressed exon hits.
 
 ```{r}
-
+# Generate correlation plot
+# Remove all rows including an NA in any column and remove the IID column (NOT needed for the corrplot!)
+pData.new <- pData[, c("PRS.SCZ", "Age", "Sex", "pH", "PMI" , "RIN", "RIN2", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4", "SV1")]
+# 5. change BPD and MDD diagnosis in Diagnosis to SCZ
+# save categorical and continuous variable names
+classes <- sapply(pData.new, class) # get type of columns
+categorical.cov = names(classes[classes == "factor"])
+continuous.cov = names(classes[classes == "numeric"])
+# generate contrast for design matrix
+contrast <- lapply(categorical.cov, function(x) {fac = pData.new[, x]; return(contrasts(fac))})
+names(contrast) <- categorical.cov
+# generate design matrix
+design <- model.matrix(~ PRS.SCZ + Age + Sex + Dx + pH + PMI + RIN + RIN2 + SV1 + Batch + Suicide + Type_of_Death + C1 + C2 + C3 + C4, pData.new, contrasts.arg = contrast)
+design.cor <- corr.test(design[, -1], use = 'pairwise.complete.obs', method = "pearson", adjust = "none")
+# change colnames
+corrplot(as.matrix(design.cor$r), method = "circle", col = viridis(200, direction = -1), tl.col = "black")
 ```
 
 # Session Info

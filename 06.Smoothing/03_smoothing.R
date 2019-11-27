@@ -152,3 +152,43 @@ write.table(prs_scz2, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brai
 # 3. Run Validation (get score for each patient)
 #/storage/groups/ccm01/tools/ldpred-master/LDpred.py score --gf /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/SCZ2/00_input/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_scz2_filtered --rf /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/SCZ2/02_LDpred/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_scz2_filtered_reverse_weights --f 0.3 --pf /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/phenotypes.txt --out /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/SCZ2/03_validate/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_scz2_filtered_reverse_weights_PRS &> /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/SCZ2/03_validate/validate_reverse.log
 
+
+
+
+# change eQTL hit rs SNP IDs into chr:pos format (e.g. chr1:12345)
+snpspos <- read.table("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input/SNP_locations.txt", header = T, stringsAsFactors = FALSE, sep = "\t") # snp chr pos
+head(snpspos)
+snps_nearby_genes <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Smoothing/input/eQTLs/snps_nearby_genes_1mb.txt", data.table = F, stringsAsFactors = F, header = F)
+#dim(snps_nearby_genes)
+#snps_nearby_genes <- merge(snps_nearby_genes, snpspos, by.x = "V1", by.y = "snp")
+#snps_nearby_genes[, c("V1", "chr", "pos")] <- NULL
+fwrite(snps_nearby_genes, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Smoothing/input/eQTLs/snps_nearby_genes_1mb.txt", quote = F, sep = "\n", col.names = F)
+
+# change eQTL hit rs SNP IDs into chr:pos format (e.g. chr1:12345)
+gene_eSNPs <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_gene_hits_cases_vs_controls.txt", select = c("FDR", "SNP_location"), data.table = F, stringsAsFactors = F)
+gene_eSNPs$SNP_location <- paste0("chr", gene_eSNPs$SNP_location)
+gene_eSNPs <- gene_eSNPs[gene_eSNPs$FDR < 0.05, ]
+gene_eSNPs$FDR <- NULL
+fwrite(gene_eSNPs, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Smoothing/input/eQTLs/snps_gene_cis-eqtl_hits.txt", quote = F, sep = "\n", col.names = F)
+
+# change eQTL hit rs SNP IDs into chr:pos format (e.g. chr1:12345)
+gene_eSNPs <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_gene_hits_cases_only.txt", select = c("FDR", "SNP_location"), data.table = F, stringsAsFactors = F)
+gene_eSNPs$SNP_location <- paste0("chr", gene_eSNPs$SNP_location)
+gene_eSNPs <- gene_eSNPs[gene_eSNPs$FDR < 0.05, ]
+gene_eSNPs$FDR <- NULL
+fwrite(gene_eSNPs, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Smoothing/input/eQTLs/snps_gene_cis-eqtl_hits_cases.txt", quote = F, sep = "\n", col.names = F)
+
+gtex_wb_eqtl <- readRDS("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/RData/GTEx_v8_Whole_Blood_hg19_eQTL_SNPs.rds")  # GTEx Whole Blood eQTL
+gtex_wb_eqtl <- as.data.frame(gtex_wb_eqtl)
+gtex_wb_eqtl$id <- paste0("chr", gtex_wb_eqtl$seqnames, ":", gtex_wb_eqtl$start)
+gtex_wb_eqtl[, c("seqnames", "start", "end", "width", "strand", "snp_id")] <- NULL
+fwrite(gtex_wb_eqtl, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Smoothing/input/eQTLs/gtex_wb_gene_cis-eqtls.txt", quote = F, sep = "\n", col.names = F)
+
+
+### Different method: take LD SNPs of best PRSice-2 SCZ PRS and reduce to nearby gene SNPs
+snps <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/PRSice-2/SCZ2/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_scz2_filtered_PRSice-2_PRS.snp")
+dim(snps)
+ids <- intersect(snps$SNP, snps_nearby_genes$V1)
+snps <- snps[snps$SNP %in% ids]
+snps <- snps[as.numeric(snps$P) < 0.0222001, ]
+fwrite(snps, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Smoothing/input/eQTLs/ld_snps_nearby_genes_1mb.txt", quote = F, sep = "\t", col.names = F)

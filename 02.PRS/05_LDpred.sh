@@ -113,7 +113,7 @@ if [ $genotypes ] && [ $cohort ] && [ $sumstats ] && [ $nums ] && [ $out_path ] 
     echo "gibbs done"
 
     # 3. Run scoring (get score for each patient)
-    /storage/groups/ccm01/tools/ldpred/ldpred/ldpred score --gf ${genotypes} --rf ${out_path}/02_LDpred/${out_file_name} --f 1 0.9 0.8 0.7 0.6 0.5 0.4 0.3 0.2 0.1 0.03 0.01 0.003 0.001 --pf /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/phenotypes.txt --out ${out_path}/03_validate/${out_file_name}_PRS &> ${out_path}/03_validate/validate.log
+    /storage/groups/ccm01/tools/ldpred/ldpred/ldpred score --gf ${genotypes} --rf ${out_path}/02_LDpred/${out_file_name} --f 1 0.9 0.8 0.7 0.6 0.5 0.4 0.3 0.2 0.1 0.03 0.01 0.003 0.001 --pf /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/phenotypes.txt --out ${out_path}/03_validate/${out_file_name}_PRS &> ${out_path}/03_validate/validate.log
     echo "score done"
 
     # 4. run LDpred for pruning and thresholding (P+T)
@@ -121,7 +121,7 @@ if [ $genotypes ] && [ $cohort ] && [ $sumstats ] && [ $nums ] && [ $out_path ] 
     echo "gibbs for P+T done"
 
     # 5. run scoring (get score for each patient) for the P+T
-    /storage/groups/ccm01/tools/ldpred/ldpred/ldpred score --gf ${genotypes} --rf ${out_path}/04_P+T/${out_file_name} --p 1 0.05 0.00000005 --pf /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/phenotypes.txt --out ${out_path}/04_P+T/${out_file_name}_PRS &> ${out_path}/04_P+T/validate_p+t.log
+    /storage/groups/ccm01/tools/ldpred/ldpred/ldpred score --gf ${genotypes} --rf ${out_path}/04_P+T/${out_file_name} --p 1 0.05 0.00000005 --pf /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/phenotypes.txt --out ${out_path}/04_P+T/${out_file_name}_PRS &> ${out_path}/04_P+T/validate_p+t.log
     echo "score for P+T done"
 
     # Print that the job is done

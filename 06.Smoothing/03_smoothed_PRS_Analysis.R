@@ -3,7 +3,7 @@
 ####################
 # In this R script, we will analyze and plot all generated polygenic risk scores
 
-# 1. Load packages (for own R installation - version 3.6)
+# 1. Load packages (for own R installation - version 3)
 .libPaths("/home/icb/karolina.worf/R/x86_64-pc-linux-gnu-library/3.6/")
 library(viridis) # for colorblind color palette
 library(data.table)
@@ -14,12 +14,90 @@ library(pheatmap)
 library(limma)
 library(rcompanion)
 library(oligo)
+library(RColorBrewer)
 
 # 2. Load data (all different generated PRS)
 # load, filter and save phenotype data
 load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
+index <- which(is.na(pData(geneSummaries)$C1))  # remove all samples with C1 = NA
 dim(geneSummaries)
 pData <- pData(geneSummaries)
+rm(geneSummaries)
+
+EvaluatePRS <- function(input, gwas, seperator, output){
+  # 1. read file
+  prs <- fread(file = input, sep = seperator, header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+  # 2. add pData information to PRS
+  prs <- merge(prs, pData, by = "IID")
+  # change Dx to numeric
+  prs[prs$Dx == "CTL", "Dx"] <- "0"
+  prs[prs$Dx == "CASE", "Dx"] <- "1"
+  prs$Dx <- as.numeric(as.character(prs$Dx))
+  # 3. Get Nagelkerkes R2 and p-value
+  lm.prs <- lm(prs$Dx ~ prs$PRS)
+  r2 <- nagelkerke(lm.prs)$Pseudo.R.squared.for.model.vs.null["Nagelkerke (Cragg and Uhler)", "Pseudo.R.squared"]
+  r2.2 <- nagelkerke(lm.prs)$Pseudo.R.squared.for.model.vs.null["Cox and Snell (ML)", "Pseudo.R.squared"]
+  sum.prs <- summary(lm.prs)
+  p.value <- pf(sum.prs$fstatistic[1], sum.prs$fstatistic[2], sum.prs$fstatistic[3], lower.tail = FALSE)
+  print(paste0(gwas, ":\nNagelkerke R2 = ", r2, "\nCox and Snell R2 = ", r2.2, "\nP-value = ", p.value))
+  # 4. Generate boxplot
+  col <- viridis(20) # get six colors (for plots)
+  # change and relevel Diagnosis column of SCZ2
+  prs.plot <- prs[, c("PRS", "Diagnosis")]
+  cases <- prs.plot[prs.plot$Diagnosis != "CTL", ]
+  cases$Diagnosis <- as.character(cases$Diagnosis)
+  cases$Diagnosis <- "CASE"
+  prs.plot <- rbind(prs.plot, cases)
+  prs.plot$Diagnosis <- factor(prs.plot$Diagnosis, levels = c("CTL", "CASE", "MDD", "BPD", "SCZ"))
+  # boxplot of PRS
+  ggplot(prs.plot, aes(x = Diagnosis, y = PRS, fill = Diagnosis)) +
+    scale_x_discrete(labels = c("Controls", "Cases", "Major depression disorder", "Bipolar disorder", "Schizophrenia")) +
+    theme_classic() +
+    theme(text = element_text(size = 26), axis.text.x = element_text(angle = 45, hjust = 1), axis.text = element_text(size = 26), plot.title = element_text(hjust = 0.5), axis.title.x = element_blank()) +
+    geom_boxplot(alpha = 0.7) + 
+    scale_fill_manual(values = viridis(5), guide = F) +
+    ggtitle(paste0("PRS based on ", gwas, " GWAS summary statistic")) + 
+    ylab("Polygenic risk score (PRS)") 
+  ggsave(output, width = 12, height = 10, units = "in")
+  return(prs)
+}
+
+path = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Smoothing/"
+
+### PRSice-2 ###
+scz2_prsice <- EvaluatePRS(input = paste0(path, "results/nearby_genes/pmb_nearby_genes_1mb_scz2_PRSice-2_PRS.best"),
+                           gwas = "schizophrenia", seperator = " ",
+                           output = paste0(path, "figures/boxplot_PRSice-2_PRS_SCZ2_SNPs_nearby_genes_1Mb.pdf"))
+scz2_prsice <- EvaluatePRS(input = paste0(path, "results/gene_eqtl/pmb_gene_eSNPs_cases_vs_controls_scz2_PRSice-2_PRS.best"),
+                           gwas = "schizophrenia", seperator = " ",
+                           output = paste0(path, "figures/boxplot_PRSice-2_PRS_SCZ2_gene_eSNPs_cases_vs_controls.pdf"))
+scz2_prsice <- EvaluatePRS(input = paste0(path, "results/gene_eqtl/pmb_gene_eSNPs_cases_only_scz2_PRSice-2_PRS.best"),
+                           gwas = "schizophrenia", seperator = " ",
+                           output = paste0(path, "figures/boxplot_PRSice-2_PRS_SCZ2_gene_eSNPs_cases_only.pdf"))
+scz2_prsice <- EvaluatePRS(input = paste0(path, "results/gtex_wb/pmb_gtex_gene_eSNPs_scz2_PRSice-2_PRS.best"),
+                           gwas = "schizophrenia", seperator = " ",
+                           output = paste0(path, "figures/boxplot_PRSice-2_PRS_SCZ2_gtex_eQTL_SNPs.pdf"))
+
+
+
+
+# check best score from normal PRS
+scz2.scores <- fread(input = paste0(path, "results/gene_eqtl/pmb_gene_eSNPs_cases_vs_controls_scz2_PRSice-2_PRS.all.score"))
+names <- colnames(scz2.scores)[-1]
+scz2.scores$`1` <- NULL
+colnames(scz2.scores) <- names
+scz2.scores <- merge(scz2.scores, pData, by = "IID")
+scz2.scores[scz2.scores$Dx == "CTL", "Dx"] <- "0"
+scz2.scores[scz2.scores$Dx == "CASE", "Dx"] <- "1"
+scz2.scores$Dx <- as.numeric(as.character(scz2.scores$Dx))
+# 3. Get Nagelkerkes R2 and p-value
+prs.scz2 <- lm(scz2.scores$Dx ~ scz2.scores$`0.0215001`)
+r2 <- nagelkerke(prs.scz2)$Pseudo.R.squared.for.model.vs.null["Nagelkerke (Cragg and Uhler)", "Pseudo.R.squared"]
+r2.2 <- nagelkerke(prs.scz2)$Pseudo.R.squared.for.model.vs.null["Cox and Snell (ML)", "Pseudo.R.squared"]
+sum.prs <- summary(prs.scz2)
+p.value <- pf(sum.prs$fstatistic[1], sum.prs$fstatistic[2], sum.prs$fstatistic[3], lower.tail = FALSE)
+print(paste0("5e-08: Nagelkerke R2 = ", r2, "\nCos and Snell R2 = ", r2.2, "\nP-value = ", p.value))
+
 
 # load smoothed PRS scores
 # Remember to add a comma "," at the end of the header line (or remove all commas from the rest of the lines) otherwise read.table or fread can not read in the data correctly. 

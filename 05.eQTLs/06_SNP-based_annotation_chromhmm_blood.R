@@ -131,7 +131,7 @@ hmm <- readRDS("/storage/groups/ccm01/datasets/2019_ChromHMM/chromHMM_all_states
 # remove chromosome X, Y and M
 seqlevels(hmm, pruning.mode="coarse") <- setdiff(seqlevels(hmm), c("chrX", "chrY", "chrM"))
 # load ChromHMM data information
-hmm.info <- read.csv2("/storage/groups/ccm01/datasets/2019_chromHMM/epigenomes.tsv", header = T, stringsAsFactors = F, sep = "\t")
+hmm.info <- read.csv2("/storage/groups/ccm01/datasets/2019_ChromHMM/epigenomes.tsv", header = T, stringsAsFactors = F, sep = "\t")
 
 # get ChromHMM blood data
 # Blood has multiple  cell lines --> filter for Group == "Blood & T-cell"

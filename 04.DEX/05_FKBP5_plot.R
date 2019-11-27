@@ -176,9 +176,10 @@ ggplot(fkbp, aes(x = Dx, y = Expression, fill = Dx)) +
   theme_grey(base_size = 18)
 
 
-###############################
-### 3. Generate TRIM69 plot ###
-###############################
+#############################
+### 3. Generate DPP4 plot ###
+#############################
+# DPP4 is also a hit in the 108 loci (CMC) Nature paper!!!
 # 3.1 Load data
 # Gene expression
 load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
@@ -198,7 +199,7 @@ dim(exonSummaries)
 # 3.3.1 Get residuals for gene expression
 # generate design matrix
 design.res <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-fit.res <- lmFit(exprs(exonSummaries), design.res)  # fit model
+fit.res <- lmFit(exprs(transcriptSummaries), design.res)  # fit model
 res.table <- topTable(eBayes(fit.res), coef = "DxCASE", adjust = "BH", number = Inf)
 
 design.res <- model.matrix(Dx ~ Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
@@ -214,64 +215,69 @@ fit.res <- lmFit(exprs(exonSummaries), design.res)  # fit model
 res.exon <- residuals.MArrayLM(fit.res, exprs(exonSummaries))  # get residuals
 exprs(exonSummaries) <- res.exon
 
-# 3.4 Get TRIM69 gene, transcript and exon expressions
-# 3.4.1 Get EPM2A gene expression
-trim69.id <- fData(geneSummaries)[fData(geneSummaries)$gene_name == "TRIM69", "gene_id"]
-trim69.gene.expr <- as.data.frame(exprs(geneSummaries)[trim69.id, ])
-colnames(trim69.gene.expr) <- trim69.id
+# 3.4 Get DPP4 gene, transcript and exon expressions
+# 3.4.1 Get DPP4 gene expression
+dpp4.id <- fData(geneSummaries)[fData(geneSummaries)$gene_name == "DPP4", "gene_id"]
+dpp4.gene.expr <- as.data.frame(exprs(geneSummaries)[dpp4.id, ])
+colnames(dpp4.gene.expr) <- "DPP4"
 
-# 3.4.2 Get TRIM69 transcript expression
-trim69.id <- fData(transcriptSummaries)[fData(transcriptSummaries)$gene_name == "TRIM69", "transcript_id"]
-trim69.transcript.expr <- t(as.data.frame(exprs(transcriptSummaries)[trim69.id, ]))
+# 3.4.2 Get DPP4 transcript expression
+dpp4.id <- fData(transcriptSummaries)[grep("DPP4", fData(transcriptSummaries)$gene_name), "transcript_id"]
+dpp4.transcript.expr <- t(as.data.frame(exprs(transcriptSummaries)[dpp4.id, ]))
+dpp4.transcript.expr <- dpp4.transcript.expr[, c("ENST00000360534.3", "ENST00000434918.2", "ENST00000497461.1", "ENST00000416189.1", "ENST00000461836.1", "ENST00000490286.1", "ENST00000413651.1", "ENST00000468903.1", "ENST00000491591.1", "ENST00000494507.1")]
+colnames(dpp4.transcript.expr) <- c("DPP4-001", "DPP4-002", "DPP4-003", "DPP4-004", "DPP4-005", "DPP4-006", "DPP4-007", "DPP4-008", "DPP4-010", "DPP4-011")
 
-# 3.4.3 Get EPM2A exon expression
-trim69.id <- fData(exonSummaries)[fData(exonSummaries)$gene_name == "TRIM69", "exon_id"]
-trim69.exon.expr <- t(as.data.frame(exprs(exonSummaries)[trim69.id, ]))
+# 3.4.3 Get DPP4 exon expression
+dpp4.id <- fData(exonSummaries)[grep("DPP4", fData(exonSummaries)$gene_name), "exon_id"]
+dpp4.exon.expr <- t(as.data.frame(exprs(exonSummaries)[dpp4.id, ]))
+# all 7 exons in best scoring transcript of DPP4 (DPP4-008): 
+dpp4_08 <- c("ENSE00001845011", "ENSE00003482771", "ENSE00003513529", "ENSE00003668522", "ENSE00003517002", "ENSE00003590666", "ENSE00001879445")
+exons <- sapply(dpp4_08, function(x) dpp4.exon.expr[, grep(x, colnames(dpp4.exon.expr))])
+dpp4_08_exons <- rbind(exons[[2]], exons[[3]], exons[[5]], exons[[7]])
+rownames(dpp4_08_exons) <- names(exons)[c(2, 3, 5, 7)]
+dpp4.exon.expr <- t(dpp4_08_exons)
 
 # 3.5 Merge datasets
-trim69 <- trim69.gene.expr
-trim69 <- merge(trim69, trim69.transcript.expr, by = 0)
-trim69 <- merge(trim69, trim69.exon.expr, by.x = "Row.names", by.y = "row.names")
-#trim69 <- merge(trim69, pData, by.x = "Row.names", by.y = "row.names")
-colnames(trim69)[1] <- "SampleID"
-dim(trim69)  # should be 169 rows (samples)
+dpp4 <- dpp4.gene.expr
+dpp4 <- merge(dpp4, dpp4.transcript.expr, by = 0)
+dpp4 <- merge(dpp4, dpp4.exon.expr, by.x = "Row.names", by.y = "row.names")
+#dpp4 <- merge(dpp4, pData, by.x = "Row.names", by.y = "row.names")
+colnames(dpp4)[1] <- "SampleID"
+dim(dpp4)  # should be 169 rows (samples)
+head(dpp4)
 
-# 3.6 Form data into right order
-trim69 <- trim69[, c("SampleID", "ENSG00000185880.8", "ENST00000338264.4", "ENST00000559390.1", "ENST00000560141.1", "ENST00000558173.1", "ENST00000560554.1", "ENST00000559315.1", "ENST00000561237.1", "ENST00000561170.1", "ENSE00002565630.1", "ENSE00002551505.1", "ENSE00002545604.1", "ENSE00002555180.1", "ENSE00001302964.2", "ENSE00002560086.1", "ENSE00002541508.1", "ENSE00002542378.1")]
-colnames(trim69) <- c("SampleID", "TRIM69", "TRIM69-001", "TRIM69-002", "TRIM69-005", "TRIM69-006", "TRIM69-007", "TRIM69-008", "TRIM69-009", "TRIM69-011", "ENSE00002565630.1", "ENSE00002551505.1", "ENSE00002545604.1", "ENSE00002555180.1", "ENSE00001302964.2", "ENSE00002560086.1", "ENSE00002541508.1", "ENSE00002542378.1")
-head(trim69)
-
-# 3.7 Change TRIM69 data into ggplot long format
-trim69.plot.data <- reshape2::melt(trim69, id.vars = "SampleID", value.name = "Expression", variable.name = "EnsemblID" )
-trim69.plot.data$Type <- "Exons"
-trim69.plot.data[as.character(trim69.plot.data$EnsemblID) == "TRIM69", "Type"] <- "Gene"
-trim69.plot.data[startsWith(as.character(trim69.plot.data$EnsemblID), "TRIM69-"), "Type"] <- "Transcripts"
-trim69.plot.data$Type <- as.factor(trim69.plot.data$Type)
+# 3.7 Change dpp4 data into ggplot long format
+dpp4.plot.data <- reshape2::melt(dpp4, id.vars = "SampleID", value.name = "Expression", variable.name = "EnsemblID" )
+dpp4.plot.data$Type <- "Exons"
+dpp4.plot.data[as.character(dpp4.plot.data$EnsemblID) == "DPP4", "Type"] <- "Gene"
+dpp4.plot.data[startsWith(as.character(dpp4.plot.data$EnsemblID), "DPP4-"), "Type"] <- "Transcripts"
+dpp4.plot.data$Type <- as.factor(dpp4.plot.data$Type)
 # relevel to gene, transcript, exon order
-trim69.plot.data$Type <- factor(trim69.plot.data$Type, levels = c("Gene", "Transcripts", "Exons"))
+dpp4.plot.data$Type <- factor(dpp4.plot.data$Type, levels = c("Gene", "Transcripts", "Exons"))
 # add case/control information
-trim69.plot.data$SampleType <- "Cases"
+dpp4.plot.data$SampleType <- "Cases"
 controls <-pData(geneSummaries)[pData(geneSummaries)$Dx == "CTL", "ShortName"]
-trim69.plot.data[trim69.plot.data$SampleID %in% controls, "SampleType"] <- "Controls"
-head(trim69.plot.data)
+dpp4.plot.data[dpp4.plot.data$SampleID %in% controls, "SampleType"] <- "Controls"
+head(dpp4.plot.data)
 
-# 3.8 Generate TRIM69 plot
+# 3.8 Generate dpp4 plot
 cols <- c(colors[1], "gray", colors[2], "gray", colors[3], "gray")
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/boxplot_TRIM69_gene_vs_transcripts_vs_exons_residuals.pdf", width = 15)
-sp <- ggplot(trim69.plot.data, aes(x = EnsemblID, y = Expression, fill = SampleType)) +
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/boxplot_dpp4_gene_vs_transcripts_vs_exons_residuals.pdf", width = 15)
+sp <- ggplot(dpp4.plot.data, aes(x = EnsemblID, y = Expression, fill = SampleType)) +
   theme_classic() +
   theme(text = element_text(size = 22), axis.text.x = element_text(angle = 45, hjust = 1)) +
   geom_boxplot(alpha = 0.7) +
   xlab("") +
   ylab("Gene expression") +
   scale_fill_manual(values = cols) +
-  geom_hline(yintercept = median(trim69.plot.data[trim69.plot.data$EnsemblID == "TRIM69", "Expression"]), linetype = "dashed") 
+  geom_hline(yintercept = median(dpp4.plot.data[dpp4.plot.data$EnsemblID == "DPP4", "Expression"]), linetype = "dashed") 
 sp + facet_wrap(. ~ Type, scales = "free")
 dev.off()
 
-###############################
-### 3. Generate FNDC3A plot ###
-###############################
+############################
+### 3. Generate EYS plot ###
+############################
+# EYS is a GWAS hit in two different schizophrenia paper!!
 # 3.1 Load data
 # Gene expression
 load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
@@ -305,16 +311,16 @@ exprs(exonSummaries) <- res.exon
 
 # 3.4 Get FNDC3A gene, transcript and exon expressions
 # 3.4.1 Get FNDC3A gene expression
-fndc3a.id <- fData(geneSummaries)[fData(geneSummaries)$gene_name == "FNDC3A", "gene_id"]
+fndc3a.id <- fData(geneSummaries)[fData(geneSummaries)$gene_name == "EYS", "gene_id"]
 fndc3a.gene.expr <- as.data.frame(exprs(geneSummaries)[fndc3a.id, ])
 colnames(fndc3a.gene.expr) <- fndc3a.id
 
 # 3.4.2 Get FNDC3A transcript expression
-fndc3a.id <- fData(transcriptSummaries)[fData(transcriptSummaries)$gene_name == "FNDC3A", "transcript_id"]
+fndc3a.id <- fData(transcriptSummaries)[grep("EYS", fData(transcriptSummaries)$gene_name), "transcript_id"]
 fndc3a.transcript.expr <- t(as.data.frame(exprs(transcriptSummaries)[fndc3a.id, ]))
 
 # 3.4.3 Get FNDC3A exon expression
-fndc3a.id <- fData(exonSummaries)[fData(exonSummaries)$gene_name == "FNDC3A", "exon_id"]
+fndc3a.id <- fData(exonSummaries)[grep("EYS", fData(transcriptSummaries)$gene_name), "exon_id"]
 fndc3a.exon.expr <- t(as.data.frame(exprs(exonSummaries)[fndc3a.id, ]))
 
 # 3.5 Merge datasets
@@ -462,3 +468,25 @@ sp <- ggplot(sertad4.plot.data, aes(x = EnsemblID, y = Expression, fill = Sample
   geom_hline(yintercept = median(sertad4.plot.data[sertad4.plot.data$EnsemblID == "SERTAD4", "Expression"]), linetype = "dashed") 
 sp + facet_wrap(. ~ Type, scales = "free")
 dev.off()
+
+
+### Overlap DEA hits for p < 0.01
+genes <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/1.1_diff_expr_genes_for_diagnosis.csv", select = c("p-value", "Gene Symbol"), data.table = F)
+genes <- genes[genes$`p-value` < 0.01, "Gene Symbol"]
+transcripts <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/1.3_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.csv", select = c("p-value", "Gene Symbol"), data.table = F)
+transcripts <- transcripts[transcripts$`p-value` < 0.01, "Gene Symbol"]
+exons <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/1.3_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.csv", select = c("p-value", "Gene Symbol"), data.table = F)
+exons <- exons[exons$`p-value` < 0.01, "Gene Symbol"]
+
+length(genes)
+length(transcripts)
+length(exons)
+length(intersect(genes, transcripts))
+length(intersect(genes, exons))
+length(intersect(transcripts, exons))
+
+library(VennDiagram)
+draw.triple.venn(length(genes), length(transcripts), length(exons), 
+                 length(intersect(genes, transcripts)), length(intersect(transcripts, exons)),
+                 length(intersect(genes, exons)), length(intersect(exons, (intersect(genes, transcripts)))),
+                 category = c("Gene", "Transcript", "Exon"), scaled = F)
