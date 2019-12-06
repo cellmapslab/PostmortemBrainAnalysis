@@ -10,6 +10,7 @@ Following analyses will be performed:
   - Pre-processing of genotype data, cohort data and GWAS summary statistic files
   - Run LDpred
   - Run PRSice-2
+  - Run Lassosum
   - Evaluate and plot results
 3. **GRScore (TRPS)**
 4. **Differential expression (DE) analysis**
