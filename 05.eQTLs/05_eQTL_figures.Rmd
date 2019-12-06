@@ -59,7 +59,6 @@ library(rvcheck)
 library(ggplotify)
 library(venneuler)
 library(ggforce)
-#library(beadarray)
 library(tidyr)  # to separate IDs
 ```
 
@@ -269,6 +268,67 @@ eqtls.exon.cases <- eqtls.exon.cases[order(eqtls.exon.cases$FDR),]
 write.table(eqtls.exon.cases, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_exon_hits_cases_only.txt", row.names = F, quote = F, dec = ".", sep = " ")
 ```
 
+## VENN diagrams
+
+### SNP level
+
+First we will generate the VENN diagram for the cases and control (all) dataset. 
+
+```{r}
+genes_all <- unique(eqtls.gene$SNP)
+transcripts_all <- unique(eqtls.transcript$SNP)
+exons_all <- unique(eqtls.exon$SNP)
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/VENN_eSNPs_cases_vs_controls.pdf")
+grid.newpage()
+overrideTriple=T
+draw.triple.venn(area1 = length(genes_all), area2 = length(transcripts_all), area3 = length(exons_all), n12 = length(intersect(genes_all, transcripts_all)), n23 = length(intersect(transcripts_all, exons_all)), n13 = length(intersect(genes_all, exons_all)), euler.d = F, scaled = F, n123 = length(intersect(genes_all, intersect(transcripts_all, exons_all))),  category = c(paste("Gene eSNPs", length(genes_all), sep = "\n"), paste("Transcript eSNPs", length(transcripts_all), sep = "\n"), paste("Exon eSNPs", length(exons_all), sep = "\n")), lty = "blank", fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
+dev.off()
+```
+
+Now, we generate the VENN diagram for the case only dataset.
+
+```{r}
+genes_cases_only <- eqtls.gene.cases$SNP
+transcripts_cases_only <- eqtls.transcript.cases$SNP
+exons_cases_only <- eqtls.exon.cases$SNP
+```
+
+And again for cases & control dataset but with clumped SNPs.
+
+```{r}
+ipath <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/RData/"
+geGenes_clumped <- readRDS(paste0(ipath,"pmb_gene_hits_cases_vs_controls_cis_eQTL_SNPs_clumped.rds"))
+teGenes_clumped <- readRDS(paste0(ipath,"pmb_transcript_hits_cases_vs_controls_cis_eQTL_SNPs_clumped.rds"))
+eeGenes_clumped <- readRDS(paste0(ipath,"pmb_exon_hits_cases_vs_controls_cis_eQTL_SNPs_clumped.rds"))
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/VENN_eSNPs_cases_vs_controls_clumped.pdf")
+grid.newpage()
+overrideTriple <- T
+draw.triple.venn(area1 = length(geGenes_clumped), area2 = length(teGenes_clumped), area3 = length(eeGenes_clumped), n12 = length(intersect(geGenes_clumped, teGenes_clumped)), n23 = length(intersect(teGenes_clumped, eeGenes_clumped)), n13 = length(intersect(geGenes_clumped, eeGenes_clumped)), n123 = length(intersect(geGenes_clumped, intersect(teGenes_clumped, eeGenes_clumped))), euler.d = F, scaled = F, category = c(paste("Gene eSNPs", length(geGenes_clumped), sep = "\n"), paste("Transcript eSNPs", length(teGenes_clumped), sep = "\n"), paste("Exon eSNPs", length(eeGenes_clumped), sep = "\n")), lty = "blank", fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
+dev.off()
+```
+
+### Gene level
+
+First, generate the VENN for the cases and controls (all) dataset.
+
+```{r}
+genes_all = unique(eqtls.gene$Gene_symbol)
+transcripts_all = unique(eqtls.transcript$Gene_symbol)
+exons_all = unique(eqtls.exon$Gene_symbol)
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/VENN_eGenes_cases_vs_controls.pdf")
+grid.newpage()
+overrideTriple <- T
+draw.triple.venn(area1 = length(genes_all), area2 = length(transcripts_all), area3 = length(exons_all), n12 = length(intersect(genes_all, transcripts_all)), n23 = length(intersect(transcripts_all, exons_all)), n13 = length(intersect(genes_all, exons_all)), n123 = length(intersect(genes_all, intersect(transcripts_all, exons_all))), euler.d = F, scaled = F, category = c(paste("Gene eGenes", length(genes_all), sep = "\n"), paste("Transcript eGenes", length(transcripts_all), sep = "\n"), paste("Exon eGenes", length(exons_all), sep = "\n")), lty = "blank", fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
+dev.off()
+```
+
+Now, we generate the VENN diagram for the case only dataset.
+
+```{r}
+genes_cases_only = eqtls.gene.cases$Gene_symbol
+transcripts_cases_only = eqtls.transcript.cases$Gene_symbol
+exons_cases_only = eqtls.exon.cases$Gene_symbol
+```
 
 ## Upset plots
 
@@ -293,16 +353,21 @@ dev.off()
 ### Gene level
 
 ```{r}
-eqtls.genes <- list(genes_all = eqtls.gene$Gene_symbol, genes_cases_only = eqtls.gene.cases$Gene_symbol, transcripts_all = eqtls.transcript$Gene_symbol, transcripts_cases_only = eqtls.transcript.cases$Gene_symbol, exons_all = eqtls.exon$Gene_symbol, exons_cases_only = eqtls.exon.cases$Gene_symbol)
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/01_upset_plot_cis_eqtls_gene_level.pdf", width = 20, height = 7, onefile = F)
+# 1. Load DEGenes (from transcript and exon level)
+degenes_exon <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/1.3_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.csv", data.table = F, stringsAsFactors = F)
+degenes_exon <- degenes_exon[degenes_exon$`FDR estimate` < 0.1, "Gene Symbol"]
+degenes_transcript <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/1.3_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.csv", data.table = F, stringsAsFactors = F)
+degenes_transcript <- degenes_transcript[degenes_transcript$`FDR estimate` < 0.1, "Gene Symbol"]
+eqtls.genes <- list(genes_all = eqtls.gene$Gene_symbol, transcripts_all = eqtls.transcript$Gene_symbol, exons_all = eqtls.exon$Gene_symbol, transcript_DEGenes = degenes_transcript, exon_DEGenes = degenes_exon)
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/01_upset_plot_cis_eqtls_gene_level_plus_DE_hits.pdf", width = 20, height = 7, onefile = F)
 upset(fromList(eqtls.genes), 
-      sets = c("exons_all", "transcripts_all", "genes_all", "exons_cases_only", "transcripts_cases_only", "genes_cases_only"), 
-      nsets = 6, 
+      sets = c("exon_DEGenes", "transcript_DEGenes", "exons_all", "transcripts_all", "genes_all"), 
+      nsets = 5, 
       nintersects = 60, 
       mainbar.y.label = "# genes", 
       text.scale = 2, 
       keep.order = T,
-      sets.bar.color = c("#A6D854", "#4292C6", "#FDAE6B", "#A6D854", "#4292C6", "#FDAE6B"))
+      sets.bar.color = c("#A6D854", "#4292C6", "#FDAE6B", "#A6D854", "#4292C6"))
 dev.off()
 ```
 

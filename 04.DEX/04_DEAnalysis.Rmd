@@ -58,6 +58,7 @@ library(limma)  # for differential expression
 library(data.table)
 library(dplyr)
 library(tidyr)
+library(rtracklayer)
 
 # Color palettes
 library(RColorBrewer)
@@ -92,32 +93,33 @@ RunLimma <- function(design, summary){
 # on transcript/exon level: two or more transcripts/exons have the exact same expression values and were merged together as also done for their gene symbols and IDs. Usually these gene symbols and IDs are just duplicates and we need to remove these for further analysis (e.g. new FDR correction). The merged transcript/exon IDs we will leave merged.
 # 4. save the resulting table into an output file
 GenerateResultTableGene <- function(fit, variable, file){
-  top.hits <- topTable(fit, coef = variable, adjust = "BH", number = Inf)
-  print(head(top.hits))
-  print(paste0("log2FC range: ", round(min(top.hits$logFC), 2), " until ", round(max(top.hits$logFC), 2)))
-  colnames(top.hits) <- c("Ensembl Gene ID", "Location", "Gene Symbol", "logFC", "Average Expression", "t-statistic", "p-value", "FDR estimate", "B coefficient")
-  top.hits <- unique(separate_rows(top.hits, `Gene Symbol`, sep = "\\|"))
-  write.table(top.hits, file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/", file), sep = "\t", row.names = F)
+  top_hits <- topTable(fit, coef = variable, adjust = "BH", number = Inf)
+  print(head(top_hits))
+  print(paste0("log2FC range: ", round(min(top_hits$logFC), 2), " until ", round(max(top_hits$logFC), 2)))
+  colnames(top_hits) <- c("Ensembl Gene ID", "Location", "Gene Symbol", "logFC", "Average Expression", "t-statistic", "p-value", "FDR estimate", "B coefficient")
+  top_hits <- unique(separate_rows(top_hits, `Gene Symbol`, sep = "\\|"))
+  write.table(top_hits, file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/", file), sep = "\t", row.names = F)
+  return(top_hits)
 }
 GenerateResultTableTranscript <- function(fit, variable, file){
-  top.hits <- topTable(fit, coef = variable, adjust = "BH", number = Inf)
-  print(head(top.hits))
-  print(paste0("log2FC range: ", round(min(top.hits$logFC), 2), " until ", round(max(top.hits$logFC), 2)))
-  colnames(top.hits) <- c("Ensembl Transcript ID", "Location", "Ensembl Gene ID", "Gene Symbol", "logFC", "Average Expression", "t-statistic", "p-value", "FDR estimate", "B coefficient")
-  top.hits <- unique(separate_rows(top.hits, `Ensembl Gene ID`, sep = "\\|"))
-  top.hits <- unique(separate_rows(top.hits, `Gene Symbol`, sep = "\\|"))
-  write.table(top.hits, file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/", file), sep = "\t", row.names = F)
-  return(top.hits)
+  top_hits <- topTable(fit, coef = variable, adjust = "BH", number = Inf)
+  print(head(top_hits))
+  print(paste0("log2FC range: ", round(min(top_hits$logFC), 2), " until ", round(max(top_hits$logFC), 2)))
+  colnames(top_hits) <- c("Ensembl Transcript ID", "Location", "Ensembl Gene ID", "Gene Symbol", "logFC", "Average Expression", "t-statistic", "p-value", "FDR estimate", "B coefficient")
+  top_hits <- unique(separate_rows(top_hits, `Ensembl Gene ID`, sep = "\\|"))
+  top_hits <- unique(separate_rows(top_hits, `Gene Symbol`, sep = "\\|"))
+  write.table(top_hits, file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/", file), sep = "\t", row.names = F)
+  return(top_hits)
 }
 GenerateResultTableExon <- function(fit, variable, file){
-  top.hits <- topTable(fit, coef = variable, adjust = "BH", number = Inf)
-  print(head(top.hits))
-  print(paste0("log2FC range: ", round(min(top.hits$logFC), 2), " until ", round(max(top.hits$logFC), 2)))
-  colnames(top.hits) <- c("Ensembl Exon ID", "Location", "Ensembl Transcript ID", "Ensembl Gene ID", "Gene Symbol", "logFC", "Average Expression", "t-statistic", "p-value", "FDR estimate", "B coefficient")
-  top.hits <- unique(separate_rows(top.hits, `Ensembl Gene ID`, sep = "\\|"))
-  top.hits <- unique(separate_rows(top.hits, `Gene Symbol`, sep = "\\|"))
-  write.table(top.hits, file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/", file), sep = "\t", row.names = F)
-  return(top.hits)
+  top_hits <- topTable(fit, coef = variable, adjust = "BH", number = Inf)
+  print(head(top_hits))
+  print(paste0("log2FC range: ", round(min(top_hits$logFC), 2), " until ", round(max(top_hits$logFC), 2)))
+  colnames(top_hits) <- c("Ensembl Exon ID", "Location", "Ensembl Transcript ID", "Ensembl Gene ID", "Gene Symbol", "logFC", "Average Expression", "t-statistic", "p-value", "FDR estimate", "B coefficient")
+  top_hits <- unique(separate_rows(top_hits, `Ensembl Gene ID`, sep = "\\|"))
+  top_hits <- unique(separate_rows(top_hits, `Gene Symbol`, sep = "\\|"))
+  write.table(top_hits, file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/", file), sep = "\t", row.names = F)
+  return(top_hits)
 }
 
 # function to generate a vulcano plot for differentially expressed genes
@@ -130,8 +132,7 @@ GenerateVolcanoPlot <- function(fit, variable, file) {
   threshold <- hits[index[length(index)] + 1, "P.Value"]
   ### volcano plot ###
   # label only significant hits (if more than 10)
-  if(length(index) >= 10){
-    ggplot(hits, aes(x = logFC, y = -log10(P.Value))) + 
+  g <- ggplot(hits, aes(x = logFC, y = -log10(P.Value))) + 
     theme_bw(base_size = 22) + 
     geom_point() + 
     xlim(-2, 2) + 
@@ -142,94 +143,117 @@ GenerateVolcanoPlot <- function(fit, variable, file) {
       panel.border = element_blank(),
       panel.background = element_blank()) +
     labs(caption = paste0("Total variables: ", total)) +
-    geom_hline(yintercept = -log10(threshold), linetype = "dashed") + 
-        geom_point(data = hits[index, ], aes(x = logFC, y = -log10(P.Value)), colour = viridis(1), size = 2) +
-    geom_text_repel(data = hits[index[1:10], ], aes(label = gene_name), colour = viridis(1))
+    geom_hline(yintercept = -log10(threshold), linetype = "dashed")
+ if(length(index) >= 10){
+    g + geom_point(data = hits[index, ], aes(x = logFC, y = -log10(P.Value)), colour = "red2", size = 2) +
+    geom_text_repel(data = hits[index[1:10], ], aes(label = gene_name), colour = "red2")
   # else: label hit genes (if some are found) purple and following genes green until a maximum of 10 genes is labeled
   } else if(length(index) == 1) {
-    ggplot(hits, aes(x = logFC, y = -log10(P.Value))) + 
-    theme_bw(base_size = 22) + 
-    geom_point() + 
-    xlim(-2, 2) + 
-    ylim(0, 6) +
-    xlab(bquote(~Log[2]~ "fold change")) +
-    ylab(bquote(~-Log[10]~ italic(P))) +
-    theme(axis.line = element_line(),
-      panel.border = element_blank(),
-      panel.background = element_blank()) +
-    labs(caption = paste0("Total variables: ", total)) +
-    geom_hline(yintercept = -log10(threshold), linetype = "dashed") + 
-    geom_point(data = hits[1:10, ], aes(x = logFC, y = -log10(P.Value)), colour = viridis(3)[2], size = 2) +
-    geom_text_repel(data = hits[1:10, ], aes(label = gene_name), colour = viridis(3)[2])
-  }  else {
-    ggplot(hits, aes(x = logFC, y = -log10(P.Value))) + 
-    theme_bw(base_size = 22) + 
-    geom_point() + 
-    xlim(-2, 2) + 
-    ylim(0, 6) +
-    xlab(bquote(~Log[2]~ "fold change")) +
-    ylab(bquote(~-Log[10]~ italic(P))) +
-    theme(axis.line = element_line(),
-      panel.border = element_blank(),
-      panel.background = element_blank()) +
-    labs(caption = paste0("Total variables: ", total)) +
-    geom_hline(yintercept = -log10(threshold), linetype = "dashed") + 
-    geom_point(data = hits[index, ], aes(x = logFC, y = -log10(P.Value)), colour = viridis(1), size = 2) +
-    geom_text_repel(data = hits[index, ], aes(label = gene_name), colour = viridis(1)) +
-    geom_point(data = hits[(length(index) + 1):10, ], aes(x = logFC, y = -log10(P.Value)), colour = viridis(3)[2], size = 2) +
-    geom_text_repel(data = hits[(length(index) + 1):10, ], aes(label = gene_name), colour = viridis(3)[2])
+    g + geom_text_repel(data = hits[1:10, ], aes(label = gene_name))
+  } else {
+    g + geom_point(data = hits[index, ], aes(x = logFC, y = -log10(P.Value)), colour = "red2", size = 2) +
+    geom_text_repel(data = hits[index, ], aes(label = gene_name), colour = "red2") +
+    geom_point(data = hits[(length(index) + 1):10, ], aes(x = logFC, y = -log10(P.Value)), size = 2) +
+    geom_text_repel(data = hits[(length(index) + 1):10, ], aes(label = gene_name))
   }
+  g
+  ggsave(paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/", file), width = 8, height = 6, units = "in")
+}
+
+# change logFC of PRS output
+ChangeLogFC <- function(res, summaries){
+  # add logFC of Dx (otherwise the logFC is not possible to calculate)
+  design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+  fit <- RunLimma(design, summaries)
+  res2 <- topTable(fit, coef = "DxCASE", number = Inf, adjust.method = "BH")
+  res[rownames(res2), "logFC"] <- res2$logFC
+  return(res)
+}
+
+# function to generate a vulcano plot for differentially expressed genes
+GenerateVolcanoPlotPRS <- function(res, file) {
+  total <- nrow(res)
+  # get first hit after FDR 10% for drawing a p-value threshold line
+  index <- if(length(which(as.numeric(as.character(res$`FDR estimate`)) < 0.1)) == 0) 0 else which(as.numeric(as.character(res$`FDR estimate`)) < 0.1)
+  threshold <- res[index[length(index)] + 1, "p-value"]
+  ### volcano plot ###
+  # label only significant hits (if more than 10)
+  g <- ggplot(res, aes(x = logFC, y = -log10(as.numeric(as.character(res$`p-value`))))) + 
+    theme_bw(base_size = 22) + 
+    geom_point() + 
+    xlim(-2, 2) + 
+    ylim(0, 6) +
+    xlab(bquote(~Log[2]~ "fold change")) +
+    ylab(bquote(~-Log[10]~ italic(P))) +
+    theme(axis.line = element_line(),
+      panel.border = element_blank(),
+      panel.background = element_blank()) +
+    labs(caption = paste0("Total variables: ", total)) +
+    geom_hline(yintercept = -log10(threshold), linetype = "dashed")
+ if(length(index) >= 10){
+    g + geom_point(data = res[index, ], aes(x = logFC, y = -log10(res$`p-value`)), colour = "red2", size = 2) +
+    geom_text_repel(data = res[index[1:10], ], aes(label = res$`Gene Symbol`), colour = "red2")
+  # else: label hit genes (if some are found) purple and following genes green until a maximum of 10 genes is labeled
+  } else if(length(index) == 1) {
+    g + geom_text_repel(data = res[1:10, ], aes(label = res[1:10, "Gene Symbol"]))
+  } else {
+    g + geom_point(data = res[index[length(index)] + 1, ], aes(x = logFC, y = -log10(res$`p-value`)), colour = "red2", size = 2) +
+    geom_text_repel(data = res[index[length(index)] + 1, ], aes(label = res$`Gene Symbol`), colour = "red2") +
+    geom_point(data = res[(length(index) + 1):10, ], aes(x = logFC, y = -log10(res$`p-value`)), size = 2) +
+    geom_text_repel(data = res[(length(index) + 1):10, ], aes(label = res$`Gene Symbol`))
+  }
+  g
   ggsave(paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/", file), width = 8, height = 6, units = "in")
 }
 
 # function to plot all differentially expressed hits for the different covariates corrected for all other covariates as a vertical barplot
-GenerateVerticalBarplotOfDiffExprHits <- function(design, fit, from, to, adj, plot.name){
+GenerateVerticalBarplotOfDiffExprHits <- function(design, fit, from, to, adj, plot_name){
   # Get padj values for all different covariates
   nc <- ncol(design) - 1
-  limma.res.fc <- topTable(fit, adjust = "BH", sort.by = "none", number = Inf)
-  limma.res.padj <- limma.res.fc[, from:(to + nc)]
+  limma_res_fc <- topTable(fit, adjust = "BH", sort.by = "none", number = Inf)
+  limma_res_padj <- limma_res_fc[, from:(to + nc)]
   for (i in 1:nc){
-    limma.res.padj[, i] = topTable(fit, adjust = "BH", sort.by = "none", number = Inf, coef = i + 1)[, adj]
+    limma_res_padj[, i] = topTable(fit, adjust = "BH", sort.by = "none", number = Inf, coef = i + 1)[, adj]
     if(i == nc){
-      limma.res.padj$`Gene Symbol` = topTable(fit, adjust = "BH", sort.by = "none", number = Inf, coef = i + 1)[, adj - 5]
-      limma.res.padj$`Ensembl Gene ID` = topTable(fit, adjust = "BH", sort.by = "none", number = Inf, coef = i + 1)[, adj - 6]
+      limma_res_padj$`Gene Symbol` = topTable(fit, adjust = "BH", sort.by = "none", number = Inf, coef = i + 1)[, adj - 5]
+      limma_res_padj$`Ensembl Gene ID` = topTable(fit, adjust = "BH", sort.by = "none", number = Inf, coef = i + 1)[, adj - 6]
     }
   }
-  #head(limma.res.padj)
-  limma.res.padj <- limma.res.padj[, -c(length(limma.res.padj) - 2)]  # remove SV1
-  colnames(limma.res.padj) <- c("Diagnosis", "Age", "Sex", "pH", "PMI", "RIN", "RIN2", "Suicide", "Type_of_Death1", "Type_of_Death2", "C1", "C2", "C3", "C4", "Gene Symbol", "Ensembl Gene ID")
-  limma.res.padj$Type_of_Death <- (limma.res.padj$Type_of_Death1 + limma.res.padj$Type_of_Death2) / 2
-  limma.res.padj <- limma.res.padj[, c("Diagnosis", "Age", "Sex", "pH", "PMI", "RIN", "RIN2", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4", "Gene Symbol", "Ensembl Gene ID")]
+  #head(limma_res_padj)
+  limma_res_padj <- limma_res_padj[, -c(length(limma_res_padj) - 2)]  # remove SV1
+  colnames(limma_res_padj) <- c("Diagnosis", "Age", "Sex", "pH", "PMI", "RIN", "RIN2", "Suicide", "Type_of_Death1", "Type_of_Death2", "C1", "C2", "C3", "C4", "Gene Symbol", "Ensembl Gene ID")
+  limma_res_padj$Type_of_Death <- (limma_res_padj$Type_of_Death1 + limma_res_padj$Type_of_Death2) / 2
+  limma_res_padj <- limma_res_padj[, c("Diagnosis", "Age", "Sex", "pH", "PMI", "RIN", "RIN2", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4", "Gene Symbol", "Ensembl Gene ID")]
   # unmerge gene symbols and IDs and get only unique gene symbols/IDs as hits
-  limma.res.padj <- unique(separate_rows(limma.res.padj, `Ensembl Gene ID`, sep = "\\|"))
-  limma.res.padj <- unique(separate_rows(limma.res.padj, `Gene Symbol`, sep = "\\|"))
+  limma_res_padj <- unique(separate_rows(limma_res_padj, `Ensembl Gene ID`, sep = "\\|"))
+  limma_res_padj <- unique(separate_rows(limma_res_padj, `Gene Symbol`, sep = "\\|"))
   # remove Gene symbols and IDs as we do not need them anymore (just for same results as in result tables)
-  limma.res.padj$`Gene Symbol` <- NULL
-  limma.res.padj$`Ensembl Gene ID` <- NULL
+  limma_res_padj$`Gene Symbol` <- NULL
+  limma_res_padj$`Ensembl Gene ID` <- NULL
   # check, how many padj values are < 0.10
-  limma.res.padj.0.05 <- apply(limma.res.padj, 2, function(x) sum(x < 0.1))
-  limma.res.plot <- data.frame(sort(limma.res.padj.0.05, decreasing = T))
+  limma_res_padj_0.05 <- apply(limma_res_padj, 2, function(x) sum(x < 0.1))
+  limma_res_plot <- data.frame(sort(limma_res_padj_0.05, decreasing = T))
   # vertical barplot with ggplot2
-  ggplot(limma.res.plot, aes(y = limma.res.plot$sort.limma.res.padj.0.05..decreasing...T., x = reorder(row.names(limma.res.plot), sort.limma.res.padj.0.05..decreasing...T.))) +
+  ggplot(limma_res_plot, aes(y = limma_res_plot$sort.limma_res_padj_0.05..decreasing...T., x = reorder(row.names(limma_res_plot), sort.limma_res_padj_0.05..decreasing...T.))) +
     geom_bar(stat = "identity") +
     coord_flip() +
     theme_minimal() +
     theme(text = element_text(size = 22)) +
     ylab("# significant hits") +
     xlab("") +
-    geom_text(size = 7, aes(label = limma.res.plot$sort.limma.res.padj.0.05..decreasing...T.), nudge_y = 120, colour = "dimgray") +
+    geom_text(size = 7, aes(label = limma_res_plot$sort.limma_res_padj_0.05..decreasing...T.), nudge_y = 120, colour = "dimgray") +
     scale_y_continuous(expand = c(0.02, 0.01))
-  ggsave(paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/", plot.name))
-  return(limma.res.plot)
+  ggsave(paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/", plot_name))
+  return(limma_res_plot)
 }
 
-# function to recalculate the p-value and fdr for transcripts and exons based on gene level: load the result table, get the smallest p-value for a gene, calculate new fdr using the genes smallest p-values and gene number as background
+# function to recalculate the p-value and fdr for transcripts and exons based on gene level (Ensmebl Gene ID NOT Symbol!!): load the result table, get the smallest p-value for a gene (Ensembl Gene ID), calculate new fdr using the genes smallest p-values and gene number as background
 GetExprWithSmallestP <- function(input, summaries){
   res <- fread(paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/", input), header = T, stringsAsFactors = F)
   # get the rows with the lowest p-value per gene ID
-  min.pval <- res[ , .SD[which.min(`p-value`)], by = `Ensembl Gene ID`]
+  min_pval <- res[ , .SD[which.min(`p-value`)], by = `Ensembl Gene ID`]
   # get all transcript IDs with lowest p-value per gene ID
-  index <- which(rownames(exprs(summaries)) %in% as.character(c(min.pval[, 2])[[1]]))
+  index <- which(rownames(exprs(summaries)) %in% as.character(c(min_pval[, 2])[[1]]))
   # reduce transcript/exonSummaries to these transcripts/exons
   summaries <- summaries[c(index), ]
   dim(summaries)
@@ -247,9 +271,9 @@ Now, we will load the normalized and batch corrected microarray data summarized 
 ```{r, echo = F}
 # Import RMA corrected and annotated Affymetrix microarray data on gene level (from core transcripts)
 load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
-geneSummaries.core <- geneSummaries
-exprs(geneSummaries.core) <- as.matrix(exprs(geneSummaries.core))
-dim(geneSummaries.core)
+geneSummaries_core <- geneSummaries
+exprs(geneSummaries_core) <- as.matrix(exprs(geneSummaries_core))
+dim(geneSummaries_core)
 
 # Import RMA corrected and annotated Affymetrix microarray data on gene level (from probesets)
 load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
@@ -293,7 +317,7 @@ All loaded PRS are added to the phenotype (pData) information.
 ```{r, echo = F}
 pData$PRS.SCZ <- unlist(prs_scz2[prs_scz2$IID %in% pData$IID, "PRS"])
 pData$PRS.MDD <- unlist(prs_mdd2[prs_mdd2$IID %in% pData$IID, "PRS"])
-pData$prs_bip <- unlist(prs_bip[prs_bip$IID %in% pData$IID, "PRS"])
+pData$PRS.BIP <- unlist(prs_bip[prs_bip$IID %in% pData$IID, "PRS"])
 pData$PRS.CD <- unlist(prs_cross_disorder[prs_cross_disorder$IID %in% pData$IID, "PRS"])
 rm(prs_bip, prs_mdd2, prs_scz2, prs_cross_disorder)
 ```
@@ -326,7 +350,7 @@ Get significantly differentially expressed genes for all the different covariate
 
 ```{r, echo = F}
 # generate vertical barplot
-limma.res.gene <- GenerateVerticalBarplotOfDiffExprHits(design, fit, from = 4, to = 3, adj = 8, plot.name = "1.1_barplot_significant_DEA_hits_genes.pdf")
+limma_res_gene <- GenerateVerticalBarplotOfDiffExprHits(design, fit, from = 4, to = 3, adj = 8, plot_name = "1.1_barplot_significant_DEA_hits_genes.pdf")
 rm(design, fit)
 ```
 
@@ -352,11 +376,11 @@ Plot residuals of Sex vs. Diagnosis for the one hit gene (TRIM10):
 
 ```{r, echo = F}
 # generate design matrix
-design.res <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+design_res <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 # fit model
-fit.res <- lmFit(geneSummaries, design.res)
+fit_res <- lmFit(geneSummaries, design_res)
 # get residuals
-res <- residuals.MArrayLM(fit.res, exprs(geneSummaries))
+res <- residuals.MArrayLM(fit_res, exprs(geneSummaries))
 
 # generate boxplot with case vs control for male and female samples of the hit gene (TRIM10)
 trim10 <- res[rownames(res) == "ENSG00000204613.6", ]
@@ -389,7 +413,7 @@ control <- males[males$Dx == "CTL",]
 t.test(case$trim10, control$trim10) # p-value = 0.05302
 
 # remove unnecessary data
-rm(design, fit, design.res, fit.res, res, trim10, females, males, case, control)
+rm(design, fit, design_res, fit_res, res, trim10, females, males, case, control)
 ```
 
 ### PRS with normal model
@@ -440,10 +464,10 @@ design <- model.matrix(~ PRS.BIP + Age + Sex + pH + PMI + RIN + RIN2 + Suicide +
 fit <- RunLimma(design, geneSummaries)
 
 # result table
-GenerateResultTableGene(fit, variable = "prs_bip", file =  "2.1.3_diff_expr_genes_for_BIP_PRS.csv")
+GenerateResultTableGene(fit, variable = "PRS.BIP", file =  "2.1.3_diff_expr_genes_for_BIP_PRS.csv")
 
 # volcano plot
-GenerateVolcanoPlot(fit, variable = "prs_bip", file = "2.1.3_volcano_plot_diff_expr_genes_for_BIP_PRS.pdf")
+GenerateVolcanoPlot(fit, variable = "PRS.BIP", file = "2.1.3_volcano_plot_diff_expr_genes_for_BIP_PRS.pdf")
 rm(design, fit)
 ```
 
@@ -467,6 +491,46 @@ rm(design, fit)
 
 ## Transcript level
 
+First, we will plot the distribution of Ensembl Transcript IDs per Ensembl Gene ID. We will plot the distribution in our filtered expression dataset as well as the original transcripts per gene found in GENCODE (for hg19). 
+
+```{r, echo = F}
+features <- fData(transcriptSummaries)[, c("transcript_id", "gene_id")]
+features <- separate_rows(features, transcript_id, gene_id, sep = "\\|")
+features <- features[!duplicated(features), ]
+freqs <- as.data.frame(table(as.data.frame(table(features$gene_id))$Freq))
+
+# load gene to transcript info from Gencode and filter exactly like in the processing step
+genes <- import.gff("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/annotation_files/gencode.v19.annotation.gtf", format = "gtf")
+genes <- genes[genes$gene_type == "protein_coding"]  
+genes <- genes[genes$type == "transcript"]
+genes <- genes[genes$source == "HAVANA"]
+genes <- as.data.frame(genes)[, c("gene_id", "transcript_id")]
+
+# get only Ensembl gene IDs for which we have transcripts (see above)
+genes <- genes[genes$gene_id %in% features$gene_id, ]
+genes <- genes[!duplicated(genes), ]
+freqs2 <- as.data.frame(table(as.data.frame(table(genes$gene_id))$Freq))
+
+# merge the two datasets
+tfreq <- merge(freqs, freqs2, by = "Var1", all = T)
+tfreq[is.na(tfreq$Freq.x), "Freq.x"] <- 0
+tfreq[is.na(tfreq$Freq.y), "Freq.y"] <- 0
+colnames(tfreq) <- c("TranscriptCount", "ExpressionFreq", "OriginalFreq")
+tfreq <- reshape2::melt(tfreq, id.vars = "TranscriptCount")
+
+ggplot(data = tfreq, aes(x = TranscriptCount, y = value, fill = variable, width = 0.8)) +
+  theme_minimal() +
+  theme(text = element_text(size = 15)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  scale_x_discrete(expand = c(0.015, 0)) +
+  scale_y_continuous(expand = c(0.01, 0)) +
+  labs(x = "Number of transcripts per gene", y = "Number of genes") +
+  scale_fill_discrete(name = "", labels = c("Own data", "GENCODE"))
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/1_barplot_transcripts_per_gene_gencode_vs_own_data.pdf")
+rm(features, genes, freqs, freqs2, tfreq)
+```
+
+
 ### Diagnosis with normal model
 
 First, run the linear model with correction for all covariates and generate the result table. 
@@ -478,20 +542,20 @@ design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type
 fit <- RunLimma(design, transcriptSummaries)
 
 # result table
-top.hits <- GenerateResultTableTranscript(fit, variable = "DxCASE", file =  "1.1_diff_expr_transcripts_for_diagnosis.csv")
+top_hits <- GenerateResultTableTranscript(fit, variable = "DxCASE", file =  "1.1_diff_expr_transcripts_for_diagnosis.csv")
 
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "DxCASE", file = "1.1_volcano_plot_diff_expr_transcripts_for_diagnosis.pdf")
 ```
 
-No hits. Maybe a problem of the multiple testing correction as we have too many transcripts to correct for. We will test a new FDR correction model in one of the following sections.
+No hits. Maybe a problem of the multiple testing correction as we have too many transcripts to correct for. We will test a new FDR correction model in the following section.
 
 Get significantly differentially expressed transcripts for all the different covariates (corrected for all the other covariates). 
 
 ```{r, echo = F}
 # generate vertical barplot
-limma.res.transcript <- GenerateVerticalBarplotOfDiffExprHits(design, fit, from = 5, to = 4, adj = 9, plot.name = "1.1_barplot_significant_DEA_hits_transcripts.pdf")
-rm(design, fit, top.hits)
+limma_res_transcript <- GenerateVerticalBarplotOfDiffExprHits(design, fit, from = 5, to = 4, adj = 9, plot_name = "1.1_barplot_significant_DEA_hits_transcripts.pdf")
+rm(design, fit, top_hits)
 ```
 
 ### Diagnosis with recalculated p-values and FDR
@@ -515,7 +579,7 @@ design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type
 fit <- RunLimma(design, transcriptSummaries.new)
 
 # result table
-top.hits <- GenerateResultTableTranscript(fit, variable = "DxCASE", file =  "1.3_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.csv")
+top_hits <- GenerateResultTableTranscript(fit, variable = "DxCASE", file =  "1.3_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.csv")
 
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "DxCASE", file = "1.3_volcano_plot_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.pdf")
@@ -523,21 +587,78 @@ GenerateVolcanoPlot(fit, variable = "DxCASE", file = "1.3_volcano_plot_diff_expr
 
 Now, we have multiple hits on the transcript level. We could find transcripts on following genes as significant:
 
-1. with FDR < 5%: `r length(top.hits[top.hits$"FDR estimate" < 0.05, "Gene Symbol"])` 
+1. with FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Gene Symbol"])` 
 
-2. with FDR < 10%: `r length(top.hits[top.hits$"FDR estimate" < 0.1, "Gene Symbol"])`
+2. with FDR < 10%: `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"])`
 
-Four genes with an FDR < 0.05:  `r top.hits[top.hits$"FDR estimate" < 0.05, "Gene Symbol"]`
+Four genes with an FDR < 0.05:  `r top_hits[top_hits$"FDR estimate" < 0.05, "Gene Symbol"]`
 
-Six genes with an FDR < 0.1:  `r top.hits[top.hits$"FDR estimate" < 0.1, "Gene Symbol"]`
+Six genes with an FDR < 0.1:  `r top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"]`
 
 Get significantly differentially expressed transcripts for all the different covariates (corrected for all the other covariates). 
 
 ```{r, echo = F}
 # generate vertical barplot
-limma.res.transcript.new <- GenerateVerticalBarplotOfDiffExprHits(design, fit, from = 5, to = 4, adj = 9, plot.name = "1.3_barplot_significant_DEA_hits_transcripts_new_pvalue_and_fdr.pdf")
-rm(design, fit, top.hits)
+limma_res_transcript.new <- GenerateVerticalBarplotOfDiffExprHits(design, fit, from = 5, to = 4, adj = 9, plot_name = "1.3_barplot_significant_DEA_hits_transcripts_new_pvalue_and_fdr.pdf")
+rm(design, fit)
 ```
+
+Now we generate some plots for the found tDEgenes. First, we will plot a heatmap of the six tDEGenes.
+
+```{r, echo = F}
+# get only top hits (6 tDEGenes)
+top_hits <- top_hits[top_hits$`FDR estimate` < 0.1, ]
+# ǵenerate heatmap of hits
+anno <- pData(transcriptSummaries)[, c("Age", "PMI", "RIN", "Sex", "Suicide", "Dx", "ShortName")]
+rownames(anno) <- anno$ShortName
+anno$ShortName <- NULL
+pheatmap(exprs(transcriptSummaries)[top_hits$`Ensembl Transcript ID`, ], scale = "row", annotation_col = anno, show_colnames = F)
+pheatmap(exprs(transcriptSummaries)[top_hits$`Ensembl Transcript ID`, ], scale = "row", annotation_col = anno, show_colnames = F, filename = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/1.3_heatmap_significant_DEA_hits_transcripts_new_pvalue_and_fdr.pdf")
+rm(anno)
+```
+
+Then, we plot the up and down regulated genes into one barplot with the two variables mirrored on the x-axis.
+
+```{r, echo = F}
+logfc <- as.data.frame(table(top_hits$logFC))
+logfc$group <- "Above"
+logfc[as.numeric(as.character(logfc$Var1)) < 0, "group"] <- "Below"
+logfc[as.numeric(as.character(logfc$Var1)) < 0, "Freq"] <- -1
+logfc$Var1 <- abs(round(as.numeric(as.character(logfc$Var1)), 2))
+logfc$logfc <- 2^logfc$Var1
+logfc$linearFC <- sapply(logfc$logfc, function(x) {if(as.double(as.character(x)) >= 1 || is.na(x)){x} else {-1/x}})
+
+ggplot(logfc, aes(x = linearFC, y = Freq, fill = group)) + 
+  geom_bar(stat = "identity", position = "identity") + 
+  xlab("linear fold change") +
+  ylab("Number of tDEGenes (FDR < 10%)") +
+  xlim(1, 1.5)
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/1.3_barplot_up_down_regulated_significant_DEA_hits_transcripts_new_pvalue_and_fdr.pdf")
+rm(logfc)
+```
+
+Now, we generate violin plots for all six hits.
+
+```{r, echo = F}
+for (hit in top_hits$`Ensembl Transcript ID`) {
+  name <- top_hits[hit, "Gene Symbol"]
+  # get exprs of top hit
+  data <- as.data.frame(exprs(transcriptSummaries)[top_hits[hit, "Ensembl Transcript ID"], ])
+  colnames(data) <- "expression"
+  data <- merge(data, pData(transcriptSummaries)[, c("ShortName", "Dx")], by.x = "row.names", by.y = "ShortName")
+  ggplot(data, aes(x = Dx, y = expression, fill = Dx)) + 
+    geom_violin() + 
+    geom_boxplot(width = 0.2) +
+    theme_classic() +
+    theme(text = element_text(size = 20), plot.title = element_text(hjust = 0.5)) +
+    labs(title = top_hits[hit, "Gene Symbol"], x = element_blank(), y = "Expression values") +
+    scale_x_discrete(labels = c("Controls", "Cases")) +
+    scale_fill_manual(values = c("royalblue", "red"), name = "", labels = c("Controls", "Cases"))
+  ggsave(paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/1.3_violinplot_significant_DEA_hits_transcripts_new_pvalue_and_fdr_", top_hits[hit, "Gene Symbol"],".pdf"), width = 8, height = 6, units = "in")
+}
+rm(name, data)
+```
+
 
 ### Diagnosis with sex and diagnosis interaction model
 
@@ -551,11 +672,11 @@ design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type
 fit <- RunLimma(design, transcriptSummaries)
 
 # result table
-top.hits <- GenerateResultTableTranscript(fit, variable = "DxCASE", file =  "1.2_diff_expr_transcripts_for_diagnosis_with_sex_dx_interaction.csv")
+top_hits <- GenerateResultTableTranscript(fit, variable = "DxCASE", file =  "1.2_diff_expr_transcripts_for_diagnosis_with_sex_dx_interaction.csv")
 
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "DxCASE", file = "1.2_volcano_plot_diff_expr_transcripts_for_diagnosis_with_sex_dx_interaction.pdf")
-rm(design, fit, top.hits)
+rm(design, fit, top_hits)
 ```
 
 No hits. Maybe a problem of the multiple testing correction as we have too many transcripts to correct for. 
@@ -572,11 +693,11 @@ design <- model.matrix(~ PRS.SCZ + Age + Sex + pH + PMI + RIN + RIN2 + Suicide +
 fit <- RunLimma(design, transcriptSummaries)
 
 # result table
-top.hits <- GenerateResultTableTranscript(fit, variable = "PRS.SCZ", file =  "2.1.1_diff_expr_transcripts_for_SCZ_PRS.csv")
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.SCZ", file =  "2.1.1_diff_expr_transcripts_for_SCZ_PRS.csv")
 
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "PRS.SCZ", file = "2.1.1_volcano_plot_diff_expr_transcripts_for_SCZ_PRS.pdf")
-rm(design, fit, top.hits)
+rm(design, fit, top_hits)
 ```
 
 **MDD PRS**
@@ -589,28 +710,28 @@ design <- model.matrix(~ PRS.MDD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide +
 fit <- RunLimma(design, transcriptSummaries)
 
 # result table
-top.hits <- GenerateResultTableTranscript(fit, variable = "PRS.MDD", file =  "2.1.2_diff_expr_transcripts_for_MDD_PRS.csv")
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.MDD", file =  "2.1.2_diff_expr_transcripts_for_MDD_PRS.csv")
 
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "PRS.MDD", file = "2.1.2_volcano_plot_diff_expr_transcripts_for_MDD_PRS.pdf")
-rm(design, fit, top.hits)
+rm(design, fit, top_hits)
 ```
 
 **BIP PRS**
 
 ```{r, echo = F}
 # generate design matrix
-design <- model.matrix(~ prs_bip + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+design <- model.matrix(~ PRS.BIP + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 
 # differential expression analysis (limma)
 fit <- RunLimma(design, transcriptSummaries)
 
 # result table
-top.hits <- GenerateResultTableTranscript(fit, variable = "prs_bip", file =  "2.1.3_diff_expr_transcripts_for_BIP_PRS.csv")
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.BIP", file =  "2.1.3_diff_expr_transcripts_for_BIP_PRS.csv")
 
 # volcano plot
-GenerateVolcanoPlot(fit, variable = "prs_bip", file = "2.1.3_volcano_plot_diff_expr_transcripts_for_BIP_PRS.pdf")
-rm(design, fit, top.hits)
+GenerateVolcanoPlot(fit, variable = "PRS.BIP", file = "2.1.3_volcano_plot_diff_expr_transcripts_for_BIP_PRS.pdf")
+rm(design, fit, top_hits)
 ```
 
 **Cross-disorder PRS**
@@ -623,12 +744,15 @@ design <- model.matrix(~ PRS.CD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + 
 fit <- RunLimma(design, transcriptSummaries)
 
 # result table
-top.hits <- GenerateResultTableTranscript(fit, variable = "PRS.CD", file =  "2.1.4_diff_expr_transcripts_for_CD_PRS.csv")
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.CD", file =  "2.1.4_diff_expr_transcripts_for_CD_PRS.csv")
 
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "PRS.CD", file = "2.1.4_volcano_plot_diff_expr_transcripts_for_CD_PRS.pdf")
-rm(design, fit, top.hits)
+rm(design, fit, top_hits)
 ```
+
+No hits using the PRS instead of diagnosis. 
+
 
 ### PRS with recalculated p-value and FDR
 
@@ -652,17 +776,19 @@ design <- model.matrix(~ PRS.SCZ + Age + Sex + pH + PMI + RIN + RIN2 + Suicide +
 fit <- RunLimma(design, transcriptSummaries.new)
 
 # result table
-top.hits <- GenerateResultTableTranscript(fit, variable = "PRS.SCZ", file =  "2.2.1_diff_expr_transcripts_for_SCZ_PRS_new_pvalue_and_fdr.csv")
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.SCZ", file =  "2.2.1_diff_expr_transcripts_for_SCZ_PRS_new_pvalue_and_fdr.csv")
 
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "PRS.SCZ", file = "2.2.1_volcano_plot_diff_expr_transcripts_for_SCZ_PRS_new_pvalue_and_fdr.pdf")
 ```
 
-We still have no hits on the transcript level as shown below:
+Now, we have some hits on the transcript level as shown below:
 
-1. with FDR < 5%: `r length(top.hits[top.hits$"FDR estimate" < 0.05, "Gene Symbol"])` 
+1. with FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Gene Symbol"])` 
 
-2. with FDR < 10%: `r length(top.hits[top.hits$"FDR estimate" < 0.1, "Gene Symbol"])`
+2. with FDR < 10%: `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"])`
+
+Here, are the 8 gene symbols:  `r top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"]`
 
 **MDD PRS**
 
@@ -678,17 +804,17 @@ design <- model.matrix(~ PRS.MDD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide +
 fit <- RunLimma(design, transcriptSummaries.new)
 
 # result table
-top.hits <- GenerateResultTableTranscript(fit, variable = "PRS.MDD", file =  "2.2.2_diff_expr_transcripts_for_MDD_PRS_new_pvalue_and_fdr.csv")
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.MDD", file =  "2.2.2_diff_expr_transcripts_for_MDD_PRS_new_pvalue_and_fdr.csv")
 
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "PRS.MDD", file = "2.2.2_volcano_plot_diff_expr_transcripts_for_MDD_PRS_new_pvalue_and_fdr.pdf")
 ```
 
-We still have no hits on the transcript level as shown below:
+We still have no hits on the transcript level for the MDD GWAS as shown below:
 
-1. with FDR < 5%: `r length(top.hits[top.hits$"FDR estimate" < 0.05, "Gene Symbol"])` 
+1. with FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Gene Symbol"])` 
 
-2. with FDR < 10%: `r length(top.hits[top.hits$"FDR estimate" < 0.1, "Gene Symbol"])`
+2. with FDR < 10%: `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"])`
 
 **BIP PRS**
 
@@ -698,23 +824,25 @@ transcriptSummaries.new <- GetExprWithSmallestP(input = "2.1.3_diff_expr_transcr
 dim(transcriptSummaries.new)
 
 # generate design matrix
-design <- model.matrix(~ prs_bip + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+design <- model.matrix(~ PRS.BIP + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 
 # differential expression analysis (limma)
 fit <- RunLimma(design, transcriptSummaries.new)
 
 # result table
-top.hits <- GenerateResultTableTranscript(fit, variable = "prs_bip", file =  "2.2.3_diff_expr_transcripts_for_BIP_PRS_new_pvalue_and_fdr.csv")
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.BIP", file =  "2.2.3_diff_expr_transcripts_for_BIP_PRS_new_pvalue_and_fdr.csv")
 
 # volcano plot
-GenerateVolcanoPlot(fit, variable = "prs_bip", file = "2.2.3_volcano_plot_diff_expr_transcripts_for_BIP_PRS_new_pvalue_and_fdr.pdf")
+GenerateVolcanoPlot(fit, variable = "PRS.BIP", file = "2.2.3_volcano_plot_diff_expr_transcripts_for_BIP_PRS_new_pvalue_and_fdr.pdf")
 ```
 
 We still have no hits on the transcript level as shown below:
 
-1. with FDR < 5%: `r length(top.hits[top.hits$"FDR estimate" < 0.05, "Gene Symbol"])` 
+1. with FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Gene Symbol"])` 
 
-2. with FDR < 10%: `r length(top.hits[top.hits$"FDR estimate" < 0.1, "Gene Symbol"])`
+2. with FDR < 10%: `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"])`
+
+Here, are the gene symbols of the 10 hits:  `r top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"]`
 
 **Cross-disorder PRS**
 
@@ -730,7 +858,7 @@ design <- model.matrix(~ PRS.CD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + 
 fit <- RunLimma(design, transcriptSummaries.new)
 
 # result table
-top.hits <- GenerateResultTableTranscript(fit, variable = "PRS.CD", file =  "2.2.4_diff_expr_transcripts_for_CD_PRS_new_pvalue_and_fdr.csv")
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.CD", file =  "2.2.4_diff_expr_transcripts_for_CD_PRS_new_pvalue_and_fdr.csv")
 
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "PRS.CD", file = "2.2.4_volcano_plot_diff_expr_transcripts_for_CD_PRS_new_pvalue_and_fdr.pdf")
@@ -738,12 +866,56 @@ GenerateVolcanoPlot(fit, variable = "PRS.CD", file = "2.2.4_volcano_plot_diff_ex
 
 We still have no hits on the transcript level as shown below:
 
-1. with FDR < 5%: `r length(top.hits[top.hits$"FDR estimate" < 0.05, "Gene Symbol"])` 
+1. with FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Gene Symbol"])` 
 
-2. with FDR < 10%: `r length(top.hits[top.hits$"FDR estimate" < 0.1, "Gene Symbol"])`
+2. with FDR < 10%: `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"])`
+
+
+Here, are the gene symbols of the 2 hits at FDR < 5%:  `r top_hits[top_hits$"FDR estimate" < 0.05, "Gene Symbol"]`
+
+And the gene symbols of the 3 hits at FDR < 10%:  `r top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"]`
 
 
 ## Exon level 
+
+First, we will plot the distribution of Ensembl Exon IDs per Ensembl Gene ID. We will plot the distribution in our filtered expression dataset as well as the original exons per gene found in GENCODE (for hg19). 
+
+```{r, echo = F}
+features <- fData(exonSummaries)[, c("exon_id", "gene_id")]
+features <- separate_rows(features, exon_id, gene_id, sep = "\\|")
+features <- features[!duplicated(features), ]
+freqs <- as.data.frame(table(as.data.frame(table(features$gene_id))$Freq))
+
+# load gene to transcript info from Gencode and filter exactly like in the processing step
+genes <- import.gff("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/annotation_files/gencode.v19.annotation.gtf", format = "gtf")
+genes <- genes[genes$gene_type == "protein_coding"]  
+genes <- genes[genes$type == "exon"]
+genes <- genes[genes$source == "HAVANA"]
+genes <- as.data.frame(genes)[, c("gene_id", "exon_id")]
+
+# get only Ensembl gene IDs for which we have exons (see above)
+genes <- genes[genes$gene_id %in% features$gene_id, ]
+genes <- genes[!duplicated(genes), ]
+freqs2 <- as.data.frame(table(as.data.frame(table(genes$gene_id))$Freq))
+
+# merge the two datasets
+tfreq <- merge(freqs, freqs2, by = "Var1", all = T)
+tfreq[is.na(tfreq$Freq.x), "Freq.x"] <- 0
+tfreq[is.na(tfreq$Freq.y), "Freq.y"] <- 0
+colnames(tfreq) <- c("ExonCount", "ExpressionFreq", "OriginalFreq")
+tfreq <- reshape2::melt(tfreq, id.vars = "ExonCount")
+
+ggplot(data = tfreq, aes(x = ExonCount, y = value, fill = variable, width = 0.8)) +
+  theme_minimal() +
+  theme(text = element_text(size = 15)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  scale_x_discrete(expand = c(0.015, 0)) +
+  scale_y_continuous(expand = c(0.01, 0)) +
+  labs(x = "Number of exons per gene", y = "Number of genes") +
+  scale_fill_discrete(name = "", labels = c("Own data", "GENCODE"))
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/1_barplot_exons_per_gene_gencode_vs_own_data.pdf")
+rm(features, genes, freqs, freqs2, tfreq)
+```
 
 ### Diagnosis with normal model
 
@@ -756,7 +928,7 @@ design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type
 fit <- RunLimma(design, exonSummaries)
 
 # result table
-top.hits <- GenerateResultTableExon(fit, variable = "DxCASE", file =  "1.1_diff_expr_exons_for_diagnosis.csv")
+top_hits <- GenerateResultTableExon(fit, variable = "DxCASE", file =  "1.1_diff_expr_exons_for_diagnosis.csv")
 
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "DxCASE", file = "1.1_volcano_plot_diff_expr_exons_for_diagnosis.pdf")
@@ -766,23 +938,23 @@ Get significantly differentially expressed genes for all the different covariate
 
 ```{r, echo = F}
 # generate vertical barplot
-limma.res.exon <- GenerateVerticalBarplotOfDiffExprHits(design, fit, from = 6, to = 5, adj = 10, plot.name = "1.1_barplot_significant_DEA_hits_exons.pdf")
+limma_res_exon <- GenerateVerticalBarplotOfDiffExprHits(design, fit, from = 6, to = 5, adj = 10, plot_name = "1.1_barplot_significant_DEA_hits_exons.pdf")
 ```
 
 Now, we combine the barplot of the number of differentially expressed genes, transcripts and exons per covariate (corrected for all other covariates). 
 
 ```{r, echo = F}
 ### ALL COMBINED (gene + transcript + exon barplot) ###
-colnames(limma.res.gene) <- "counts"
-limma.res.gene$type <- "gene"
-limma.res.gene$covariates <- row.names(limma.res.gene)
-colnames(limma.res.transcript) <- "counts"
-limma.res.transcript$type <- "transcript"
-limma.res.transcript$covariates <- row.names(limma.res.transcript)
-colnames(limma.res.exon) <- "counts"
-limma.res.exon$type <- "exon"
-limma.res.exon$covariates <- row.names(limma.res.exon)
-limma.res.all <- rbind(limma.res.gene, limma.res.transcript, limma.res.exon)
+colnames(limma_res_gene) <- "counts"
+limma_res_gene$type <- "gene"
+limma_res_gene$covariates <- row.names(limma_res_gene)
+colnames(limma_res_transcript) <- "counts"
+limma_res_transcript$type <- "transcript"
+limma_res_transcript$covariates <- row.names(limma_res_transcript)
+colnames(limma_res_exon) <- "counts"
+limma_res_exon$type <- "exon"
+limma_res_exon$covariates <- row.names(limma_res_exon)
+limma.res.all <- rbind(limma_res_gene, limma_res_transcript, limma_res_exon)
 limma.res.all$covariates <- as.factor(limma.res.all$covariates)
 limma.res.all$covariates <- factor(limma.res.all$covariates, levels = c("C4", "C3", "C2", "C1", "Type_of_Death","Suicide", "Sex", "RIN2", "RIN", "Diagnosis", "PMI", "pH", "Age"))
 
@@ -799,7 +971,7 @@ p <- ggplot(limma.res.all, aes(y = counts, x = covariates)) +
 p + facet_wrap(~ type, scale = "free_x") + theme(panel.spacing = unit(2, "lines"))
 dev.off()
 # remove unnecessary data
-rm(design, fit, top.hits, limma.res.exon, limma.res.transcript, limma.res.all, p)
+rm(design, fit, top_hits, limma_res_exon, limma_res_transcript, limma.res.all, p)
 ```
 
 ### Diagnosis with sex and diagnosis interaction model
@@ -814,13 +986,13 @@ design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type
 fit <- RunLimma(design, exonSummaries)
 
 # result table
-top.hits <- GenerateResultTableExon(fit, variable = "DxCASE", file =  "1.2_diff_expr_exons_for_diagnosis_with_sex_dx_interaction.csv")
+top_hits <- GenerateResultTableExon(fit, variable = "DxCASE", file =  "1.2_diff_expr_exons_for_diagnosis_with_sex_dx_interaction.csv")
 
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "DxCASE", file = "1.2_volcano_plot_diff_expr_exons_for_diagnosis_with_sex_dx_interaction.pdf")
 
 # remove unnecessary data
-rm(design, fit, top.hits)
+rm(design, fit, top_hits)
 ```
 
 No hits. Maybe a problem of the multiple testing correction as we have too many exons to correct for. 
@@ -846,7 +1018,7 @@ design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type
 fit <- RunLimma(design, exonSummaries.new)
 
 # result table
-top.hits <- GenerateResultTableExon(fit, variable = "DxCASE", file =  "1.3_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.csv")
+top_hits <- GenerateResultTableExon(fit, variable = "DxCASE", file =  "1.3_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.csv")
 
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "DxCASE", file = "1.3_volcano_plot_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.pdf")
@@ -854,30 +1026,30 @@ GenerateVolcanoPlot(fit, variable = "DxCASE", file = "1.3_volcano_plot_diff_expr
 
 Now, we have multiple hits on the exon level. We could find exons on following genes as significant:
 
-1. with FDR < 5%: `r length(top.hits[top.hits$"FDR estimate" < 0.05, "Gene Symbol"])` 
+1. with FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Gene Symbol"])` 
 
-2. with FDR < 10%: `r length(top.hits[top.hits$"FDR estimate" < 0.1, "Gene Symbol"])`
+2. with FDR < 10%: `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"])`
 
-Three genes with an FDR of 0.05369:  `r top.hits[top.hits$"FDR estimate" < 0.054, "Gene Symbol"]`
+Three genes with an FDR of 0.05369:  `r top_hits[top_hits$"FDR estimate" < 0.054, "Gene Symbol"]`
 
 Get significantly differentially expressed genes for all the different covariates. 
 
 ```{r, echo = F}
 # generate vertical barplot
-limma.res.exon.new <- GenerateVerticalBarplotOfDiffExprHits(design, fit, from = 6, to = 5, adj = 10, plot.name = "1.3_barplot_significant_DEA_hits_exons_new_pvalue_and_fdr.pdf")
+limma_res_exon.new <- GenerateVerticalBarplotOfDiffExprHits(design, fit, from = 6, to = 5, adj = 10, plot_name = "1.3_barplot_significant_DEA_hits_exons_new_pvalue_and_fdr.pdf")
 ```
 
 Now, we combine the barplot of the number of differentially expressed genes, transcripts and exons per covariate (corrected for all other covariates). 
 
 ```{r, echo = F}
 ### ALL COMBINED (gene + transcript + exon barplot) ###
-colnames(limma.res.transcript.new) <- "counts"
-limma.res.transcript.new$type <- "transcript"
-limma.res.transcript.new$covariates <- row.names(limma.res.transcript.new)
-colnames(limma.res.exon.new) <- "counts"
-limma.res.exon.new$type <- "exon"
-limma.res.exon.new$covariates <- row.names(limma.res.exon.new)
-limma.res.all <- rbind(limma.res.gene, limma.res.transcript.new, limma.res.exon.new)
+colnames(limma_res_transcript.new) <- "counts"
+limma_res_transcript.new$type <- "transcript"
+limma_res_transcript.new$covariates <- row.names(limma_res_transcript.new)
+colnames(limma_res_exon.new) <- "counts"
+limma_res_exon.new$type <- "exon"
+limma_res_exon.new$covariates <- row.names(limma_res_exon.new)
+limma.res.all <- rbind(limma_res_gene, limma_res_transcript.new, limma_res_exon.new)
 limma.res.all$covariates <- as.factor(limma.res.all$covariates)
 limma.res.all$covariates <- factor(limma.res.all$covariates, levels = c("C4", "C3", "C2", "C1", "Type_of_Death","Suicide", "Sex", "RIN2", "RIN", "Diagnosis", "PMI", "pH", "Age"))
 
@@ -894,7 +1066,63 @@ p <- ggplot(limma.res.all, aes(y = counts, x = covariates)) +
 p + facet_wrap(~ type, scale = "free_x") + theme(panel.spacing = unit(2, "lines"))
 dev.off()
 # remove unnecessary data
-rm(design, fit, top.hits, limma.res.exon.new, limma.res.transcript.new, limma.res.gene, limma.res.all, p)
+rm(design, fit, limma_res_exon.new, limma_res_transcript.new, limma_res_gene, limma.res.all, p)
+```
+
+Now we generate some plots for the found eDEgenes. First, we will plot a heatmap of the 2224 eDEGenes.
+
+```{r, echo = F}
+# get only top hits (2224 eDEGenes)
+top_hits <- top_hits[top_hits$`FDR estimate` < 0.1, ]
+# ǵenerate heatmap of hits
+anno <- pData(exonSummaries)[, c("Age", "PMI", "RIN", "Sex", "Suicide", "Dx", "ShortName")]
+rownames(anno) <- anno$ShortName
+anno$ShortName <- NULL
+pheatmap(exprs(exonSummaries)[top_hits$`Ensembl Exon ID`, ], scale = "row", annotation_col = anno, show_colnames = F, show_rownames = F)
+pheatmap(exprs(exonSummaries)[top_hits$`Ensembl Exon ID`, ], scale = "row", annotation_col = anno, show_colnames = F, show_rownames = F, filename = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/1.3_heatmap_significant_DEA_hits_exons_new_pvalue_and_fdr.pdf")
+rm(anno)
+```
+
+Then, we plot the up and down regulated genes into one barplot with the two variables mirrored on the x-axis.
+
+```{r, echo = F}
+logfc <- as.data.frame(table(top_hits$logFC))
+logfc$group <- "Above"
+logfc[as.numeric(as.character(logfc$Var1)) < 0, "group"] <- "Below"
+logfc[as.numeric(as.character(logfc$Var1)) < 0, "Freq"] <- -1
+logfc$Var1 <- abs(round(as.numeric(as.character(logfc$Var1)), 2))
+logfc$logfc <- 2^logfc$Var1
+logfc$linearFC <- sapply(logfc$logfc, function(x) {if(as.double(as.character(x)) >= 1 || is.na(x)){x} else {-1/x}})
+
+ggplot(logfc, aes(x = linearFC, y = Freq, fill = group)) + 
+  geom_bar(stat = "identity", position = "identity") + 
+  xlab("linear fold change") +
+  ylab("Number of tDEGenes (FDR < 10%)") +
+  xlim(1, 1.5)
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/1.3_barplot_up_down_regulated_significant_DEA_hits_exons_new_pvalue_and_fdr.pdf")
+rm(logfc)
+```
+
+Now, we generate violin plots for the top six hits.
+
+```{r, echo = F}
+for (hit in top_hits$`Ensembl Exon ID`[1:6]) {
+  name <- top_hits[hit, "Gene Symbol"]
+  # get exprs of top hit
+  data <- as.data.frame(exprs(exonSummaries)[top_hits[hit, "Ensembl Exon ID"], ])
+  colnames(data) <- "expression"
+  data <- merge(data, pData(exonSummaries)[, c("ShortName", "Dx")], by.x = "row.names", by.y = "ShortName")
+  ggplot(data, aes(x = Dx, y = expression, fill = Dx)) + 
+    geom_violin() + 
+    geom_boxplot(width = 0.2) +
+    theme_classic() +
+    theme(text = element_text(size = 20), plot.title = element_text(hjust = 0.5)) +
+    labs(title = top_hits[hit, "Gene Symbol"], x = element_blank(), y = "Expression values") +
+    scale_x_discrete(labels = c("Controls", "Cases")) +
+    scale_fill_manual(values = c("royalblue", "red"), name = "", labels = c("Controls", "Cases"))
+  ggsave(paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/1.3_violinplot_significant_DEA_hits_exons_new_pvalue_and_fdr_", top_hits[hit, "Gene Symbol"],".pdf"), width = 8, height = 6, units = "in")
+}
+rm(name, data)
 ```
 
 
@@ -910,11 +1138,11 @@ design <- model.matrix(~ PRS.SCZ + Sex + Age + pH + PMI + RIN + RIN2 + Suicide +
 fit <- RunLimma(design, exonSummaries)
 
 # result table
-top.hits <- GenerateResultTableExon(fit, variable = "PRS.SCZ", file =  "2.1.1_diff_expr_exons_for_SCZ_PRS.csv")
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.SCZ", file =  "2.1.1_diff_expr_exons_for_SCZ_PRS.csv")
 
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "PRS.SCZ", file = "2.1.1_volcano_plot_diff_expr_exons_for_SCZ_PRS.pdf")
-rm(design, fit, top.hits)
+rm(design, fit, top_hits)
 ```
 
 **MDD PRS**
@@ -927,28 +1155,28 @@ design <- model.matrix(~ PRS.MDD + Sex + Age + pH + PMI + RIN + RIN2 + Suicide +
 fit <- RunLimma(design, exonSummaries)
 
 # result table
-top.hits <- GenerateResultTableExon(fit, variable = "PRS.MDD", file =  "2.1.2_diff_expr_exons_for_MDD_PRS.csv")
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.MDD", file =  "2.1.2_diff_expr_exons_for_MDD_PRS.csv")
 
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "PRS.MDD", file = "2.1.2_volcano_plot_diff_expr_exons_for_MDD_PRS.pdf")
-rm(design, fit, top.hits)
+rm(design, fit, top_hits)
 ```
 
 **BIP PRS**
 
 ```{r, echo = F}
 # generate design matrix for BIP PRS
-design <- model.matrix(~ prs_bip + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+design <- model.matrix(~ PRS.BIP + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 
 # differential expression analysis (limma)
 fit <- RunLimma(design, exonSummaries)
 
 # result table
-top.hits <- GenerateResultTableExon(fit, variable = "prs_bip", file =  "2.1.3_diff_expr_exons_for_BIP_PRS.csv")
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.BIP", file =  "2.1.3_diff_expr_exons_for_BIP_PRS.csv")
 
 # volcano plot
-GenerateVolcanoPlot(fit, variable = "prs_bip", file = "2.1.3_volcano_plot_diff_expr_exons_for_BIP_PRS.pdf")
-rm(design, fit, top.hits)
+GenerateVolcanoPlot(fit, variable = "PRS.BIP", file = "2.1.3_volcano_plot_diff_expr_exons_for_BIP_PRS.pdf")
+rm(design, fit, top_hits)
 ```
 
 **Cross-disorder PRS**
@@ -961,12 +1189,14 @@ design <- model.matrix(~ PRS.CD + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + 
 fit <- RunLimma(design, exonSummaries)
 
 # result table
-top.hits <- GenerateResultTableExon(fit, variable = "PRS.CD", file =  "2.1.4_diff_expr_exons_for_CD_PRS.csv")
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.CD", file =  "2.1.4_diff_expr_exons_for_CD_PRS.csv")
 
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "PRS.CD", file = "2.1.4_volcano_plot_diff_expr_exons_for_CD_PRS.pdf")
-rm(design, fit, top.hits)
+rm(design, fit, top_hits)
 ```
+
+No hits using PRS instead of diagnosis. 
 
 ### PRS with recalculated p-value and FDR
 
@@ -984,7 +1214,7 @@ design <- model.matrix(~ PRS.SCZ + Age + Sex + pH + PMI + RIN + RIN2 + Suicide +
 fit <- RunLimma(design, exonSummaries.new)
 
 # result table
-top.hits <- GenerateResultTableExon(fit, variable = "PRS.SCZ", file =  "2.2.1_diff_expr_exons_for_SCZ_PRS_new_pvalue_and_fdr.csv")
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.SCZ", file =  "2.2.1_diff_expr_exons_for_SCZ_PRS_new_pvalue_and_fdr.csv")
 
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "PRS.SCZ", file = "2.2.1_volcano_plot_diff_expr_exons_for_SCZ_PRS_new_pvalue_and_fdr.pdf")
@@ -992,11 +1222,11 @@ GenerateVolcanoPlot(fit, variable = "PRS.SCZ", file = "2.2.1_volcano_plot_diff_e
 
 No hits with FDR < 0.05 (5%), but many hits with FDR < 0.1 (10%):
 
-1. with FDR < 5%: `r length(top.hits[top.hits$"FDR estimate" < 0.05, "Gene Symbol"])` 
+1. with FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Gene Symbol"])` 
 
-2. with FDR < 10%: `r length(top.hits[top.hits$"FDR estimate" < 0.1, "Gene Symbol"])`
+2. with FDR < 10%: `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"])`
 
-Two genes with an FDR of 0.05205:  `r top.hits[top.hits$"FDR estimate" < 0.053, "Gene Symbol"]`
+Here are the 10 first top gene symbols: `r top_hits[top_hits$"FDR estimate" < 0.05, "Gene Symbol"][1:10]`
 
 **MDD PRS**
 
@@ -1012,7 +1242,7 @@ design <- model.matrix(~ PRS.MDD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide +
 fit <- RunLimma(design, exonSummaries.new)
 
 # result table
-top.hits <- GenerateResultTableExon(fit, variable = "PRS.MDD", file =  "2.2.2_diff_expr_exons_for_MDD_PRS_new_pvalue_and_fdr.csv")
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.MDD", file =  "2.2.2_diff_expr_exons_for_MDD_PRS_new_pvalue_and_fdr.csv")
 
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "PRS.MDD", file = "2.2.2_volcano_plot_diff_expr_exons_for_MDD_PRS_new_pvalue_and_fdr.pdf")
@@ -1020,11 +1250,11 @@ GenerateVolcanoPlot(fit, variable = "PRS.MDD", file = "2.2.2_volcano_plot_diff_e
 
 No hits with FDR < 0.05 (5%), but many hits with FDR < 0.1 (10%):
 
-1. with FDR < 5%: `r length(top.hits[top.hits$"FDR estimate" < 0.05, "Gene Symbol"])` 
+1. with FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Gene Symbol"])` 
 
-2. with FDR < 10%: `r length(top.hits[top.hits$"FDR estimate" < 0.1, "Gene Symbol"])`
+2. with FDR < 10%: `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"])`
 
-13 genes with an FDR of 0.05374:  `r top.hits[top.hits$"FDR estimate" < 0.054, "Gene Symbol"]`
+Here are the 10 first top gene symbols: `r top_hits[top_hits$"FDR estimate" < 0.05, "Gene Symbol"][1:10]`
 
 **BIP PRS**
 
@@ -1034,23 +1264,25 @@ exonSummaries.new <- GetExprWithSmallestP(input = "2.1.3_diff_expr_exons_for_BIP
 dim(exonSummaries.new)
 
 # generate design matrix
-design <- model.matrix(~ prs_bip + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+design <- model.matrix(~ PRS.BIP + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 
 # differential expression analysis (limma)
 fit <- RunLimma(design, exonSummaries.new)
 
 # result table
-top.hits <- GenerateResultTableExon(fit, variable = "prs_bip", file =  "2.2.3_diff_expr_exons_for_BIP_PRS_new_pvalue_and_fdr.csv")
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.BIP", file =  "2.2.3_diff_expr_exons_for_BIP_PRS_new_pvalue_and_fdr.csv")
 
 # volcano plot
-GenerateVolcanoPlot(fit, variable = "prs_bip", file = "2.2.3_volcano_plot_diff_expr_exons_for_BIP_PRS_new_pvalue_and_fdr.pdf")
+GenerateVolcanoPlot(fit, variable = "PRS.BIP", file = "2.2.3_volcano_plot_diff_expr_exons_for_BIP_PRS_new_pvalue_and_fdr.pdf")
 ```
 
 We have no hits on the exon level for bipolar disorder as shown below:
 
-1. with FDR < 5%: `r length(top.hits[top.hits$"FDR estimate" < 0.05, "Gene Symbol"])` 
+1. with FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Gene Symbol"])` 
 
-2. with FDR < 10%: `r length(top.hits[top.hits$"FDR estimate" < 0.1, "Gene Symbol"])`
+2. with FDR < 10%: `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"])`
+
+Here are the 10 first top gene symbols: `r top_hits[top_hits$"FDR estimate" < 0.05, "Gene Symbol"][1:10]`
 
 **Cross-disorder PRS**
 
@@ -1066,7 +1298,7 @@ design <- model.matrix(~ PRS.CD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + 
 fit <- RunLimma(design, exonSummaries.new)
 
 # result table
-top.hits <- GenerateResultTableExon(fit, variable = "PRS.CD", file =  "2.2.4_diff_expr_exons_for_CD_PRS_new_pvalue_and_fdr.csv")
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.CD", file =  "2.2.4_diff_expr_exons_for_CD_PRS_new_pvalue_and_fdr.csv")
 
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "PRS.CD", file = "2.2.4_volcano_plot_diff_expr_exons_for_CD_PRS_new_pvalue_and_fdr.pdf")
@@ -1074,11 +1306,13 @@ GenerateVolcanoPlot(fit, variable = "PRS.CD", file = "2.2.4_volcano_plot_diff_ex
 
 For the cross-disorder (CD) PRS we can find also hits with FDR < 0.05 (5%) as followed:
 
-1. with FDR < 5%: `r length(top.hits[top.hits$"FDR estimate" < 0.05, "Gene Symbol"])` 
+1. with FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Gene Symbol"])` 
 
-2. with FDR < 10%: `r length(top.hits[top.hits$"FDR estimate" < 0.1, "Gene Symbol"])`
+2. with FDR < 10%: `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"])`
 
-Five genes with an FDR < 0.05 (5%):  `r top.hits[top.hits$"FDR estimate" < 0.05, "Gene Symbol"]`
+One gene with an FDR < 0.05 (5%):  `r top_hits[top_hits$"FDR estimate" < 0.05, "Gene Symbol"]`
+
+And here are the 10 first top gene symbols: `r top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"][1:10]`
 
 
 ## VENN diagrams of hits
@@ -1124,8 +1358,8 @@ design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type
 # get top DE genes
 fit <- lmFit(exonSummaries, design)
 fit2 <- eBayes(fit)
-top.hits <- topTable(fit2, coef = "DxCASE", adjust = "BH", number = Inf)
-head(top.hits)
+top_hits <- topTable(fit2, coef = "DxCASE", adjust = "BH", number = Inf)
+head(top_hits)
 ```
 
 ### Case only exon eQTL
@@ -1136,28 +1370,6 @@ Check exon expression for exons found in the cases only eQTL dataset for any dif
 
 ```
 
-### Unique case only exon eQTL
-
-Check exon expression for exons found in the unique cases only dataset for any differentially expressed exon hits.
-
-```{r}
-# Generate correlation plot
-# Remove all rows including an NA in any column and remove the IID column (NOT needed for the corrplot!)
-pData.new <- pData[, c("PRS.SCZ", "Age", "Sex", "pH", "PMI" , "RIN", "RIN2", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4", "SV1")]
-# 5. change BPD and MDD diagnosis in Diagnosis to SCZ
-# save categorical and continuous variable names
-classes <- sapply(pData.new, class) # get type of columns
-categorical.cov = names(classes[classes == "factor"])
-continuous.cov = names(classes[classes == "numeric"])
-# generate contrast for design matrix
-contrast <- lapply(categorical.cov, function(x) {fac = pData.new[, x]; return(contrasts(fac))})
-names(contrast) <- categorical.cov
-# generate design matrix
-design <- model.matrix(~ PRS.SCZ + Age + Sex + Dx + pH + PMI + RIN + RIN2 + SV1 + Batch + Suicide + Type_of_Death + C1 + C2 + C3 + C4, pData.new, contrasts.arg = contrast)
-design.cor <- corr.test(design[, -1], use = 'pairwise.complete.obs', method = "pearson", adjust = "none")
-# change colnames
-corrplot(as.matrix(design.cor$r), method = "circle", col = viridis(200, direction = -1), tl.col = "black")
-```
 
 # Session Info
 

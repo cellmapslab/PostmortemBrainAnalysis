@@ -79,22 +79,22 @@ annotatePublicData <- function(own, public, nperm, background){
 # vepGR_hg19 <- unlist(liftOver(vepGR, hg38ToHg19))#10719405
 # seqlevelsStyle(vepGR_hg19) <- "NCBI"
 # saveRDS(vepGR_hg19, "VEP_hg19_collapsed_MAF01.rds")
-vepGR_hg19= readRDS("/storage/groups/ccm01/datasets/2019_VEP/VEP_hg19_collapsed_MAF01.rds")
-seqlevels(vepGR_hg19, pruning.mode="coarse") <- setdiff(seqlevels(vepGR_hg19), c("X", "Y", "M"))
+vepGR_hg19 <- readRDS("/storage/groups/ccm01/datasets/2019_VEP/VEP_hg19_collapsed_MAF01.rds")
+seqlevels(vepGR_hg19, pruning.mode = "coarse") <- setdiff(seqlevels(vepGR_hg19), c("X", "Y", "M"))
 
 ### LOAD eQTL results ###
-ipath="/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/RData/"
+ipath <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/RData/"
 #ipath=""
 # cis-eQTLs of cases and controls (ALL) in genes, transcripts and exons
-eqtls.gene.gr <- readRDS(paste0(ipath,"pmb_cis-eQTL_gene_hits_cases_vs_controls_granges_object.rds"))
-eqtls.transcript.gr <- readRDS(paste0(ipath,"pmb_cis-eQTL_transcript_hits_cases_vs_controls_granges_object.rds"))
-eqtls.exon.gr <- readRDS(paste0(ipath,"pmb_cis-eQTL_exon_hits_cases_vs_controls_granges_object.rds"))
-eqtls.gene.cases.gr <- readRDS(paste0(ipath,"pmb_cis-eQTL_gene_hits_cases_only_granges_object.rds"))
-eqtls.transcript.cases.gr <- readRDS(paste0(ipath,"pmb_cis-eQTL_transcript_hits_cases_only_granges_object.rds"))
-eqtls.exon.cases.gr <- readRDS(paste0(ipath,"pmb_cis-eQTL_exon_hits_cases_only_granges_object.rds"))
+eqtls.gene.gr <- readRDS(paste0(ipath,"pmb_gene_hits_cases_vs_controls_cis_eQTL_SNPs.rds"))
+eqtls.transcript.gr <- readRDS(paste0(ipath,"pmb_transcript_hits_cases_vs_controls_cis_eQTL_SNPs.rds"))
+eqtls.exon.gr <- readRDS(paste0(ipath,"pmb_exon_hits_cases_vs_controls_cis_eQTL_SNPs.rds"))
+eqtls.gene.cases.gr <- readRDS(paste0(ipath,"pmb_gene_hits_cases_only_cis_eQTL_SNPs.rds"))
+eqtls.transcript.cases.gr <- readRDS(paste0(ipath,"pmb_transcript_hits_cases_only_cis_eQTL_SNPs.rds"))
+eqtls.exon.cases.gr <- readRDS(paste0(ipath,"pmb_exon_hits_cases_only_cis_eQTL_SNPs.rds"))
 
 ### Load Background data ###
-background.gr= readRDS(paste0(ipath,"background_SNPs_granges_object.rds"))
+background.gr <- readRDS(paste0(ipath,"background_SNPs.rds"))
 #length(background.gr@ranges)#[1] 6798048
 #background.gr.vep <- subsetByOverlaps(background.gr, vepGR_hg19)
 #length(background.gr.vep@ranges)# 3382170
@@ -131,4 +131,31 @@ stopCluster(cl)
 # 2.4.6 write results into a file
 write.table(results2, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/pmb_cis-eQTL_annotation_results_10000_permutations_VEP.tsv", row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")
 
+
+### Load public data
+# CMC (Fromer et al.) gene eQTLs and isoQTLs
+cmc_eqtl <- readRDS(paste0(ipath, "CMC_adjustedSVA_eQTL_SNPs.rds"))
+cmc_isoqtl <- readRDS(paste0(ipath, "CMC_adjustedSVA_isoQTL_SNPs.rds"))
+
+### GTEx Whole Blood eQTLs and sQTLs
+gtex_wb_eqtl <- readRDS(paste0(ipath, "GTEx_v8_Whole_Blood_hg19_eQTL_SNPs.rds"))
+gtex_wb_sqtl <- readRDS(paste0(ipath, "GTEx_v8_Whole_Blood_hg19_sQTL_SNPs.rds"))
+
+### GTEx Brain (all brain tissues) eQTLs and sQTLs
+gtex_brains_eqtl <- readRDS(paste0(ipath, "GTEx_v8_Brains_hg19_eQTL_SNPs.rds"))
+gtex_brains_sqtl <- readRDS(paste0(ipath, "GTEx_v8_Brains_hg19_sQTL_SNPs.rds"))
+
+
+
+
+
+### CMC (Fromer et al.) gene eQTLs
+cmc_gene <- data.table::fread("/storage/groups/ccm01/datasets/2019_CMC_Fromer_et_al/eQTL/CMC_MSSM-Penn-Pitt_DLPFC_Analysis_eQTL-adjustedSVA.txt")
+cmc_gene <- cmc_gene[cmc_gene$FDR < 0.05, ]  # filter for FDR <= 0.05
+cmc_gene_gr <- GenomicRanges::GRanges(seqnames = cmc_gene$SNP_location, 
+                                      snp_id = cmc_gene$SNP)  # generate GRanges object 
+cmc_gene_gr <- cmc_gene_gr[!duplicated(cmc_gene_gr)]  # remove duplicated rows: 2,199,772 => 1,342,767 SNPs
+GenomeInfoDb::seqlevelsStyle(cmc_gene_gr) <- "NCBI"
+saveRDS(cmc_gene_gr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/RData/CMC_adjustedSVA_eQTL_SNPs_background.rds")
+rm(cmc_gene, cmc_gene_gr)
 

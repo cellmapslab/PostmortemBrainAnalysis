@@ -78,9 +78,6 @@ scz2_prsice <- EvaluatePRS(input = paste0(path, "results/gtex_wb/pmb_gtex_gene_e
                            gwas = "schizophrenia", seperator = " ",
                            output = paste0(path, "figures/boxplot_PRSice-2_PRS_SCZ2_gtex_eQTL_SNPs.pdf"))
 
-
-
-
 # check best score from normal PRS
 scz2.scores <- fread(input = paste0(path, "results/gene_eqtl/pmb_gene_eSNPs_cases_vs_controls_scz2_PRSice-2_PRS.all.score"))
 names <- colnames(scz2.scores)[-1]
