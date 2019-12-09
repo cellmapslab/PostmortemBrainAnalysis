@@ -1,10 +1,12 @@
 /04.DEX/01_Preprocessing_cache/*
 /04.DEX/01_Preprocessing_cache/latex/__packages
 /04.DEX/04_DEAnalysis_cache/*
+/04.DEX/04_DEAnalysis_files/*
 *.txt
 *.nopred
 *.nosex
 *.profile
+*.pdf
 *.html
 *.log
 *.Rout
@@ -13,4 +15,5 @@
 *.Rhistory
 *.giosave*
 *.out
+*.nfs*
 /00_Carlos/*
