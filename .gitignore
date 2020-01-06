@@ -1,7 +1,7 @@
-/04.DEX/01_Preprocessing_cache/*
-/04.DEX/01_Preprocessing_cache/latex/__packages
-/04.DEX/04_DEAnalysis_cache/*
-/04.DEX/04_DEAnalysis_files/*
+/04.DEA/01_Preprocessing_cache/*
+/04.DEA/01_Preprocessing_cache/latex/__packages
+/04.DEA/04_DEAnalysis_cache/*
+/04.DEA/04_DEAnalysis_files/*
 *.txt
 *.tex
 *.nopred
