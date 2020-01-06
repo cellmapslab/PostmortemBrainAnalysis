@@ -15,7 +15,7 @@ run_matrix_eqtl <- function(SNP_file, expression_file, cov_file, outfile_cis, ou
   # Error covariance matrix: set to numeric() for identity
   errorCovariance <- numeric()
   # Distance for local (cis) gene-SNP pairs
-  cisDist = 1e6  # cis window of 1Mb = 1e6, 100kb = 1e5
+  cisDist = 1e6  # cis window of 1Mbp = 1e6, 500kbp = 5e5, 100kbp = 1e5
   
   # 2. Set Data Up
   # Now we need to set up the snp and gene expression data in the special format required by the MatrixEQTL package

@@ -206,7 +206,8 @@ for (i in brains) {
 gtex_brains_gr <- GenomicRanges::GRanges(seqnames = gtex_brains$chr, 
                                          ranges = IRanges::IRanges(start = as.numeric(as.character(gtex_brains$variant_pos)), 
                                                                    end = as.numeric(as.character(gtex_brains$variant_pos))),
-                                         snp_id = gtex_brains$rs_id_dbSNP151_GRCh38p7)  # generate GRanges object only with chr, position and rs SNP ID
+                                         snp_id = gtex_brains$rs_id_dbSNP151_GRCh38p7,
+                                         state = gtex_brains)  # generate GRanges object only with chr, position and rs SNP ID
 GenomeInfoDb::seqlevelsStyle(gtex_brains_gr) <- "UCSC"
 gtex_brains_gr_hg19 <- unlist(rtracklayer::liftOver(gtex_brains_gr, hg38_to_hg19))  # lift over from GRCh38 to GRCh37 (hg19): 89,312 => 88,885
 gtex_brains_gr_hg19 <- gtex_brains_gr_hg19[!duplicated(gtex_brains_gr_hg19)]  # no duplicated rows found: 88,885 => 61,935 SNPs

@@ -596,27 +596,43 @@ genes <- GRanges(seqnames = eqtls.exon$Gene_location)
 
 ## Manhattan Plots
 
-1. The easy way using the qqman package:
+The easy way using the qqman package:
 
 ```{r}
-# for all
-all <- merge(me.all$cis$eqtls, snpspos, by.x = "snps", by.y = "snp", all.x = T)
-all <- all[complete.cases(all), ]
-#png("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/manhattan_plot_gene_cis_eqtls_all.png")
-manhattan(all, chr = "chr", bp = "pos", snp = "snps", p = "pvalue")
-#dev.off()
-# for SCZ only
-cases <- merge(me.scz$cis$eqtls, snpspos, by.x = "snps", by.y = "snp", all.x = T)
-cases <- cases[complete.cases(cases), ]
-#png("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/manhattan_plot_gene_cis_eqtls_cases.png")
-manhattan(cases, chr = "chr", bp = "pos", snp = "snps", p = "pvalue")
-#dev.off()
-# for CTL only
-controls <- merge(me.ctl$cis$eqtls, snpspos, by.x = "snps", by.y = "snp", all.x = T)
-controls <- controls[complete.cases(controls), ]
-#bitmap("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/manhattan_plot_gene_cis_eqtls_controls.png", "png16m")
-manhattan(controls, chr = "chr", bp = "pos", snp = "snps", p = "pvalue")
-#dev.off()
+library(tidyr)
+library(qqman)
+# load gene eQTL hits
+eqtls_gene <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_gene_hits_cases_vs_controls.txt", header = TRUE, data.table = F, stringsAsFactors = F, select = c("SNP", "p-value", "SNP_location"))
+eqtls_gene <- separate(eqtls_gene, "SNP_location", c("Chr", "BP"))
+eqtls_gene$Chr <- as.numeric(eqtls_gene$Chr)
+eqtls_gene$BP <- as.numeric(eqtls_gene$BP)
+# manhattan plot
+#pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/manhattan_plot_gene_eSNPs_FDR_0.05.pdf", width = 17, height = 7)
+png("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/manhattan_plot_gene_eSNPs_FDR_0.05.png", width = 679, height = 308)
+manhattan(eqtls_gene, chr = "Chr", bp = "BP", snp = "SNP", p = "p-value", suggestiveline = F, genomewideline = F, ylim = c(3, 30), col = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), "gray"))
+dev.off()
+
+# load transcript eQTL hits
+eqtls_transcript <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_transcript_hits_cases_vs_controls.txt", header = TRUE, data.table = F, stringsAsFactors = F, select = c("SNP", "p-value", "SNP_location"))
+eqtls_transcript <- separate(eqtls_transcript, "SNP_location", c("Chr", "BP"))
+eqtls_transcript$Chr <- as.numeric(eqtls_transcript$Chr)
+eqtls_transcript$BP <- as.numeric(eqtls_transcript$BP)
+# manhattan plot
+#pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/manhattan_plot_transcript_eSNPs_FDR_0.05.pdf", width = 17, height = 7)
+png("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/manhattan_plot_transcript_eSNPs_FDR_0.05.png", width = 679, height = 308)
+manhattan(eqtls_transcript, chr = "Chr", bp = "BP", snp = "SNP", p = "p-value", suggestiveline = F, genomewideline = F, ylim = c(2, 50), col = c(rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), "gray"))
+dev.off()
+
+# load exon eQTL hits
+eqtls_exon <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_exon_hits_cases_vs_controls.txt", header = TRUE, data.table = F, stringsAsFactors = F, select = c("SNP", "p-value", "SNP_location"))
+eqtls_exon <- separate(eqtls_exon, "SNP_location", c("Chr", "BP"))
+eqtls_exon$Chr <- as.numeric(eqtls_exon$Chr)
+eqtls_exon$BP <- as.numeric(eqtls_exon$BP)
+# manhattan plot
+#pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/manhattan_plot_exon_eSNPs_FDR_0.05.pdf", width = 17, height = 7)
+png("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/manhattan_plot_exon_eSNPs_FDR_0.05.png", width = 679, height = 308)
+manhattan(eqtls_exon, chr = "Chr", bp = "BP", snp = "SNP", p = "p-value", suggestiveline = F, genomewideline = F, ylim = c(2, 55), col = c(rgb(red = 158, green = 212, blue = 0, maxColorValue = 255), "gray"))
+dev.off()
 ```
 
 

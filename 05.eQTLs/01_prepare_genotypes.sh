@@ -11,7 +11,7 @@ chromosome=($(seq 1 1 22))
 ##############################
 ## 1.1 Here, we will perform three different steps in one qctool v1.5 run:
 ##	1) Exclude samples with ZNP or MD in the IID (we assume that they come from other projects) 
-## 	2) Filter for MAF > 1% (0.01) + HWE < 6 (-log10(1e-06))
+## 	2) Filter for MAF > 5% (0.05) + HWE < 6 (-log10(1e-06))
 ## 	3) Remove NA in first column using the -omit-chromosome parameter
 #for chr in ${chromosome[@]} ; do # go through all genotype files
 #    $tools_path/qctool_v1.5/qctool -g ${read_genotypes}/pmb_info06_chr${chr}.gen.gz -s ${read_genotypes}/pmb_info06_chr${chr}.sample -hwe 6 -maf 0.05 1 -excl-samples ${out_genotypes}/exclude_samples.txt -filetype gen -omit-chromosome -og ${out_genotypes}/1.1_MAF_HWE_filtered/pmb_info06_chr${chr}_maf0.05.gen.gz -os ${out_genotypes}/1.1_MAF_HWE_filtered/pmb_info06_chr${chr}_maf0.05.sample &>> ${out_genotypes}/1.1_MAF_HWE_filtered/1.1_MAF_0.05_HWE_6_filtered.log

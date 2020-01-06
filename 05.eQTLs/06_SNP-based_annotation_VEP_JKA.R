@@ -114,9 +114,9 @@ registerDoSNOW(cl)
 results2 <- foreach (i = seq_along(states), .combine = rbind,
                      .packages = c("GenomicRanges", "S4Vectors")) %dopar% {
                        results <- data.frame()
-                       overlap <- paste0("VEP_", states[i], "_SNP_overlap")
-                       pval <- paste0("VEP_", states[i], "_SNP_pVal")
-                       or <- paste0("VEP_", states[i], "_SNP_or")
+                       overlap <- paste0(strsplit(states[i], "_d")[[1]], "_SNP_overlap")
+                       pval <- paste0(strsplit(states[i], "_d")[[1]], "_SNP_pVal")
+                       or <- paste0(strsplit(states[i], "_d")[[1]], "_SNP_or")
                        vep.selected <- vepGR_hg19[vepGR_hg19$code == states[i]]
                        results[c(overlap, pval, or), "Gene"] <- annotatePublicData(eqtls.gene.gr,  vep.selected, perm, background.gr)
                        results[c(overlap, pval, or), "Gene_cases"] <- annotatePublicData(eqtls.gene.cases.gr,  vep.selected, perm, background.gr)
@@ -145,17 +145,19 @@ gtex_wb_sqtl <- readRDS(paste0(ipath, "GTEx_v8_Whole_Blood_hg19_sQTL_SNPs.rds"))
 gtex_brains_eqtl <- readRDS(paste0(ipath, "GTEx_v8_Brains_hg19_eQTL_SNPs.rds"))
 gtex_brains_sqtl <- readRDS(paste0(ipath, "GTEx_v8_Brains_hg19_sQTL_SNPs.rds"))
 
+### Get overlap to CMC, GTEx wb and brain
+results <- data.frame()
+for (state in states) {
+  vep.selected <- vepGR_hg19[vepGR_hg19$code == state]
+  results[substr(state,1 , nchar(state) - 2), "CMC_eQTL"] <- sum(overlapsAny(cmc_eqtl, vep.selected))
+  results[substr(state,1 , nchar(state) - 2), "CMC_isoQTL"] <- sum(overlapsAny(cmc_isoqtl, vep.selected))
+  results[substr(state,1 , nchar(state) - 2), "GTEx_eQTL_wb"] <- sum(overlapsAny(gtex_wb_eqtl, vep.selected))
+  results[substr(state,1 , nchar(state) - 2), "GTEx_sQTL_wb"] <- sum(overlapsAny(gtex_wb_sqtl, vep.selected))
+  results[substr(state,1 , nchar(state) - 2), "GTEx_eQTL_brain"] <- sum(overlapsAny(gtex_brains_eqtl, vep.selected))
+  results[substr(state,1 , nchar(state) - 2), "GTEx_sQTL_brain"] <- sum(overlapsAny(gtex_brains_sqtl, vep.selected))
+}
 
+### write results into a file
+write.table(results, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/CMC_GTEx_SNP_overlap_to_VEP.tsv", row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")
 
-
-
-### CMC (Fromer et al.) gene eQTLs
-cmc_gene <- data.table::fread("/storage/groups/ccm01/datasets/2019_CMC_Fromer_et_al/eQTL/CMC_MSSM-Penn-Pitt_DLPFC_Analysis_eQTL-adjustedSVA.txt")
-cmc_gene <- cmc_gene[cmc_gene$FDR < 0.05, ]  # filter for FDR <= 0.05
-cmc_gene_gr <- GenomicRanges::GRanges(seqnames = cmc_gene$SNP_location, 
-                                      snp_id = cmc_gene$SNP)  # generate GRanges object 
-cmc_gene_gr <- cmc_gene_gr[!duplicated(cmc_gene_gr)]  # remove duplicated rows: 2,199,772 => 1,342,767 SNPs
-GenomeInfoDb::seqlevelsStyle(cmc_gene_gr) <- "NCBI"
-saveRDS(cmc_gene_gr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/RData/CMC_adjustedSVA_eQTL_SNPs_background.rds")
-rm(cmc_gene, cmc_gene_gr)
 

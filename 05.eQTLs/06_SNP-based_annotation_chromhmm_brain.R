@@ -131,24 +131,22 @@ hmm <- readRDS("/storage/groups/ccm01/datasets/2019_ChromHMM/chromHMM_all_states
 # remove chromosome X, Y and M
 seqlevels(hmm, pruning.mode="coarse") <- setdiff(seqlevels(hmm), c("chrX", "chrY", "chrM"))
 # load ChromHMM data information
-hmm.info <- read.csv2("/storage/groups/ccm01/datasets/2019_ChromHMM/epigenomes.tsv", header = T, stringsAsFactors = F, sep = "\t")
-
-state.counts <- as.data.table(table(hmm.brain$name))
+hmm_info <- read.csv2("/storage/groups/ccm01/datasets/2019_ChromHMM/epigenomes.tsv", header = T, stringsAsFactors = F, sep = "\t")
 
 # get ChromHMM brain data --> Brain_Dorsolateral_Prefrontal_Cortex
-#hmm.brain <- hmm[hmm$code == "E073"]
-#seqlevelsStyle(hmm.brain) <- "NCBI"
+#hmm_brain <- hmm[hmm$code == "E073"]
+#seqlevelsStyle(hmm_brain) <- "NCBI"
 
 # get ChromHMM brain data
 # Blood has multiple  cell lines --> filter for Group == "Blood & T-cell"
-brain <- hmm.info[hmm.info$GROUP == "Brain", "EID"]  # get IDs for all brain related ChromHMM data
-hmm.brain <- hmm[hmm$code %in% brain, ]  # get brain data
-seqlevelsStyle(hmm.brain) <- "NCBI"
-rm(hmm, hmm.info)
+brain <- hmm_info[hmm_info$GROUP == "Brain", "EID"]  # get IDs for all brain related ChromHMM data
+hmm_brain <- hmm[hmm$code %in% brain, ]  # get brain data
+seqlevelsStyle(hmm_brain) <- "NCBI"
+rm(hmm, hmm_info)
 
 # Test frequency of eQTLs on chromosomes
 #eqtls.chr <- as.data.frame(table(seqnames(eqtls.transcript.cases.gr)))
-#eqtls.hmm <- as.data.frame(table(seqnames(hmm.brain)))
+#eqtls.hmm <- as.data.frame(table(seqnames(hmm_brain)))
 #chromosomes <- merge(eqtls.chr, eqtls.hmm, by = "Var1")
 #wilcox.test(chromosomes$Freq.x, chromosomes$Freq.y, alternative = "two.sided")
 
@@ -157,7 +155,7 @@ rm(hmm, hmm.info)
 perm <- 10000
 
 # ChromHMM states
-states <- names(table(hmm.brain$name))
+states <- names(table(hmm_brain$name))
 
 # 2.4.1 annotation to ChromHMM Brain (parallelized)
 cl <- makeCluster(15)
@@ -169,13 +167,13 @@ results2 <- foreach (i = seq_along(states), .combine = rbind,
   overlap <- paste0("ChromHMM_brain_", states[i], "_SNP_overlap")
   pval <- paste0("ChromHMM_brain_", states[i], "_SNP_pVal")
   or <- paste0("ChromHMM_brain_", states[i], "_SNP_or")
-  hmm.brain.selected <- hmm.brain[hmm.brain$name == states[i]]
-  results[c(overlap, pval, or), "Gene"] <- annotatePublicData(eqtls.gene.gr, hmm.brain.selected, perm, background.gr)
-  results[c(overlap, pval, or), "Gene_cases"] <- annotatePublicData(eqtls.gene.cases.gr, hmm.brain.selected, perm, background.gr)
-  results[c(overlap, pval, or), "Transcript"] <- annotatePublicData(eqtls.transcript.gr, hmm.brain.selected, perm, background.gr)
-  results[c(overlap, pval, or), "Transcript_cases"] <- annotatePublicData(eqtls.transcript.cases.gr, hmm.brain.selected, perm, background.gr)
-  results[c(overlap, pval, or), "Exon"] <- annotatePublicData(eqtls.exon.gr, hmm.brain.selected, perm, background.gr)
-  results[c(overlap, pval, or), "Exon_cases"] <- annotatePublicData(eqtls.exon.cases.gr, hmm.brain.selected, perm, background.gr)
+  hmm_brain.selected <- hmm_brain[hmm_brain$name == states[i]]
+  results[c(overlap, pval, or), "Gene"] <- annotatePublicData(eqtls.gene.gr, hmm_brain.selected, perm, background.gr)
+  results[c(overlap, pval, or), "Gene_cases"] <- annotatePublicData(eqtls.gene.cases.gr, hmm_brain.selected, perm, background.gr)
+  results[c(overlap, pval, or), "Transcript"] <- annotatePublicData(eqtls.transcript.gr, hmm_brain.selected, perm, background.gr)
+  results[c(overlap, pval, or), "Transcript_cases"] <- annotatePublicData(eqtls.transcript.cases.gr, hmm_brain.selected, perm, background.gr)
+  results[c(overlap, pval, or), "Exon"] <- annotatePublicData(eqtls.exon.gr, hmm_brain.selected, perm, background.gr)
+  results[c(overlap, pval, or), "Exon_cases"] <- annotatePublicData(eqtls.exon.cases.gr, hmm_brain.selected, perm, background.gr)
   results
 }
 
@@ -183,3 +181,33 @@ stopCluster(cl)
 
 # 2.4.6 write results into a file
 write.table(results2, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/pmb_cis-eQTL_annotation_results_10000_permutations_ChromHMM_brain.tsv", row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")
+
+### Load public data
+ipath <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/RData/"
+
+# CMC (Fromer et al.) gene eQTLs and isoQTLs
+cmc_eqtl <- readRDS(paste0(ipath, "CMC_adjustedSVA_eQTL_SNPs.rds"))
+cmc_isoqtl <- readRDS(paste0(ipath, "CMC_adjustedSVA_isoQTL_SNPs.rds"))
+
+### GTEx Whole Blood eQTLs and sQTLs
+gtex_wb_eqtl <- readRDS(paste0(ipath, "GTEx_v8_Whole_Blood_hg19_eQTL_SNPs.rds"))
+gtex_wb_sqtl <- readRDS(paste0(ipath, "GTEx_v8_Whole_Blood_hg19_sQTL_SNPs.rds"))
+
+### GTEx Brain (all brain tissues) eQTLs and sQTLs
+gtex_brains_eqtl <- readRDS(paste0(ipath, "GTEx_v8_Brains_hg19_eQTL_SNPs.rds"))
+gtex_brains_sqtl <- readRDS(paste0(ipath, "GTEx_v8_Brains_hg19_sQTL_SNPs.rds"))
+
+### Get overlap to CMC, GTEx wb and brain
+results <- data.frame()
+for (state in states) {
+  hmm_brain_selected <- hmm_brain[hmm_brain$name == state]
+  results[strsplit(state, "_d")[[1]], "CMC_eQTL"] <- sum(overlapsAny(cmc_eqtl, hmm_brain_selected))
+  results[strsplit(state, "_d")[[1]], "CMC_isoQTL"] <- sum(overlapsAny(cmc_isoqtl, hmm_brain_selected))
+  results[strsplit(state, "_d")[[1]], "GTEx_eQTL_wb"] <- sum(overlapsAny(gtex_wb_eqtl, hmm_brain_selected))
+  results[strsplit(state, "_d")[[1]], "GTEx_sQTL_wb"] <- sum(overlapsAny(gtex_wb_sqtl, hmm_brain_selected))
+  results[strsplit(state, "_d")[[1]], "GTEx_eQTL_brain"] <- sum(overlapsAny(gtex_brains_eqtl, hmm_brain_selected))
+  results[strsplit(state, "_d")[[1]], "GTEx_sQTL_brain"] <- sum(overlapsAny(gtex_brains_sqtl, hmm_brain_selected))
+}
+
+### write results into a file
+write.table(results, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/CMC_GTEx_SNP_overlap_to_ChromHMM.tsv", row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")
