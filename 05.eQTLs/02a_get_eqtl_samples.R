@@ -22,4 +22,4 @@ pData <- pData[!is.na(pData$Type_of_Death), ]
 length(pData$IID) # 169
 
 # save all important sample IIDs for filtering of the genotype data
-cat(sapply(sort(pData$IID), toString), file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/eqtl_samples.txt", sep="\n")
+cat(sapply(sort(pData$IID), toString), file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/preprocessed_genotypes/eqtl_samples.txt", sep="\n")

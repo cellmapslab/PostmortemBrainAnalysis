@@ -4,7 +4,7 @@ library(ggplot2)
 library(viridis)
 library(data.table)
 library(limma)
-library(gridExtra)
+library(griDEAtra)
 
 # different colors for genes, transcripts and exons as well as control datasets
 colors <- c("#FDAE6B", "#4292C6", "#A6D854")
@@ -15,63 +15,63 @@ colors <- c("#FDAE6B", "#4292C6", "#A6D854")
 
 # 1.1 Load data
 # Gene expression
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_gene_summaries_annotated_batch_corrected.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/6_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_gene_summaries_annotated_batch_corrected.RData")
 # Transcript expression
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_transcript_summaries_annotated_batch_corrected.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_transcript_summaries_annotated_batch_corrected.RData")
 # Exon expression
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_exon_summaries_annotated_batch_corrected.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_exon_summaries_annotated_batch_corrected.RData")
 # pData
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_pData_with_surrogate_variables.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/7_pData_with_surrogate_variables.RData")
 
 # 1.2 Remove samples with missing values
 # 1.2.1 remove all samples with C1 = NA from phenotype data and gene/transcript/exon expression data
-index <- which(is.na(pData(geneSummaries)$C1))
-geneSummaries <- geneSummaries[, -c(index)]
-transcriptSummaries <- transcriptSummaries[, -c(index)]
-exonSummaries <- exonSummaries[, -c(index)]
+inDEA <- which(is.na(pData(gene_summaries)$C1))
+gene_summaries <- gene_summaries[, -c(inDEA)]
+transcript_summaries <- transcript_summaries[, -c(inDEA)]
+exon_summaries <- exon_summaries[, -c(inDEA)]
 
 # 1.2.2 remove all samples with Type_of_Death = NA from phenotype data and gene expression data
-index <- which(is.na(pData(geneSummaries)$Type_of_Death))
-geneSummaries <- geneSummaries[, -c(index)]
-transcriptSummaries <- transcriptSummaries[, -c(index)]
-exonSummaries <- exonSummaries[, -c(index)]
+inDEA <- which(is.na(pData(gene_summaries)$Type_of_Death))
+gene_summaries <- gene_summaries[, -c(inDEA)]
+transcript_summaries <- transcript_summaries[, -c(inDEA)]
+exon_summaries <- exon_summaries[, -c(inDEA)]
 
-# 1.2.3 check dim of geneSummaries (25 rows should be removed = 169 samples left)
-dim(geneSummaries)
-dim(transcriptSummaries)
-dim(exonSummaries)
-identical(rownames(pData(geneSummaries)), rownames(pData))
+# 1.2.3 check dim of gene_summaries (25 rows should be removed = 169 samples left)
+dim(gene_summaries)
+dim(transcript_summaries)
+dim(exon_summaries)
+identical(rownames(pData(gene_summaries)), rownames(pData))
 
 # 1.3 Get residuals for gene, transcript and exon expression
 # 1.3.1 Get residuals for gene expression
 # generate design matrix
 design.res <- model.matrix(Dx ~ Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, pData)
-fit.res <- lmFit(geneSummaries, design.res)  # fit model
-res.gene <- residuals.MArrayLM(fit.res, exprs(geneSummaries))  # get residuals
-#exprs(geneSummaries) <- res.gene
+fit.res <- lmFit(gene_summaries, design.res)  # fit model
+res.gene <- residuals.MArrayLM(fit.res, exprs(gene_summaries))  # get residuals
+#exprs(gene_summaries) <- res.gene
 # 1.3.2 Get residuals for transcript expression
-fit.res <- lmFit(transcriptSummaries, design.res)  # fit model
-res.transcript <- residuals.MArrayLM(fit.res, exprs(transcriptSummaries))  # get residuals
-#exprs(transcriptSummaries) <- res.transcript
+fit.res <- lmFit(transcript_summaries, design.res)  # fit model
+res.transcript <- residuals.MArrayLM(fit.res, exprs(transcript_summaries))  # get residuals
+#exprs(transcript_summaries) <- res.transcript
 # 1.3.3 Get residuals for exon expression (Remember: include SV1!!)
 design.res <- model.matrix(Dx ~ Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-fit.res <- lmFit(exonSummaries, design.res)  # fit model
-res.exon <- residuals.MArrayLM(fit.res, exprs(exonSummaries))  # get residuals
-#exprs(exonSummaries) <- res.exon
+fit.res <- lmFit(exon_summaries, design.res)  # fit model
+res.exon <- residuals.MArrayLM(fit.res, exprs(exon_summaries))  # get residuals
+#exprs(exon_summaries) <- res.exon
 
 # 1.4 Get FKBP5 gene, transcript and exon expressions
 # 1.4.1 Get FKBP5 gene expression
-fkbp5.id <- fData(geneSummaries)[grep("FKBP5", fData(geneSummaries)$gene_name), "gene_id"]
-fkbp5.gene.expr <- as.data.frame(exprs(geneSummaries)[fkbp5.id, ])
+fkbp5.id <- fData(gene_summaries)[grep("FKBP5", fData(gene_summaries)$gene_name), "gene_id"]
+fkbp5.gene.expr <- as.data.frame(exprs(gene_summaries)[fkbp5.id, ])
 colnames(fkbp5.gene.expr) <- fkbp5.id
 
 # 1.4.2 Get FKBP5 transcript expression
-fkbp5.id <- fData(transcriptSummaries)[grep("FKBP5", fData(transcriptSummaries)$gene_name), "transcript_id"]
-fkbp5.transcript.expr <- t(as.data.frame(exprs(transcriptSummaries)[fkbp5.id, ]))
+fkbp5.id <- fData(transcript_summaries)[grep("FKBP5", fData(transcript_summaries)$gene_name), "transcript_id"]
+fkbp5.transcript.expr <- t(as.data.frame(exprs(transcript_summaries)[fkbp5.id, ]))
 
 # 1.4.3 Get FKBP5 exon expression
-fkbp5.id <- fData(exonSummaries)[grep("FKBP5", fData(exonSummaries)$gene_name), "exon_id"]
-fkbp5.exon.expr <- t(as.data.frame(exprs(exonSummaries)[fkbp5.id, ]))
+fkbp5.id <- fData(exon_summaries)[grep("FKBP5", fData(exon_summaries)$gene_name), "exon_id"]
+fkbp5.exon.expr <- t(as.data.frame(exprs(exon_summaries)[fkbp5.id, ]))
 
 # 1.5 Load PRS
 # 1.5.1 load SCZ2 PRS
@@ -84,7 +84,7 @@ prs.bip <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.
 prs.cross.disorder <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpred/Cross_Disorder/03_validate/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_cd_filtered_PRS_LDpred-inf.txt", sep = ",", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
 
 # 1.6 Merge PRS to pData (to get the patient/control IDs)
-pData <- pData(geneSummaries)[, c("IID", "ShortName")]
+pData <- pData(gene_summaries)[, c("IID", "ShortName")]
 pData$PRS.SCZ <- unlist(prs.scz2[prs.scz2$IID %in% pData$IID, "PRS"])
 pData$PRS.MDD <- unlist(prs.mdd2[prs.mdd2$IID %in% pData$IID, "PRS"])
 pData$PRS.BIP <- unlist(prs.bip[prs.bip$IID %in% pData$IID, "PRS"])
@@ -100,8 +100,8 @@ colnames(fkbp5)[1] <- "SampleID"
 dim(fkbp5)  # should be 169 rows (samples)
 
 # 1.8 Save dataset
-write.table(fkbp5, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/fkbp5_expressions_and_PRS.tsv", row.names = FALSE, sep = "\t")
-rm(prs.scz2, prs.mdd2, prs.bip, prs.cross.disorder, fkbp5.id, index)
+write.table(fkbp5, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/fkbp5_expressions_and_PRS.tsv", row.names = FALSE, sep = "\t")
+rm(prs.scz2, prs.mdd2, prs.bip, prs.cross.disorder, fkbp5.id, inDEA)
 
 ###############################
 ### 2. Generate FKBP5 plots ###
@@ -124,13 +124,13 @@ fkbp5.plot.data$Type <- as.factor(fkbp5.plot.data$Type)
 fkbp5.plot.data$Type <- factor(fkbp5.plot.data$Type, levels = c("Gene", "Transcripts", "Exons"))
 # add case/control information
 fkbp5.plot.data$SampleType <- "Cases"
-controls <-pData(geneSummaries)[pData(geneSummaries)$Dx == "CTL", "ShortName"]
+controls <-pData(gene_summaries)[pData(gene_summaries)$Dx == "CTL", "ShortName"]
 fkbp5.plot.data[fkbp5.plot.data$SampleID %in% controls, "SampleType"] <- "Controls"
 head(fkbp5.plot.data)
 
 # 2.3 Generate FKBP5 plot
 cols <- c(colors[1], "gray")
-#pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/boxplot_FKBP5_gene_vs_transcripts_vs_exons.pdf", width = 15)
+#pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/boxplot_FKBP5_gene_vs_transcripts_vs_exons.pdf", width = 15)
 sp <- ggplot(fkbp5.plot.data, aes(x = EnsemblID, y = Expression, fill = SampleType)) +
   theme_classic() +
   theme(text = element_text(size = 22), axis.text.x = element_text(angle = 45, hjust = 1)) +
@@ -145,16 +145,16 @@ sp + facet_wrap(. ~ Type, scales = "free")
 
 # boxplot of cases vs. controls
 # remove all samples with C1 = NA from phenotype data and gene/exon expression data
-index <- which(is.na(pData(geneSummaries)$C1))
-geneSummaries <- geneSummaries[, -c(index)]
-exonSummaries <- exonSummaries[, -c(index)]
+inDEA <- which(is.na(pData(gene_summaries)$C1))
+gene_summaries <- gene_summaries[, -c(inDEA)]
+exon_summaries <- exon_summaries[, -c(inDEA)]
 # remove all samples with Type_of_Death = NA from phenotype data and gene expression data
-index <- which(is.na(pData(geneSummaries)$Type_of_Death))
-geneSummaries <- geneSummaries[, -c(index)]
-exonSummaries <- exonSummaries[, -c(index)]
-# check dim of geneSummaries (25 rows should be removed)
-dim(geneSummaries)
-pData <- pData(geneSummaries)
+inDEA <- which(is.na(pData(gene_summaries)$Type_of_Death))
+gene_summaries <- gene_summaries[, -c(inDEA)]
+exon_summaries <- exon_summaries[, -c(inDEA)]
+# check dim of gene_summaries (25 rows should be removed)
+dim(gene_summaries)
+pData <- pData(gene_summaries)
 
 # add original Dx as Diagnosis column to pData
 pData["Diagnosis"] <- pData$Dx
@@ -182,54 +182,54 @@ ggplot(fkbp, aes(x = Dx, y = Expression, fill = Dx)) +
 # DPP4 is also a hit in the 108 loci (CMC) Nature paper!!!
 # 3.1 Load data
 # Gene expression
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
 # Transcript expression
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_transcript_summaries_annotated.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_transcript_summaries_annotated.RData")
 # Exon expression
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_exon_summaries_annotated.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_exon_summaries_annotated.RData")
 # pData
-pData <- pData(geneSummaries)
+pData <- pData(gene_summaries)
 
 # check dim of all Summaries (169 samples each)
-dim(geneSummaries)
-dim(transcriptSummaries)
-dim(exonSummaries)
+dim(gene_summaries)
+dim(transcript_summaries)
+dim(exon_summaries)
 
 # 3.3 Get residuals for gene, transcript and exon expression
 # 3.3.1 Get residuals for gene expression
 # generate design matrix
 design.res <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-fit.res <- lmFit(exprs(transcriptSummaries), design.res)  # fit model
+fit.res <- lmFit(exprs(transcript_summaries), design.res)  # fit model
 res.table <- topTable(eBayes(fit.res), coef = "DxCASE", adjust = "BH", number = Inf)
 
 design.res <- model.matrix(Dx ~ Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-fit.res <- lmFit(exprs(geneSummaries), design.res)  # fit model
-res.gene <- residuals.MArrayLM(fit.res, exprs(geneSummaries))  # get residuals
-exprs(geneSummaries) <- res.gene
+fit.res <- lmFit(exprs(gene_summaries), design.res)  # fit model
+res.gene <- residuals.MArrayLM(fit.res, exprs(gene_summaries))  # get residuals
+exprs(gene_summaries) <- res.gene
 # 3.3.2 Get residuals for transcript expression
-fit.res <- lmFit(exprs(transcriptSummaries), design.res)  # fit model
-res.transcript <- residuals.MArrayLM(fit.res, exprs(transcriptSummaries))  # get residuals
-exprs(transcriptSummaries) <- res.transcript
+fit.res <- lmFit(exprs(transcript_summaries), design.res)  # fit model
+res.transcript <- residuals.MArrayLM(fit.res, exprs(transcript_summaries))  # get residuals
+exprs(transcript_summaries) <- res.transcript
 # 3.3.3 Get residuals for exon expression (Remember: include SV1!!)
-fit.res <- lmFit(exprs(exonSummaries), design.res)  # fit model
-res.exon <- residuals.MArrayLM(fit.res, exprs(exonSummaries))  # get residuals
-exprs(exonSummaries) <- res.exon
+fit.res <- lmFit(exprs(exon_summaries), design.res)  # fit model
+res.exon <- residuals.MArrayLM(fit.res, exprs(exon_summaries))  # get residuals
+exprs(exon_summaries) <- res.exon
 
 # 3.4 Get DPP4 gene, transcript and exon expressions
 # 3.4.1 Get DPP4 gene expression
-dpp4.id <- fData(geneSummaries)[fData(geneSummaries)$gene_name == "DPP4", "gene_id"]
-dpp4.gene.expr <- as.data.frame(exprs(geneSummaries)[dpp4.id, ])
+dpp4.id <- fData(gene_summaries)[fData(gene_summaries)$gene_name == "DPP4", "gene_id"]
+dpp4.gene.expr <- as.data.frame(exprs(gene_summaries)[dpp4.id, ])
 colnames(dpp4.gene.expr) <- "DPP4"
 
 # 3.4.2 Get DPP4 transcript expression
-dpp4.id <- fData(transcriptSummaries)[grep("DPP4", fData(transcriptSummaries)$gene_name), "transcript_id"]
-dpp4.transcript.expr <- t(as.data.frame(exprs(transcriptSummaries)[dpp4.id, ]))
+dpp4.id <- fData(transcript_summaries)[grep("DPP4", fData(transcript_summaries)$gene_name), "transcript_id"]
+dpp4.transcript.expr <- t(as.data.frame(exprs(transcript_summaries)[dpp4.id, ]))
 dpp4.transcript.expr <- dpp4.transcript.expr[, c("ENST00000360534.3", "ENST00000434918.2", "ENST00000497461.1", "ENST00000416189.1", "ENST00000461836.1", "ENST00000490286.1", "ENST00000413651.1", "ENST00000468903.1", "ENST00000491591.1", "ENST00000494507.1")]
 colnames(dpp4.transcript.expr) <- c("DPP4-001", "DPP4-002", "DPP4-003", "DPP4-004", "DPP4-005", "DPP4-006", "DPP4-007", "DPP4-008", "DPP4-010", "DPP4-011")
 
 # 3.4.3 Get DPP4 exon expression
-dpp4.id <- fData(exonSummaries)[grep("DPP4", fData(exonSummaries)$gene_name), "exon_id"]
-dpp4.exon.expr <- t(as.data.frame(exprs(exonSummaries)[dpp4.id, ]))
+dpp4.id <- fData(exon_summaries)[grep("DPP4", fData(exon_summaries)$gene_name), "exon_id"]
+dpp4.exon.expr <- t(as.data.frame(exprs(exon_summaries)[dpp4.id, ]))
 # all 7 exons in best scoring transcript of DPP4 (DPP4-008): 
 dpp4_08 <- c("ENSE00001845011", "ENSE00003482771", "ENSE00003513529", "ENSE00003668522", "ENSE00003517002", "ENSE00003590666", "ENSE00001879445")
 exons <- sapply(dpp4_08, function(x) dpp4.exon.expr[, grep(x, colnames(dpp4.exon.expr))])
@@ -256,13 +256,13 @@ dpp4.plot.data$Type <- as.factor(dpp4.plot.data$Type)
 dpp4.plot.data$Type <- factor(dpp4.plot.data$Type, levels = c("Gene", "Transcripts", "Exons"))
 # add case/control information
 dpp4.plot.data$SampleType <- "Cases"
-controls <-pData(geneSummaries)[pData(geneSummaries)$Dx == "CTL", "ShortName"]
+controls <-pData(gene_summaries)[pData(gene_summaries)$Dx == "CTL", "ShortName"]
 dpp4.plot.data[dpp4.plot.data$SampleID %in% controls, "SampleType"] <- "Controls"
 head(dpp4.plot.data)
 
 # 3.8 Generate dpp4 plot
 cols <- c(colors[1], "gray", colors[2], "gray", colors[3], "gray")
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/boxplot_dpp4_gene_vs_transcripts_vs_exons_residuals.pdf", width = 15)
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/boxplot_dpp4_gene_vs_transcripts_vs_exons_residuals.pdf", width = 15)
 sp <- ggplot(dpp4.plot.data, aes(x = EnsemblID, y = Expression, fill = SampleType)) +
   theme_classic() +
   theme(text = element_text(size = 22), axis.text.x = element_text(angle = 45, hjust = 1)) +
@@ -280,48 +280,48 @@ dev.off()
 # EYS is a GWAS hit in two different schizophrenia paper!!
 # 3.1 Load data
 # Gene expression
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
 # Transcript expression
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_transcript_summaries_annotated.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_transcript_summaries_annotated.RData")
 # Exon expression
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_exon_summaries_annotated.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_exon_summaries_annotated.RData")
 # pData
-pData <- pData(geneSummaries)
+pData <- pData(gene_summaries)
 
 # check dim of all Summaries (169 samples each)
-dim(geneSummaries)
-dim(transcriptSummaries)
-dim(exonSummaries)
+dim(gene_summaries)
+dim(transcript_summaries)
+dim(exon_summaries)
 
 # 3.3 Get residuals for gene, transcript and exon expression
 # 3.3.1 Get residuals for gene expression
 # generate design matrix
 design.res <- model.matrix(Dx ~ Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-fit.res <- lmFit(exprs(geneSummaries), design.res)  # fit model
-res.gene <- residuals.MArrayLM(fit.res, exprs(geneSummaries))  # get residuals
-exprs(geneSummaries) <- res.gene
+fit.res <- lmFit(exprs(gene_summaries), design.res)  # fit model
+res.gene <- residuals.MArrayLM(fit.res, exprs(gene_summaries))  # get residuals
+exprs(gene_summaries) <- res.gene
 # 3.3.2 Get residuals for transcript expression
-fit.res <- lmFit(exprs(transcriptSummaries), design.res)  # fit model
-res.transcript <- residuals.MArrayLM(fit.res, exprs(transcriptSummaries))  # get residuals
-exprs(transcriptSummaries) <- res.transcript
+fit.res <- lmFit(exprs(transcript_summaries), design.res)  # fit model
+res.transcript <- residuals.MArrayLM(fit.res, exprs(transcript_summaries))  # get residuals
+exprs(transcript_summaries) <- res.transcript
 # 3.3.3 Get residuals for exon expression (Remember: include SV1!!)
-fit.res <- lmFit(exprs(exonSummaries), design.res)  # fit model
-res.exon <- residuals.MArrayLM(fit.res, exprs(exonSummaries))  # get residuals
-exprs(exonSummaries) <- res.exon
+fit.res <- lmFit(exprs(exon_summaries), design.res)  # fit model
+res.exon <- residuals.MArrayLM(fit.res, exprs(exon_summaries))  # get residuals
+exprs(exon_summaries) <- res.exon
 
 # 3.4 Get FNDC3A gene, transcript and exon expressions
 # 3.4.1 Get FNDC3A gene expression
-fndc3a.id <- fData(geneSummaries)[fData(geneSummaries)$gene_name == "EYS", "gene_id"]
-fndc3a.gene.expr <- as.data.frame(exprs(geneSummaries)[fndc3a.id, ])
+fndc3a.id <- fData(gene_summaries)[fData(gene_summaries)$gene_name == "FNDC3A", "gene_id"]
+fndc3a.gene.expr <- as.data.frame(exprs(gene_summaries)[fndc3a.id, ])
 colnames(fndc3a.gene.expr) <- fndc3a.id
 
 # 3.4.2 Get FNDC3A transcript expression
-fndc3a.id <- fData(transcriptSummaries)[grep("EYS", fData(transcriptSummaries)$gene_name), "transcript_id"]
-fndc3a.transcript.expr <- t(as.data.frame(exprs(transcriptSummaries)[fndc3a.id, ]))
+fndc3a.id <- fData(transcript_summaries)[grep("FNDC3A", fData(transcript_summaries)$gene_name), "transcript_id"]
+fndc3a.transcript.expr <- t(as.data.frame(exprs(transcript_summaries)[fndc3a.id, ]))
 
 # 3.4.3 Get FNDC3A exon expression
-fndc3a.id <- fData(exonSummaries)[grep("EYS", fData(transcriptSummaries)$gene_name), "exon_id"]
-fndc3a.exon.expr <- t(as.data.frame(exprs(exonSummaries)[fndc3a.id, ]))
+fndc3a.id <- fData(exon_summaries)[grep("FNDC3A", fData(exon_summaries)$gene_name), "exon_id"]
+fndc3a.exon.expr <- t(as.data.frame(exprs(exon_summaries)[fndc3a.id, ]))
 
 # 3.5 Merge datasets
 fndc3a <- fndc3a.gene.expr
@@ -346,13 +346,13 @@ fndc3a.plot.data$Type <- as.factor(fndc3a.plot.data$Type)
 fndc3a.plot.data$Type <- factor(fndc3a.plot.data$Type, levels = c("Gene", "Transcripts", "Exons"))
 # add case/control information
 fndc3a.plot.data$SampleType <- "Cases"
-controls <-pData(geneSummaries)[pData(geneSummaries)$Dx == "CTL", "ShortName"]
+controls <-pData(gene_summaries)[pData(gene_summaries)$Dx == "CTL", "ShortName"]
 fndc3a.plot.data[fndc3a.plot.data$SampleID %in% controls, "SampleType"] <- "Controls"
 head(fndc3a.plot.data)
 
 # 3.8 Generate FNDC3A plot
 cols <- c(colors[1], "gray", colors[2], "gray", colors[3], "gray")
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/boxplot_FNDC3A_gene_vs_transcripts_vs_exons_residuals.pdf", width = 15)
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/1.1_boxplot_FNDC3A_gene_vs_transcripts_vs_exons_residuals.pdf", width = 15)
 sp <- ggplot(fndc3a.plot.data, aes(x = EnsemblID, y = Expression, fill = SampleType)) +
   theme_classic() +
   theme(text = element_text(size = 22), axis.text.x = element_text(angle = 45, hjust = 1)) +
@@ -370,63 +370,63 @@ dev.off()
 #################################
 # 3.1 Load data
 # Gene expression
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_gene_summaries_annotated_batch_corrected.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/6_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_gene_summaries_annotated_batch_corrected.RData")
 # Transcript expression
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_transcript_summaries_annotated_batch_corrected.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_transcript_summaries_annotated_batch_corrected.RData")
 # Exon expression
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_exon_summaries_annotated_batch_corrected.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_exon_summaries_annotated_batch_corrected.RData")
 # pData
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_pData_with_surrogate_variables.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/7_pData_with_surrogate_variables.RData")
 
 # 3.2 Remove samples with missing values
 # 3.2.1 remove all samples with C1 = NA from phenotype data and gene/transcript/exon expression data
-index <- which(is.na(pData(geneSummaries)$C1))
-geneSummaries <- geneSummaries[, -c(index)]
-transcriptSummaries <- transcriptSummaries[, -c(index)]
-exonSummaries <- exonSummaries[, -c(index)]
+inDEA <- which(is.na(pData(gene_summaries)$C1))
+gene_summaries <- gene_summaries[, -c(inDEA)]
+transcript_summaries <- transcript_summaries[, -c(inDEA)]
+exon_summaries <- exon_summaries[, -c(inDEA)]
 
 # 3.2.2 remove all samples with Type_of_Death = NA from phenotype data and gene expression data
-index <- which(is.na(pData(geneSummaries)$Type_of_Death))
-geneSummaries <- geneSummaries[, -c(index)]
-transcriptSummaries <- transcriptSummaries[, -c(index)]
-exonSummaries <- exonSummaries[, -c(index)]
+inDEA <- which(is.na(pData(gene_summaries)$Type_of_Death))
+gene_summaries <- gene_summaries[, -c(inDEA)]
+transcript_summaries <- transcript_summaries[, -c(inDEA)]
+exon_summaries <- exon_summaries[, -c(inDEA)]
 
-# 3.2.3 check dim of geneSummaries (25 rows should be removed = 169 samples left)
-dim(geneSummaries)
-dim(transcriptSummaries)
-dim(exonSummaries)
-identical(rownames(pData(geneSummaries)), rownames(pData))
+# 3.2.3 check dim of gene_summaries (25 rows should be removed = 169 samples left)
+dim(gene_summaries)
+dim(transcript_summaries)
+dim(exon_summaries)
+identical(rownames(pData(gene_summaries)), rownames(pData))
 
 # 3.3 Get residuals for gene, transcript and exon expression
 # 3.3.1 Get residuals for gene expression
 # generate design matrix
 design.res <- model.matrix(Dx ~ Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, pData)
-fit.res <- lmFit(geneSummaries, design.res)  # fit model
-res.gene <- residuals.MArrayLM(fit.res, exprs(geneSummaries))  # get residuals
-exprs(geneSummaries) <- res.gene
+fit.res <- lmFit(gene_summaries, design.res)  # fit model
+res.gene <- residuals.MArrayLM(fit.res, exprs(gene_summaries))  # get residuals
+exprs(gene_summaries) <- res.gene
 # 3.3.2 Get residuals for transcript expression
-fit.res <- lmFit(transcriptSummaries, design.res)  # fit model
-res.transcript <- residuals.MArrayLM(fit.res, exprs(transcriptSummaries))  # get residuals
-exprs(transcriptSummaries) <- res.transcript
+fit.res <- lmFit(transcript_summaries, design.res)  # fit model
+res.transcript <- residuals.MArrayLM(fit.res, exprs(transcript_summaries))  # get residuals
+exprs(transcript_summaries) <- res.transcript
 # 3.3.3 Get residuals for exon expression (Remember: include SV1!!)
 design.res <- model.matrix(Dx ~ Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-fit.res <- lmFit(exonSummaries, design.res)  # fit model
-res.exon <- residuals.MArrayLM(fit.res, exprs(exonSummaries))  # get residuals
-exprs(exonSummaries) <- res.exon
+fit.res <- lmFit(exon_summaries, design.res)  # fit model
+res.exon <- residuals.MArrayLM(fit.res, exprs(exon_summaries))  # get residuals
+exprs(exon_summaries) <- res.exon
 
 # 3.4 Get SERTAD4 gene, transcript and exon expressions
 # 3.4.1 Get SERTAD4 gene expression
-sertad4.id <- fData(geneSummaries)[fData(geneSummaries)$gene_name == "SERTAD4", "gene_id"]
-sertad4.gene.expr <- as.data.frame(exprs(geneSummaries)[sertad4.id, ])
+sertad4.id <- fData(gene_summaries)[fData(gene_summaries)$gene_name == "SERTAD4", "gene_id"]
+sertad4.gene.expr <- as.data.frame(exprs(gene_summaries)[sertad4.id, ])
 colnames(sertad4.gene.expr) <- sertad4.id
 
 # 3.4.2 Get SERTAD4 transcript expression
-sertad4.id <- fData(transcriptSummaries)[fData(transcriptSummaries)$gene_name == "SERTAD4", "transcript_id"]
-sertad4.transcript.expr <- t(as.data.frame(exprs(transcriptSummaries)[sertad4.id, ]))
+sertad4.id <- fData(transcript_summaries)[fData(transcript_summaries)$gene_name == "SERTAD4", "transcript_id"]
+sertad4.transcript.expr <- t(as.data.frame(exprs(transcript_summaries)[sertad4.id, ]))
 
 # 3.4.3 Get SERTAD4 exon expression
-sertad4.id <- fData(exonSummaries)[fData(exonSummaries)$gene_name == "SERTAD4", "exon_id"]
-sertad4.exon.expr <- t(as.data.frame(exprs(exonSummaries)[sertad4.id, ]))
+sertad4.id <- fData(exon_summaries)[fData(exon_summaries)$gene_name == "SERTAD4", "exon_id"]
+sertad4.exon.expr <- t(as.data.frame(exprs(exon_summaries)[sertad4.id, ]))
 
 # 3.5 Merge datasets
 sertad4 <- sertad4.gene.expr
@@ -451,13 +451,13 @@ sertad4.plot.data$Type <- as.factor(sertad4.plot.data$Type)
 sertad4.plot.data$Type <- factor(sertad4.plot.data$Type, levels = c("Gene", "Transcripts", "Exons"))
 # add case/control information
 sertad4.plot.data$SampleType <- "Cases"
-controls <-pData(geneSummaries)[pData(geneSummaries)$Dx == "CTL", "ShortName"]
+controls <-pData(gene_summaries)[pData(gene_summaries)$Dx == "CTL", "ShortName"]
 sertad4.plot.data[sertad4.plot.data$SampleID %in% controls, "SampleType"] <- "Controls"
 head(sertad4.plot.data)
 
 # 3.8 Generate SERTAD4 plot
 cols <- c(colors[1], "gray")
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/figures/boxplot_SERTAD4_gene_vs_transcripts_vs_exons_residuals.pdf", width = 15)
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/boxplot_SERTAD4_gene_vs_transcripts_vs_exons_residuals.pdf", width = 15)
 sp <- ggplot(sertad4.plot.data, aes(x = EnsemblID, y = Expression, fill = SampleType)) +
   theme_classic() +
   theme(text = element_text(size = 22), axis.text.x = element_text(angle = 45, hjust = 1)) +
@@ -471,11 +471,11 @@ dev.off()
 
 
 ### Overlap DEA hits for p < 0.01
-genes <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/1.1_diff_expr_genes_for_diagnosis.csv", select = c("p-value", "Gene Symbol"), data.table = F)
+genes <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.1_diff_expr_genes_for_diagnosis.csv", select = c("p-value", "Gene Symbol"), data.table = F)
 genes <- genes[genes$`p-value` < 0.01, "Gene Symbol"]
-transcripts <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/1.3_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.csv", select = c("p-value", "Gene Symbol"), data.table = F)
+transcripts <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.3_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.csv", select = c("p-value", "Gene Symbol"), data.table = F)
 transcripts <- transcripts[transcripts$`p-value` < 0.01, "Gene Symbol"]
-exons <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/1.3_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.csv", select = c("p-value", "Gene Symbol"), data.table = F)
+exons <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.3_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.csv", select = c("p-value", "Gene Symbol"), data.table = F)
 exons <- exons[exons$`p-value` < 0.01, "Gene Symbol"]
 
 length(genes)
@@ -491,48 +491,4 @@ draw.triple.venn(length(genes), length(transcripts), length(exons),
                  length(intersect(genes, exons)), length(intersect(exons, (intersect(genes, transcripts)))),
                  category = c("Gene", "Transcript", "Exon"), scaled = F)
 
-### Generate VENN for gDEGenes, tDEGenes and eDEGenes for age, pH, PMI, and C2
-library(VennDiagram)
-gDEGenes_age <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/1.1_diff_expr_genes_for_age.csv", select = c("Gene Symbol", "FDR estimate"), data.table = F)
-gDEGenes_age <- gDEGenes_age[gDEGenes_age$`FDR estimate` < 0.1, "Gene Symbol"]
-tDEGenes_age <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/1.3_diff_expr_transcripts_for_age_new_pvalue_and_fdr.csv", select = c("FDR estimate", "Gene Symbol"), data.table = F)
-tDEGenes_age <- tDEGenes_age[tDEGenes_age$`FDR estimate` < 0.1, "Gene Symbol"]
-eDEGenes_age <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/1.3_diff_expr_exons_for_age_new_pvalue_and_fdr.csv", select = c("FDR estimate", "Gene Symbol"), data.table = F)
-eDEGenes_age <- eDEGenes_age[eDEGenes_age$`FDR estimate` < 0.1, "Gene Symbol"]
-
-ageing_genes <- fread("/storage/groups/ccm01/datasets/2019_Human_Ageing_Genomic_Resources/genage_human.csv", select = "symbol", data.table = F)
-length(intersect(ageing_genes$symbol, eDEGenes_age))
-
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/VENN_DEGenes_for_age.pdf")
-grid.newpage()
-overrideTriple=T
-draw.triple.venn(area1 = length(gDEGenes_age), area2 = length(tDEGenes_age), 
-                 area3 = length(eDEGenes_age), 
-                 n12 = length(intersect(gDEGenes_age, tDEGenes_age)), 
-                 n23 = length(intersect(tDEGenes_age, eDEGenes_age)), 
-                 n13 = length(intersect(gDEGenes_age, eDEGenes_age)), euler.d = F, scaled = F, 
-                 n123 = length(intersect(gDEGenes_age, intersect(tDEGenes_age, eDEGenes_age))),  
-                 category = c(paste("gDEGenes", length(gDEGenes_age), sep = "\n"), paste("tDEGenes", length(tDEGenes_age), sep = "\n"), paste("eDEGenes", length(eDEGenes_age), sep = "\n")), 
-                 lty = "blank", fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
-dev.off()
-
-gDEGenes_age <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/1.1_diff_expr_genes_for_pmi.csv", select = c("Gene Symbol", "FDR estimate"), data.table = F)
-gDEGenes_age <- gDEGenes_age[gDEGenes_age$`FDR estimate` < 0.1, "Gene Symbol"]
-tDEGenes_age <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/1.3_diff_expr_transcripts_for_pmi_new_pvalue_and_fdr.csv", select = c("FDR estimate", "Gene Symbol"), data.table = F)
-tDEGenes_age <- tDEGenes_age[tDEGenes_age$`FDR estimate` < 0.1, "Gene Symbol"]
-eDEGenes_age <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/results/1.3_diff_expr_exons_for_pmi_new_pvalue_and_fdr.csv", select = c("FDR estimate", "Gene Symbol"), data.table = F)
-eDEGenes_age <- eDEGenes_age[eDEGenes_age$`FDR estimate` < 0.1, "Gene Symbol"]
-
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/VENN_DEGenes_for_c2.pdf")
-grid.newpage()
-overrideTriple=T
-draw.triple.venn(area1 = length(gDEGenes_age), area2 = length(tDEGenes_age), 
-                 area3 = length(eDEGenes_age), 
-                 n12 = length(intersect(gDEGenes_age, tDEGenes_age)), 
-                 n23 = length(intersect(tDEGenes_age, eDEGenes_age)), 
-                 n13 = length(intersect(gDEGenes_age, eDEGenes_age)), euler.d = F, scaled = F, 
-                 n123 = length(intersect(gDEGenes_age, intersect(tDEGenes_age, eDEGenes_age))),  
-                 category = c(paste("gDEGenes", length(gDEGenes_age), sep = "\n"), paste("tDEGenes", length(tDEGenes_age), sep = "\n"), paste("eDEGenes", length(eDEGenes_age), sep = "\n")), 
-                 lty = "blank", fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
-dev.off()
 

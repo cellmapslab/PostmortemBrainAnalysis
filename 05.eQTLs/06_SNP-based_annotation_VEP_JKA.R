@@ -10,30 +10,8 @@ suppressPackageStartupMessages({
   library(foreach)
   library(doSNOW)
   library(S4Vectors)
-  library(reshape2)
-  library(rtracklayer)
 })
 
-# function to generate an eQTL GRanges object (with MAF bins)
-# @param input Input data of which an GRanges object should be made of (e.g. eQTL hits)
-# @param mdata Merging data (e.g. Background SNPs)
-# @param ofile Name for the rds output file of the generated GRanges object 
-# GenerateGrangesObject <- function(input, mdata, ofile){
-#   # merge with MAF info
-#   input <- merge(input, mdata, by = "SNP")
-#   # generate GRanges object
-#   input.gr <- GRanges(seqnames = input$CHR, 
-#                       ranges = IRanges(start = as.numeric(as.character(input$POS)), 
-#                                        end = as.numeric(as.character(input$POS))),
-#                       snp_id = input$SNP, 
-#                       bin = input$bin)
-#   # remove duplicates
-#   input.gr <- input.gr[!duplicated(input.gr)] 
-#   # save GRanges object to an rds file
-#   saveRDS(input.gr, file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/RData/", ofile))
-#   # return finalized GRanges object
-#   return(input.gr)
-# }
 
 # function, to calculate the gene annotation to a public dataset, but with respect to the MAF bins
 # @param own Own cis-eQTL data set as GRanges object
@@ -58,7 +36,7 @@ annotatePublicData <- function(own, public, nperm, background){
 }
 
 ### Public data ###
-##VEP data
+### VEP data ###
 # library(rtracklayer)
 # library(data.table) 
 # library(reshape2)
@@ -95,10 +73,9 @@ eqtls.exon.cases.gr <- readRDS(paste0(ipath,"pmb_exon_hits_cases_only_cis_eQTL_S
 
 ### Load Background data ###
 background.gr <- readRDS(paste0(ipath,"background_SNPs.rds"))
-#length(background.gr@ranges)#[1] 6798048
-#background.gr.vep <- subsetByOverlaps(background.gr, vepGR_hg19)
-#length(background.gr.vep@ranges)# 3382170
-
+length(background.gr@ranges) #[1] 6,798,048
+background.gr <- subsetByOverlaps(background.gr, vepGR_hg19)
+length(background.gr@ranges) # 3,382,170
 
 ### Annotation ###
 # First, set parameters
@@ -108,8 +85,9 @@ perm <- 10000
 states <- names(table(vepGR_hg19$code))
 
 # 2.4.1 annotation to ChromHMM Blood (parallelized)
-cl <- makeCluster(17)
+cl <- makeCluster(9)
 registerDoSNOW(cl)
+clusterCall(cl, function(x) .libPaths(x), .libPaths())  # load packages from above
 
 results2 <- foreach (i = seq_along(states), .combine = rbind,
                      .packages = c("GenomicRanges", "S4Vectors")) %dopar% {

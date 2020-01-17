@@ -331,10 +331,8 @@ Here, num.sv estimated only `r n.sv` surrogate variables. **0 sv estimated**
 Generate corrPlot including the surrogate variable. 
 
 ```{r}
-mod <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4, data = pheno)
-modNew <- cbind(mod, svobj$sv)
-colnames(modNew) <- c(colnames(mod), "SV")
-modCor <- corr.test(modNew[, -1], use='pairwise.complete.obs', method = "pearson", adjust = "none")
+mod <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, data = pheno)
+modCor <- corr.test(mod[, -1], use='pairwise.complete.obs', method = "pearson", adjust = "none")
 pheatmap(modCor$r)
 corrplot(modCor$r, method="circle")
 ```

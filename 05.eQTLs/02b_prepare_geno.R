@@ -7,7 +7,7 @@
 # last modified: 1st February 2019
 
 # add installed packages from home path, to the library search path
-.libPaths("/home/icb/karolina.worf/R/x86_64-pc-linux-gnu-library/3.5/")
+.libPaths("/home/icb/karolina.worf/R/x86_64-pc-linux-gnu-library/3.6/")
 
 # load packages
 library(data.table)
@@ -54,7 +54,7 @@ if(length(args)==0){
 	# print(head(m_trans))
 
 	# 7. Save data to file (in chunks)
-	out <- paste(output, "/pmb_info06_all_chr_maf0.05_merged_matrixEQTL_transformed.gen", sep = "")
+	out <- paste(output, "/pmb_info06_all_chr_maf0.05_merged_noDup_matrixEQTL_transformed.gen", sep = "")
 	file.create(out)
 	chunkssize <- round(nr / 100)
 	for (j in 0:99){

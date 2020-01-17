@@ -44,13 +44,13 @@ opts_chunk$set(echo = TRUE,
 
 # Introduction
 
-This document includes the quality control of the different microarray pre-processing steps generated in the first R markdown script (*01_Preprocessing.Rmd*). We will use the different generated RData files of the first script as input for all the neccessary quality control and plot generation procedures. Following steps will be performed: 
+This document includes the quality control of the different microarray pre-processing steps generated in the first R markdown script (*01_Preprocessing.Rmd*). We will use the different generated RData files of the first script as input for all the neccessary quality control and plot generation procedures. For the calibrated data we will only use the probeset summarized dataset as we continue all following analyses with this dataset. The last step is done for all three annotation stages (gene, transcript, exon). Following steps will be performed: 
 
-1. Evaluate phenotype data
+1. Evaluate phenotype (covariate) data
 2. Quality control of raw data (chip scan date, boxplot, PCA plots, arrayQualityMetrics)
 3. Quality control of calibrated data (boxplot, PCA plots, arrayQualityMetrics)
-4. Quality control of calibrated and annotated data (boxplot, PCA plots, arrayQualityMetrics)
-5. Quality control of batch corrected data (boxplot, PCA plots, arrayQualityMetrics)
+4. Quality control of calibrated and batch corrected data (boxplot, PCA plots, arrayQualityMetrics)
+5. Quality control of calibrated, batch corrected and annotated data (boxplot, PCA plots, arrayQualityMetrics)
 
 We will also generate several RData files for the different quality control steps, as some of them include long processing times.  
 
@@ -63,6 +63,7 @@ Below you can find the list of packages that are required by the workflow.
 library(oligo) # for background correction, normalization and summarization
 library(arrayQualityMetrics) # for quality control
 library(psych)
+library(plyr)
 
 # Plotting and colour option packages
 library(ggplot2) # for (PCA) plots
@@ -73,31 +74,40 @@ library(corrplot)
 library(devtools)
 library(cowplot)
 library(viridis) # for colorblind color palette
+library(RColorBrewer) # for more color palettes (for corrplot)
 ```
 
-# Load Raw and Phenotype Data
 
-For the data evaluation and pre-processing, we first will load the raw data files.
+# Evaluate phenotype data
+
+## Load data
+
+For every step we will load the necessary data. To get all phenotypes, we need to load the batch corrected probeset summarized dataset as some samples were removed in this preprocessing step, which we also do not want in the phenotype plots. Additionally we will load the first 20 surrogate variables.
 
 ```{r}
+# Phenotypes
 load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/5_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA.RData")
+pheno <- pData(probeset_summaries)
+
+# Surrogate variables
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/5_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_surrogate_variables_1-20.RData")
+surrogates <- svobj$sv
+
+#mean(pheno[pheno$Diagnosis == "SCZ", "C4"])
+#sd(pheno[pheno$Diagnosis == "SCZ", "C4"])/sqrt(length(pheno[pheno$Diagnosis == "SCZ", "C4"]))
+#summary(pheno[pheno$Diagnosis == "MDD", "Suicide"])
 ```
 
-# Evaluate Phenotype Data
+## Covariate distributions
 
-## Check Variables
-
-First, we will look more closely into our phenotype data. The five replicates and three missing pH values were already removed in the preprocessing step. Now, we have `r length(pData(probesetSummaries)$IID)` samples, including `r length(pData(probesetSummaries)[pData(probesetSummaries)$Dx == "SCZ", "Dx"])` schizophrenia, `r length(pData(probesetSummaries)[pData(probesetSummaries)$Dx == "BPD", "Dx"])` bipolar disorder, `r length(pData(probesetSummaries)[pData(probesetSummaries)$Dx == "MDD", "Dx"])` major depression disorder patients and `r length(pData(probesetSummaries)[pData(probesetSummaries)$Dx == "CTL", "Dx"])` healthy controls. 
+First, we will look more closely into our phenotype data. The five replicates and three missing pH values were already removed in the preprocessing step. Now, we have `r length(pheno$IID)` samples, including `r length(pheno[pheno$Diagnosis == "SCZ", "Diagnosis"])` schizophrenia, `r length(pheno[pheno$Diagnosis == "BPD", "Diagnosis"])` bipolar disorder, `r length(pheno[pheno$Diagnosis == "MDD", "Diagnosis"])` major depression disorder patients and `r length(pheno[pheno$Diagnosis == "CTL", "Diagnosis"])` healthy controls. 
 
 One of the most important covariates is the post mortem interval (PMI) giving the time in hours from the death of a person until the removal of the samples. Another important covariate is the RNA integrity number (RIN), which tells us the quality of the RNA samples and should always be higher than six. The phenotype data also includes the age at death (Age), Sex, Diagnosis (Dx), pH, suicide information, ... (DOI), batch information, ancestry and some file identifier. The ancestry information was not available for all samples, which is the reason, why we used the genotype data to calculate the ancestry information (mds). We also distributed the files into three different batches according to their filename. File batch "a" includes all samples measured in 2009. File batch "9" and "M" include all samples measured in 2014.
 
 A short summary of the most important phenotype variables:
 
 ```{r, echo = F}
-pData <- pData(probesetSummaries)
-summary(pData[, c("Age", "Sex", "Dx", "Diagnosis", "pH", "PMI", "Suicide", "Type_of_Death", "DOI", "RIN", "Batch", "Ancestry", "File")])
-# get twenty colors (for plots)
-col <- viridis(20)
+summary(pheno[, c("Age", "Sex", "Dx", "Diagnosis", "pH", "PMI", "Suicide", "Type_of_Death", "DOI", "RIN", "Batch", "Ancestry", "File")])
 ```
 
 Now, we will check the covariates visually.
@@ -107,25 +117,25 @@ Now, we will check the covariates visually.
 Barplot of the Sex covariate (Female, Male) for cases vs. controls.
 
 ```{r, echo = F}
-plot.data <- rbind(as.data.frame(table(pData[pData$Dx == "CTL", "Sex"])), as.data.frame(table(pData[pData$Dx == "CASE", "Sex"])))
-plot.data$Type <- c("Controls", "Controls", "Cases", "Cases")
-plot.data$Gender <- "Male"
-plot.data[plot.data$Var1 == "F", "Gender"] <- "Female"
-plot.data$Type <- factor(plot.data$Type, levels = c("Controls", "Cases"))
-ggplot(plot.data) +
+plot_data <- rbind(as.data.frame(table(pheno[pheno$Dx == "CTL", "Sex"])), as.data.frame(table(pheno[pheno$Dx == "CASE", "Sex"])))
+plot_data$Type <- c("Controls", "Controls", "Cases", "Cases")
+plot_data$Gender <- "Male"
+plot_data[plot_data$Var1 == "F", "Gender"] <- "Female"
+plot_data$Type <- factor(plot_data$Type, levels = c("Controls", "Cases"))
+ggplot(plot_data) +
   # add bar for each sex colored by case/control
   geom_bar(aes(x = Gender, y = Freq, fill = Type),
            stat = "identity", position = "dodge", colour = "black") +
   # name axes and remove gap between bars and y-axis
   scale_y_continuous("", expand = c(0, 0)) +
   scale_x_discrete("") +
-  scale_fill_manual(values = c(col[16], col[20])) +
+  scale_fill_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D")) +
   # remove grey theme
-  theme_classic(base_size = 18) +
+  theme_classic(base_size = 24) +
   labs(title = "Sex", x = element_blank(), y = element_blank()) +
   # change legend 
-  theme(plot.title = element_text(hjust = 0.5), legend.position = c(0.1, 0.9), legend.background = element_rect(size = 0.5, linetype = "solid", colour = "black"), legend.title = element_blank(), legend.spacing.y = unit(2, "pt"), legend.spacing = unit(1,"cm")) 
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/barplot_sex.pdf", width = 8, height = 6, units = "in")
+  theme(plot.title = element_text(hjust = 0.5), legend.position = c(0.14, 0.9), legend.background = element_rect(size = 0.5, linetype = "solid", colour = "black"), legend.title = element_blank(), legend.spacing.y = unit(2, "pt"), legend.spacing = unit(1,"cm")) 
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_barplot_sex.pdf", width = 8, height = 6, units = "in")
 ```
 
 We can see, that we have more than threefold of males in healthy controls and schizophrenia patients and slightly more females with bipolar disorder and major depression disorder. 
@@ -133,22 +143,22 @@ We can see, that we have more than threefold of males in healthy controls and sc
 ### Diagnosis (Dx)
 
 ```{r, echo = F}
-plot.data <- as.data.frame(table(pData$Diagnosis))
-plot.data$Var1 <- factor(plot.data$Var1, levels = c("CTL", "SCZ", "MDD", "BPD"))
-ggplot(plot.data) +
+plot_data <- as.data.frame(table(pheno$Diagnosis))
+plot_data$Var1 <- factor(plot_data$Var1, levels = c("CTL", "SCZ", "MDD", "BPD"))
+ggplot(plot_data) +
   # add bar for each sex colored by case/control
   geom_bar(aes(x = Var1, y = Freq, fill = Var1),
            stat = "identity", position = "dodge", colour = "black") +
   # name axes and remove gap between bars and y-axis
   scale_y_continuous("", expand = c(0, 0)) +
   scale_x_discrete("") +
-  scale_fill_manual(values = c(col[1], col[7], col[16], col[20])) +
+  scale_fill_manual(values = viridis(4, begin = 0.3, end = 0.9, option = "D")) +
   # remove grey theme
-  theme_classic(base_size = 18) +
+  theme_classic(base_size = 24) +
   labs(title = "Diagnosis", x = element_blank(), y = element_blank()) +
   # change legend 
-  theme(plot.title = element_text(hjust = 0.5), legend.position = c(0.9, 0.9), legend.background = element_rect(size = 0.5, linetype = "solid", colour = "black"), legend.title = element_blank(), legend.spacing.y = unit(2, "pt"), legend.spacing = unit(1,"cm")) 
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/barplot_diagnosis.pdf", width = 8, height = 6, units = "in")
+  theme(plot.title = element_text(hjust = 0.5), legend.position = c(0.89, 0.9), legend.background = element_rect(size = 0.5, linetype = "solid", colour = "black"), legend.title = element_blank(), legend.spacing.y = unit(2, "pt"), legend.spacing = unit(1,"cm")) 
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_barplot_diagnosis.pdf", width = 8, height = 6, units = "in")
 ```
 
 We have almost as many healthy controls as schizophrenia patients. The number of bipolar disorder and major despression disorder patients is relatively small compared to the amount of schizophrenia patients. 
@@ -158,26 +168,26 @@ We have almost as many healthy controls as schizophrenia patients. The number of
 In the phenotype data we also have the information given, if the patients performed suicide (y) or not (n). None of the healthy controls committed suicide.  
 
 ```{r, echo = F}
-plot.data <- rbind(as.data.frame(table(pData[pData$Dx == "CTL", "Suicide"])), as.data.frame(table(pData[pData$Dx == "CASE", "Suicide"])))
-plot.data$Type <- c("Controls", "Controls", "Cases", "Cases")
-plot.data$Suicide <- "Yes"
-plot.data[plot.data$Var1 == "N", "Suicide"] <- "No"
-plot.data$Type <- factor(plot.data$Type, levels = c("Controls", "Cases"))
-plot.data$Suicide <- factor(plot.data$Suicide, levels = c("Yes", "No"))
-ggplot(plot.data) +
+plot_data <- rbind(as.data.frame(table(pheno[pheno$Dx == "CTL", "Suicide"])), as.data.frame(table(pheno[pheno$Dx == "CASE", "Suicide"])))
+plot_data$Type <- c("Controls", "Controls", "Cases", "Cases")
+plot_data$Suicide <- "Yes"
+plot_data[plot_data$Var1 == "N", "Suicide"] <- "No"
+plot_data$Type <- factor(plot_data$Type, levels = c("Controls", "Cases"))
+plot_data$Suicide <- factor(plot_data$Suicide, levels = c("Yes", "No"))
+ggplot(plot_data) +
   # add bar for each sex colored by case/control
   geom_bar(aes(x = Suicide, y = Freq, fill = Type),
            stat = "identity", position = "dodge", colour = "black") +
   # name axes and remove gap between bars and y-axis
   scale_y_continuous("", expand = c(0, 0)) +
   scale_x_discrete("") +
-  scale_fill_manual(values = c(col[16], col[20])) +
+  scale_fill_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D")) +
   # remove grey theme
-  theme_classic(base_size = 18) +
+  theme_classic(base_size = 24) +
   labs(title = "Suicide", x = element_blank(), y = element_blank()) +
   # change legend 
-  theme(plot.title = element_text(hjust = 0.5), legend.position = c(0.1, 0.9), legend.background = element_rect(size = 0.5, linetype = "solid", colour = "black"), legend.title = element_blank(), legend.spacing.y = unit(2, "pt"), legend.spacing = unit(1,"cm")) 
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/barplot_suicide.pdf", width = 8, height = 6, units = "in")
+  theme(plot.title = element_text(hjust = 0.5), legend.position = c(0.14, 0.9), legend.background = element_rect(size = 0.5, linetype = "solid", colour = "black"), legend.title = element_blank(), legend.spacing.y = unit(2, "pt"), legend.spacing = unit(1,"cm")) 
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_barplot_suicide.pdf", width = 8, height = 6, units = "in")
 ```
 
 We can see, that most of the major depression disorder (MDD) patients were doing suicide, whereas only half of the schizophrenia and bipolar disorder patients were performing suicide. All healthy controls died on a natural cause.
@@ -187,65 +197,95 @@ We can see, that most of the major depression disorder (MDD) patients were doing
 As Suicide was only performed in cases, we also wanted to distribute the type of death into natural, violent (e.g. hanging, choking from food) and non-violent (e.g. poison) type of death.
 
 ```{r, echo = F}
-plot.data <- rbind(as.data.frame(table(pData[pData$Dx == "CTL", "Type_of_Death"])), as.data.frame(table(pData[pData$Dx == "CASE", "Type_of_Death"])))
-plot.data$Type <- c("Controls", "Controls", "Controls", "Cases", "Cases", "Cases")
-plot.data$Type <- factor(plot.data$Type, levels = c("Controls", "Cases"))
-plot.data$Var1 <- factor(plot.data$Var1, levels = c("Non-violent", "Violent", "Natural"))
-ggplot(plot.data) +
+plot_data <- rbind(as.data.frame(table(pheno[pheno$Dx == "CTL", "Type_of_Death"])), as.data.frame(table(pheno[pheno$Dx == "CASE", "Type_of_Death"])))
+plot_data$Type <- c("Controls", "Controls", "Controls", "Cases", "Cases", "Cases")
+plot_data$Type <- factor(plot_data$Type, levels = c("Controls", "Cases"))
+plot_data$Var1 <- factor(plot_data$Var1, levels = c("Non-violent", "Violent", "Natural"))
+ggplot(plot_data) +
   # add bar for each sex colored by case/control
   geom_bar(aes(x = Var1, y = Freq, fill = Type),
            stat = "identity", position = "dodge", colour = "black") +
   # name axes and remove gap between bars and y-axis
   scale_y_continuous("", expand = c(0, 0)) +
   scale_x_discrete("") +
-  scale_fill_manual(values = c(col[16], col[20])) +
+  scale_fill_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D")) +
   # remove grey theme
-  theme_classic(base_size = 18) +
+  theme_classic(base_size = 24) +
   labs(title = "Type of Death", x = element_blank(), y = element_blank()) +
   # change legend 
-  theme(plot.title = element_text(hjust = 0.5), legend.position = c(0.1, 0.9), legend.background = element_rect(size = 0.5, linetype = "solid", colour = "black"), legend.title = element_blank(), legend.spacing.y = unit(2, "pt"), legend.spacing = unit(1,"cm")) 
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/barplot_type_of_death.pdf", width = 8, height = 6, units = "in")
+  theme(plot.title = element_text(hjust = 0.5), legend.position = c(0.14, 0.9), legend.background = element_rect(size = 0.5, linetype = "solid", colour = "black"), legend.title = element_blank(), legend.spacing.y = unit(2, "pt"), legend.spacing = unit(1,"cm")) 
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_barplot_type_of_death.pdf", width = 8, height = 6, units = "in")
 ```
 
 ### Batch
 
 ```{r, echo = F}
-plot.data <- rbind(as.data.frame(table(pData[pData$Dx == "CTL", "Batch"])), as.data.frame(table(pData[pData$Dx == "CASE", "Batch"])))
-plot.data$Type <- c("Controls", "Controls", "Controls", "Controls", "Controls", "Cases", "Cases", "Cases", "Cases", "Cases")
-plot.data$Type <- factor(plot.data$Type, levels = c("Controls", "Cases"))
-plot.data$Var1 <- factor(plot.data$Var1, levels = c("A", "1", "2", "3", "4"))
-ggplot(plot.data) +
+plot_data <- rbind(as.data.frame(table(pheno[pheno$Dx == "CTL", "Batch"])), as.data.frame(table(pheno[pheno$Dx == "CASE", "Batch"])))
+plot_data$Type <- c("Controls", "Controls", "Controls", "Controls", "Controls", "Cases", "Cases", "Cases", "Cases", "Cases")
+plot_data$Type <- factor(plot_data$Type, levels = c("Controls", "Cases"))
+plot_data$Var1 <- factor(plot_data$Var1, levels = c("A", "1", "2", "3", "4"))
+ggplot(plot_data) +
   # add bar for each sex colored by case/control
   geom_bar(aes(x = Var1, y = Freq, fill = Type),
            stat = "identity", position = "dodge", colour = "black") +
   # name axes and remove gap between bars and y-axis
   scale_y_continuous("", expand = c(0, 0)) +
   scale_x_discrete("") +
-  scale_fill_manual(values = c(col[16], col[20])) +
+  scale_fill_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D")) +
   # remove grey theme
-  theme_classic(base_size = 18)  +
+  theme_classic(base_size = 24)  +
   labs(title = "Batches", x = element_blank(), y = element_blank()) +
   # change legend 
-  theme(plot.title = element_text(hjust = 0.5), legend.position = c(0.1, 0.9), legend.background = element_rect(size = 0.5, linetype = "solid", colour = "black"), legend.title = element_blank(), legend.spacing.y = unit(2, "pt"), legend.spacing = unit(1,"cm")) 
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/barplot_batch.pdf", width = 8, height = 6, units = "in")
+  theme(plot.title = element_text(hjust = 0.5), legend.position = c(0.14, 0.9), legend.background = element_rect(size = 0.5, linetype = "solid", colour = "black"), legend.title = element_blank(), legend.spacing.y = unit(2, "pt"), legend.spacing = unit(1,"cm")) 
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_barplot_batch.pdf", width = 8, height = 6, units = "in")
 ```
+
+Most of the samples were measured in batch 1 and 2. Some also in batch A and a really small number in the batches 3 and 4. The samples in batch A only include schizophrenia patients and controls and the bipolar disorder patients are only included in batch 1 and 2.
+
+We are still not sure, how the samples were distributed into the different batches, as the sample date generation does not match with the batch numbers (see section "Plot sample generation dates").
+
+### Ancestry 
+
+```{r, echo = F}
+pheno$Ancestry <- as.character(pheno$Ancestry)
+pheno[pheno$Ancestry == "", "Ancestry"] <- "NA"
+plot_data <- rbind(as.data.frame(table(pheno[pheno$Dx == "CTL", "Ancestry"])), as.data.frame(table(pheno[pheno$Dx == "CASE", "Ancestry"])))
+plot_data$Type <- c("Controls", "Controls", "Cases", "Cases", "Cases", "Cases")
+plot_data$Type <- factor(plot_data$Type, levels = c("Controls", "Cases"))
+ggplot(plot_data) +
+  # add bar for each sex colored by case/control
+  geom_bar(aes(x = Var1, y = Freq, fill = Type),
+           stat = "identity", position = "dodge", colour = "black") +
+  # name axes and remove gap between bars and y-axis
+  scale_y_continuous("", expand = c(0, 0)) +
+  scale_x_discrete("") +
+  scale_fill_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D")) +
+  # remove grey theme
+  theme_classic(base_size = 24) +
+  labs(title = "Ancestry", x = element_blank(), y = element_blank()) +
+  # change legend 
+  theme(plot.title = element_text(hjust = 0.5), legend.position = c(0.5, 0.9), legend.background = element_rect(size = 0.5, linetype = "solid", colour = "black"), legend.title = element_blank(), legend.spacing.y = unit(2, "pt"), legend.spacing = unit(1,"cm")) 
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_barplot_ancestry.pdf", width = 8, height = 6, units = "in")
+```
+
+It is interesting, that all bipolar disorder and major depression disorder samples (only cases) have an unknown ancestry. Most of the samples are Ceucasian (CEU) and only a small amount is Chinese (CHB). Both types can be found in the control and case samples. Only one schizophrenia sample has no ancestry information and the unique CEU/CHB sample is also a schizophrenia case.
 
 ### Age
 
 We will first check, how the Age is distributed in the dataset for cases vs. controls. 
 
 ```{r, echo = F}
-ggplot(pData, aes(x = Dx, y = Age, fill = Dx)) +
+ggplot(pheno, aes(x = Dx, y = Age, fill = Dx)) +
   # add bar for each sex colored by case/control
   geom_violin() +
   geom_boxplot(width = 0.2) +
   # remove grey theme
-  theme_classic(base_size = 18) +
-  theme(text = element_text(size = 20), plot.title = element_text(hjust = 0.5)) +
+  theme_classic(base_size = 24) +
+  theme(text = element_text(size = 24), plot.title = element_text(hjust = 0.5)) +
   scale_x_discrete(labels = c("Controls", "Cases")) +
   labs(title = "Age at Death", x = element_blank(), y = element_blank()) +
-  scale_fill_manual(values = c(col[16], col[20]), guide = FALSE)
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/violinplot_age.pdf", width = 8, height = 6, units = "in")
+  scale_fill_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D"), guide = FALSE)
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_violinplot_age.pdf", width = 8, height = 6, units = "in")
 ```
 
 Cases died in the range of 18.60 to 87.30 and controls between 22.50 and 80.80, leaving cases with a wider range. The mean for cases (49.78) is slightly higher than for controls (47.27) and the same behavior can be seen for the median (cases = 51.40, controls = 44.00). 
@@ -253,17 +293,17 @@ Cases died in the range of 18.60 to 87.30 and controls between 22.50 and 80.80, 
 ### pH
 
 ```{r, echo = F}
-ggplot(pData, aes(x = Dx, y = pH, fill = Dx)) +
+ggplot(pheno, aes(x = Dx, y = pH, fill = Dx)) +
   # add bar for each sex colored by case/control
   geom_violin() +
   geom_boxplot(width = 0.2) +
   # remove grey theme
-  theme_classic(base_size = 18) +
-  theme(text = element_text(size = 20), plot.title = element_text(hjust = 0.5)) +
+  theme_classic(base_size = 24) +
+  theme(text = element_text(size = 24), plot.title = element_text(hjust = 0.5)) +
   scale_x_discrete(labels = c("Controls", "Cases")) +
   labs(title = "pH", x = element_blank(), y = element_blank()) +
-  scale_fill_manual(values = c(col[16], col[20]), guide = FALSE)
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/violinplot_ph.pdf", width = 8, height = 6, units = "in")
+  scale_fill_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D"), guide = FALSE)
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_violinplot_ph.pdf", width = 8, height = 6, units = "in")
 ```
 
 The pH has a peak around 6.4 to 6.6 in both, cases and controls (including controls). We can see a wider range of pH values in cases than controls. 
@@ -271,17 +311,17 @@ The pH has a peak around 6.4 to 6.6 in both, cases and controls (including contr
 ### RNA Integrity Number (RIN)
 
 ```{r, echo = F}
-ggplot(pData, aes(x = Dx, y = RIN, fill = Dx)) +
+ggplot(pheno, aes(x = Dx, y = RIN, fill = Dx)) +
   # add bar for each sex colored by case/control
   geom_violin() +
   geom_boxplot(width = 0.2) +
   # remove grey theme
-  theme_classic(base_size = 18) +
-  theme(text = element_text(size = 20), plot.title = element_text(hjust = 0.5)) +
+  theme_classic(base_size = 24) +
+  theme(text = element_text(size = 24), plot.title = element_text(hjust = 0.5)) +
   scale_x_discrete(labels = c("Controls", "Cases")) +
   labs(title = "RNA Integrity Number", x = element_blank(), y = element_blank()) +
-  scale_fill_manual(values = c(col[16], col[20]), guide = FALSE)
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/violinplot_rin.pdf", width = 8, height = 6, units = "in")
+  scale_fill_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D"), guide = FALSE)
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_violinplot_rin.pdf", width = 8, height = 6, units = "in")
 ```
 
 Most of the RNA integrity numbers lies between seven and eight. The data was already filtered for low RNA integrity numbers as we do not have any RIN below a value of six.
@@ -289,17 +329,17 @@ Most of the RNA integrity numbers lies between seven and eight. The data was alr
 ### Postmortem Intervall (PMI)
 
 ```{r, echo = F}
-ggplot(pData, aes(x = Dx, y = PMI, fill = Dx)) +
+ggplot(pheno, aes(x = Dx, y = PMI, fill = Dx)) +
   # add bar for each sex colored by case/control
   geom_violin() +
   geom_boxplot(width = 0.2) +
   # remove grey theme
-  theme_classic(base_size = 18) +
-  theme(text = element_text(size = 20), plot.title = element_text(hjust = 0.5)) +
+  theme_classic(base_size = 24) +
+  theme(text = element_text(size = 24), plot.title = element_text(hjust = 0.5)) +
   scale_x_discrete(labels = c("Controls", "Cases")) +
   labs(title = "Postmortem Interval", x = element_blank(), y = element_blank()) +
-  scale_fill_manual(values = c(col[16], col[20]), guide = FALSE)
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/violinplot_pmi.pdf", width = 8, height = 6, units = "in")
+  scale_fill_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D"), guide = FALSE)
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_violinplot_pmi.pdf", width = 8, height = 6, units = "in")
 ```
 
 The highest peak of PMI in the samples lies around 40 to 50 hours (~ 2 days) after death. In the controls and major depression disorder, we can see, that some of the samples were taken earlier (around 1 day after death). 
@@ -307,352 +347,368 @@ The highest peak of PMI in the samples lies around 40 to 50 hours (~ 2 days) aft
 ### Surrogate Variable 1
 
 ```{r, echo = F}
-ggplot(pData, aes(x = Dx, y = SV1, fill = Dx)) +
+ggplot(pheno, aes(x = Dx, y = SV1, fill = Dx)) +
   # add bar for each sex colored by case/control
   geom_violin() +
   geom_boxplot(width = 0.2) +
   # remove grey theme
-  theme_classic(base_size = 18) +
-  theme(text = element_text(size = 20), plot.title = element_text(hjust = 0.5)) +
+  theme_classic(base_size = 24) +
+  theme(text = element_text(size = 24), plot.title = element_text(hjust = 0.5)) +
   scale_x_discrete(labels = c("Controls", "Cases")) +
   labs(title = "Surrogate Variable 1", x = element_blank(), y = element_blank()) +
-  scale_fill_manual(values = c(col[16], col[20]), guide = FALSE)
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/violinplot_sv1.pdf", width = 8, height = 6, units = "in")
+  scale_fill_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D"), guide = FALSE)
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_violinplot_sv1.pdf", width = 8, height = 6, units = "in")
 ```
 
 ### C1-4
 
 ```{r, echo = F}
-ggplot(pData, aes(x = Dx, y = C1, fill = Dx)) +
+# C1
+ggplot(pheno, aes(x = Dx, y = C1, fill = Dx)) +
   # add bar for each sex colored by case/control
   geom_violin() +
   geom_boxplot(width = 0.2) +
   # remove grey theme
-  theme_classic(base_size = 18) +
-  theme(text = element_text(size = 20), plot.title = element_text(hjust = 0.5)) +
+  theme_classic(base_size = 24) +
+  theme(text = element_text(size = 24), plot.title = element_text(hjust = 0.5)) +
   scale_x_discrete(labels = c("Controls", "Cases")) +
   labs(title = "Ancestry Dim 1", x = element_blank(), y = element_blank()) +
-  scale_fill_manual(values = c(col[16], col[20]), guide = FALSE)
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/violinplot_c1.pdf", width = 8, height = 6, units = "in")
-ggplot(pData, aes(x = Dx, y = C2, fill = Dx)) +
+  scale_fill_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D"), guide = FALSE)
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_violinplot_c1.pdf", width = 8, height = 6, units = "in")
+
+# C2
+ggplot(pheno, aes(x = Dx, y = C2, fill = Dx)) +
   # add bar for each sex colored by case/control
   geom_violin() +
   geom_boxplot(width = 0.2) +
   # remove grey theme
-  theme_classic(base_size = 18) +
-  theme(text = element_text(size = 20), plot.title = element_text(hjust = 0.5)) +
+  theme_classic(base_size = 24) +
+  theme(text = element_text(size = 24), plot.title = element_text(hjust = 0.5)) +
   scale_x_discrete(labels = c("Controls", "Cases")) +
   labs(title = "Ancestry Dim 2", x = element_blank(), y = element_blank()) +
-  scale_fill_manual(values = c(col[16], col[20]), guide = FALSE)
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/violinplot_c2.pdf", width = 8, height = 6, units = "in")
-ggplot(pData, aes(x = Dx, y = C3, fill = Dx)) +
+  scale_fill_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D"), guide = FALSE)
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_violinplot_c2.pdf", width = 8, height = 6, units = "in")
+
+# C3
+ggplot(pheno, aes(x = Dx, y = C3, fill = Dx)) +
   # add bar for each sex colored by case/control
   geom_violin() +
   geom_boxplot(width = 0.2) +
   # remove grey theme
-  theme_classic(base_size = 18) +
-  theme(text = element_text(size = 20), plot.title = element_text(hjust = 0.5)) +
+  theme_classic(base_size = 24) +
+  theme(text = element_text(size = 24), plot.title = element_text(hjust = 0.5)) +
   scale_x_discrete(labels = c("Controls", "Cases")) +
   labs(title = "Ancestry Dim 3", x = element_blank(), y = element_blank()) +
-  scale_fill_manual(values = c(col[16], col[20]), guide = FALSE)
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/violinplot_c3.pdf", width = 8, height = 6, units = "in")
-ggplot(pData, aes(x = Dx, y = C4, fill = Dx)) +
+  scale_fill_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D"), guide = FALSE)
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_violinplot_c3.pdf", width = 8, height = 6, units = "in")
+
+# C4
+ggplot(pheno, aes(x = Dx, y = C4, fill = Dx)) +
   # add bar for each sex colored by case/control
   geom_violin() +
   geom_boxplot(width = 0.2) +
   # remove grey theme
-  theme_classic(base_size = 18) +
-  theme(text = element_text(size = 20), plot.title = element_text(hjust = 0.5)) +
+  theme_classic(base_size = 24) +
+  theme(text = element_text(size = 24), plot.title = element_text(hjust = 0.5)) +
   scale_x_discrete(labels = c("Controls", "Cases")) +
   labs(title = "Ancestry Dim 4", x = element_blank(), y = element_blank()) +
-  scale_fill_manual(values = c(col[16], col[20]), guide = FALSE)
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/violinplot_c4.pdf", width = 8, height = 6, units = "in")
+  scale_fill_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D"), guide = FALSE)
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_violinplot_c4.pdf", width = 8, height = 6, units = "in")
 ```
 
 
-### Type of Death And Diagnosis Correlation
+## Correlation plots
 
-```{r, echo = F}
-pData <- pData[!is.na(pData$C1), ]
-head(pData)
-dx.death <- pData[, c("Dx", "Type_of_Death")]
-dx.death.t <- as.data.frame(table(dx.death))
+### Age and type of death correlation
 
-# grouped barplot
-ggplot(dx.death.t, aes(fill = Dx, y = Freq, x = Type_of_Death)) + 
-  geom_bar(position = "dodge", stat = "identity")
+Type of death and age correlation shown in a density plot: 
 
-# Stacked barplot
-ggplot(dx.death.t, aes(fill = Type_of_Death, y = Freq, x = Dx)) + 
-  geom_bar(stat = "identity") + 
-  scale_fill_manual(values = viridis(4)) +
-  theme(text = element_text(size = 18), axis.text.x = element_text(size = 16), axis.text.y = element_text(size = 16)) + 
-  labs(x = "Diagnosis", y = "Frequency") + 
-  labs(fill = "Type of Death")
-
-# Stacked Percent barplot
-ggplot(dx.death.t, aes(fill = Type_of_Death, y = Freq, x = Dx)) + 
-  geom_bar(stat = "identity", position = "fill") + 
-  scale_fill_manual(values = viridis(4)) +
-  theme(text = element_text(size = 18), axis.text.x = element_text(size = 16), axis.text.y = element_text(size = 16)) + 
-  labs(x = "Diagnosis", y = "Frequency in Percent (%)") + 
-  labs(fill = "Type of Death")
-
-dx.suicide <- pData[, c("Dx", "Suicide")]
-dx.suicide.t <- as.data.frame(table(dx.suicide))
-
-# Stacked barplot
-ggplot(dx.suicide.t, aes(fill = Suicide, y = Freq, x = Dx)) + 
-  geom_bar(stat = "identity") + 
-  scale_fill_manual(values = viridis(3)) +
-  theme(text = element_text(size = 18), axis.text.x = element_text(size = 16), axis.text.y = element_text(size = 16)) + 
-  labs(x = "Diagnosis", y = "Frequency") + 
-  labs(fill = "Suicide")
-
-# Stacked Percent barplot
-ggplot(dx.suicide.t, aes(fill = Suicide, y = Freq, x = Dx)) + 
-  geom_bar(stat = "identity", position = "fill") + 
-  scale_fill_manual(values = viridis(3)) +
-  theme(text = element_text(size = 18), axis.text.x = element_text(size = 16), axis.text.y = element_text(size = 16)) + 
-  labs(x = "Diagnosis", y = "Frequency in Percent (%)") + 
-  labs(fill = "Suicide")
-
-
+```{r, include=F}
 # combined barplots
-nat <- data.frame(sort(pData[pData$Type_of_Death == "Natural", "Age"]))
-vio <- data.frame(sort(pData[pData$Type_of_Death == "Violent", "Age"]))
-nvio <- data.frame(sort(pData[pData$Type_of_Death == "Non-violent", "Age"]))
+nat <- data.frame(sort(pheno[pheno$Type_of_Death == "Natural", "Age"]))
+vio <- data.frame(sort(pheno[pheno$Type_of_Death == "Violent", "Age"]))
+nvio <- data.frame(sort(pheno[pheno$Type_of_Death == "Non-violent", "Age"]))
 colnames(nat) <- "Age"
 colnames(vio) <- "Age"
 colnames(nvio) <- "Age"
 nat$Type_of_Death <- "Natural"
 vio$Type_of_Death <- "Violent"
 nvio$Type_of_Death <- "Non-violent"
-tod.combined <- rbind(nat, vio, nvio)
+tod_combined <- rbind(nat, vio, nvio)
 # Histogram density plot
-ggplot(tod.combined, aes(x = Age, group = Type_of_Death, fill = Type_of_Death, colour = Type_of_Death)) + theme(plot.title = element_text(hjust = 0.5)) + labs(x = "Age", y = "Density") + stat_bin(colour = "gray", breaks = seq(10, 90, by = 10), alpha = 0.5, position = "identity", aes(y = ..density..)) + geom_density(fill = NA, size = 1.5) + theme_classic(base_size = 20) + scale_x_continuous(expand = c(0, 0), limits = c(0, 100)) + scale_y_continuous(expand = c(0, 0)) + scale_color_manual(values = viridis(4)) + scale_fill_manual(values = viridis(4)) 
+ggplot(tod_combined, aes(x = Age, group = Type_of_Death, fill = Type_of_Death, colour = Type_of_Death)) + theme(plot.title = element_text(hjust = 0.5)) + labs(x = "Age", y = "Density") + stat_bin(colour = "gray", breaks = seq(10, 90, by = 10), alpha = 0.5, position = "identity", aes(y = ..density..)) + geom_density(fill = NA, size = 1.5) + theme_classic(base_size = 20) + scale_x_continuous(expand = c(0, 0), limits = c(0, 100)) + scale_y_continuous(expand = c(0, 0)) + scale_color_manual(values = viridis(3, begin = 0.3, end = 0.9, option = "D")) + scale_fill_manual(values = viridis(3, begin = 0.3, end = 0.9, option = "D")) 
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_density_plot_age_vs_type_of_death.pdf", width = 8, height = 6, units = "in")
 ```
 
-### Age and Suicide Correlation
+### Age and suicide correlation
 
 We found out, that especially young people are committing suicide. Here, we will show the suicide and no suicide correlation to the age of the patients. As none of the controls comitted suicide, we will not include them in the plot. (The plot looks strange including controls...)
 
 ```{r, echo = F}
 # combined barplots
-sui <- data.frame(sort(pData[pData$Suicide == "Y" & pData$Dx != "CTL", "Age"]))
-nsui <- data.frame(sort(pData[pData$Suicide == "N" & pData$Dx != "CTL", "Age"]))
+sui <- data.frame(sort(pheno[pheno$Suicide == "Y" & pheno$Dx != "CTL", "Age"]))
+nsui <- data.frame(sort(pheno[pheno$Suicide == "N" & pheno$Dx != "CTL", "Age"]))
 colnames(sui) <- "Age"
 colnames(nsui) <- "Age"
 sui$Suicide <- "Yes"
 nsui$Suicide <- "No"
-sui.combined <- rbind(sui, nsui)
+sui_combined <- rbind(sui, nsui)
 # Histogram density plot
-ggplot(sui.combined, aes(x = Age, group = Suicide, fill = Suicide, colour = Suicide)) + theme(plot.title = element_text(hjust = 0.5)) + labs(x = "Age", y = "Density") + stat_bin(colour = "gray", breaks = seq(10, 90, by = 10), alpha = 0.5, position = "identity", aes(y = ..density..)) + geom_density(fill = NA, size = 1.5) + theme_classic(base_size = 20) + scale_x_continuous(expand = c(0, 0), limits = c(0, 100)) + scale_y_continuous(expand = c(0, 0)) + scale_color_manual(values = viridis(4)) + scale_fill_manual(values = viridis(4))
+ggplot(sui_combined, aes(x = Age, group = Suicide, fill = Suicide, colour = Suicide)) + theme(plot.title = element_text(hjust = 0.5)) + labs(x = "Age", y = "Density") + stat_bin(colour = "gray", breaks = seq(10, 90, by = 10), alpha = 0.5, position = "identity", aes(y = ..density..)) + geom_density(fill = NA, size = 1.5) + theme_classic(base_size = 20) + scale_x_continuous(expand = c(0, 0), limits = c(0, 100)) + scale_y_continuous(expand = c(0, 0)) + scale_color_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D")) + scale_fill_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D"))
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_density_plot_age_vs_suicide.pdf", width = 8, height = 6, units = "in")
 ```
 
-Plot with control data as extra histogram:
-
-```{r, echo = F}
-sui <- data.frame(sort(pData[pData$Suicide == "Y" & pData$Dx != "CTL", "Age"]))
-nsui <- data.frame(sort(pData[pData$Suicide == "N" & pData$Dx != "CTL", "Age"]))
-ctl <- data.frame(sort(pData[pData$Suicide == "N" & pData$Dx == "CTL", "Age"]))
-colnames(sui) <- "Age"
-colnames(nsui) <- "Age"
-colnames(ctl) <- "Age"
-sui$Type <- "Suicide (DIS)"
-nsui$Type <- "No Suicide (DIS)"
-ctl$Type <- "No Suicide (CTL)"
-sui.combined <- rbind(sui, nsui, ctl)
-# Histogram density plot
-ggplot(sui.combined, aes(x = Age, group = Type, fill = Type, colour = Type)) + labs(title = "Histogram: Suicide and Age Correlation") + theme(plot.title = element_text(hjust = 0.5)) + labs(x = "Age", y = "Density") + stat_bin(colour = "gray", breaks = seq(10, 90, by = 10), alpha = 0.5, position = "dodge", aes(y = ..density..)) + geom_density(fill = NA) + theme()
-```
-
-
-### DOI
-
-What does DOI stand for?!? For the complete disease samples the histogram looks exactly like the histogram for the complete dataset, as none of the controls has any DOI information given. 
-
-```{r, echo = F}
-par(mfrow = c(2, 2))
-doi = pData[!is.na(pData$DOI), ] # get samples with DOI infos (without NA's included)
-#hist(doi$DOI, col = "darkblue", main = "DOI Frequency", xlab = "DOI values")
-#hist(doi[doi$Dx == "CTL", "DOI"], col = "darkgreen", main = "DOI Frequency (CTL)", xlab = "DOI values")
-hist(doi[doi$Dx %in% c("SCZ", "BPD", "MDD"), "DOI"], col = col[1], main = "DOI Frequency (DIS)", xlab = "DOI values")
-hist(doi[doi$Dx == "SCZ", "DOI"], col = col[2], main = "DOI Frequency (SCZ)", xlab = "DOI values")
-hist(doi[doi$Dx == "BPD", "DOI"], col = col[3], main = "DOI Frequency (BPD)", xlab = "DOI values")
-hist(doi[doi$Dx == "MDD", "DOI"], col = col[4], main = "DOI Frequency (MDD)", xlab = "DOI values")
-```
-
-
-### Batch
-
-```{r, echo = F}
-#par(mfrow = c(2, 3))
-#barplot(table(pData$Batch), col = "darkblue", main = "Batch Distribution")
-#barplot(table(pData[pData$Dx == "CTL", "Batch"]), col = "darkgreen", main = "Batch Distribution (CTL)")
-#barplot(table(pData[pData$Dx %in% c("SCZ", "BPD", "MDD"), "Batch"]), col = "darkred", main = "Batch Distribution (DIS)")
-#barplot(table(pData[pData$Dx == "SCZ", "Batch"]), col = "red", main = "Batch Distribution (SCZ)")
-#barplot(table(pData[pData$Dx == "BPD", "Batch"]), col = "red3", main = "Batch Distribution (BPD)")
-#barplot(table(pData[pData$Dx == "MDD", "Batch"]), col = "red4", main = "Batch Distribution (MDD)")
-plot.data <- rbind(as.data.frame(table(pData$Batch)), as.data.frame(table(pData[pData$Dx == "CTL", "Batch"])), as.data.frame(table(pData[pData$Dx %in% c("SCZ", "BPD", "MDD"), "Batch"])), as.data.frame(table(pData[pData$Dx == "SCZ", "Batch"])), as.data.frame(table(pData[pData$Dx == "BPD", "Batch"])), as.data.frame(table(pData[pData$Dx == "MDD", "Batch"])))
-plot.data$Type <- c(rep("ALL", 5), rep("CTL", 5), rep("DIS", 5), rep("SCZ", 5), rep("BPD", 5), rep("MDD", 5))
-plot.data$Type <- factor(plot.data$Type, levels = c("ALL", "CTL", "DIS", "SCZ", "BPD", "MDD"))
-plot.data$Var1 <- factor(plot.data$Var1, levels = c("A", "1", "2", "3", "4"))
-ggplot(plot.data) +
-  # add bar for each discipline colored by gender
-  geom_bar(aes(x = Type, y = Freq, fill = Var1),
-           stat = "identity", position = "dodge") +
-  # name axes and remove gap between bars and y-axis
-  scale_y_continuous("Counts", expand = c(0, 0)) +
-  scale_x_discrete("") +
-  scale_fill_manual(values = viridis(5)) +
-  # remove grey theme
-  theme_classic(base_size = 18) +
-  # rotate x-axis and remove superfluous axis elements
-  theme(axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 0.5),
-        axis.ticks.x = element_blank()) 
-```
-
-Most of the samples were measured in batch 1 and 2. Some also in batch A and a really small number in the batches 3 and 4. We can see, that the samples in batch A only include schizophrenia patients and controls. The bipolar disorder patients are only included in batch 1 and 2.
-
-We are still not sure, how the samples were distributed into the different batches, as the sample date generation does not match with the batch numbers (see section "Plot sample generation dates" below).
-
-### Ancestry 
-
-```{r, echo = F}
-#par(mfrow = c(2, 3))
-#barplot(table(pData$Ancestry), col = "darkblue", main = "Ancestry Distribution")
-#barplot(table(pData[pData$Dx == "CTL", "Ancestry"]), col = "darkgreen", main = "Ancestry Distribution (CTL)")
-#barplot(table(pData[pData$Dx %in% c("SCZ", "BPD", "MDD"), "Ancestry"]), col = "darkred", main = "Ancestry Distribution (DIS)")
-#barplot(table(pData[pData$Dx == "SCZ", "Ancestry"]), col = "red", main = "Ancestry Distribution (SCZ)")
-#barplot(table(pData[pData$Dx == "BPD", "Ancestry"]), col = "red3", main = "Ancestry Distribution (BPD)")
-#barplot(table(pData[pData$Dx == "MDD", "Ancestry"]), col = "red4", main = "Ancestry Distribution (MDD)")
-plot.data <- rbind(as.data.frame(table(pData$Ancestry)), as.data.frame(table(pData[pData$Dx == "CTL", "Ancestry"])), as.data.frame(table(pData[pData$Dx %in% c("SCZ", "BPD", "MDD"), "Ancestry"])), as.data.frame(table(pData[pData$Dx == "SCZ", "Ancestry"])), as.data.frame(table(pData[pData$Dx == "BPD", "Ancestry"])), as.data.frame(table(pData[pData$Dx == "MDD", "Ancestry"])))
-plot.data$Type <- c(rep("ALL", 4), rep("CTL", 4), rep("DIS", 4), rep("SCZ", 4), rep("BPD", 4), rep("MDD", 4))
-plot.data$Type <- factor(plot.data$Type, levels = c("ALL", "CTL", "DIS", "SCZ", "BPD", "MDD"))
-ggplot(plot.data) +
-  # add bar for each discipline colored by gender
-  geom_bar(aes(x = Type, y = Freq, fill = Var1),
-           stat = "identity", position = "dodge") +
-  # name axes and remove gap between bars and y-axis
-  scale_y_continuous("Counts", expand = c(0, 0)) +
-  scale_x_discrete("") +
-  scale_fill_manual(values = viridis(4)) +
-  # remove grey theme
-  theme_classic(base_size = 18) +
-  # rotate x-axis and remove superfluous axis elements
-  theme(axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 0.5),
-        axis.ticks.x = element_blank()) 
-par(mfrow = c(1, 1))
-```
-
-It is interesting, that all bipolar disorder and major depression disorder samples have an unknown ancestry. Most of the other samples are Ceucasian (CEU) and only a small amount is Chinese (CHB). Both types can be found in the control and schizophrenia samples. Only one schizophrenia samples has no ancestry information and the unique CEU/CHB sample is also a schizophrenia case.
-
-### Correlation Plot
+### Correlation plot of all covariates
 
 ```{r, echo = F}
 # remove identifier columns (MHRIID, Filenamne, File, Batch and ShortName)
-pData_new <- pData[, -which(names(pData) %in% c("MHRIID", "Filename", "File", "ShortName", "Batch", "FID", "SOL", "IID", "pH_old", "Cause_of_Death", "Ancestry", "DOI", "Chip", "DIS", "Suicide"))]
-# change BPD and MDD diagnosis (Dx) to AFF
-pData_new$Dx <- as.character(pData_new$Dx) # change factor column to character
-pData_new[pData_new$Dx == "BPD" | pData_new$Dx == "MDD", "Dx"] <- "SCZ" # change BPD and MDD to SCZ
-pData_new[, c("Sex", "Dx", "Suicide")] <- lapply(pData_new[, c("Sex", "Dx", "Suicide")], factor)
-#sapply(pData_new, class) # check type of columns
+pheno_new <- pheno[, c("Age", "Sex", "Dx", "pH", "PMI", "RIN", "RIN2", "Batch", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4", "SV1")]
+pheno_new[, c("Sex", "Dx", "Suicide")] <- lapply(pheno_new[, c("Sex", "Dx", "Suicide")], factor)
 # relevel disease (Dx) to control (CTL)
-pData_new$Dx <- factor(pData_new$Dx, levels = c("CTL", "SCZ"))
+pheno_new$Dx <- factor(pheno_new$Dx, levels = c("CTL", "CASE"))
+# change batches into 1-5 (change A into 1)
+pheno_new$Batch <- as.character(pheno_new$Batch)
+pheno_new[pheno_new$Batch == "A", "Batch"] <- "1"
+pheno_new$Batch <- as.numeric(pheno_new$Batch)
+# Change type of death into numbers (natural = 1, non-violent = 2 and violent = 3)
+pheno_new$Type_of_Death <- as.character(pheno_new$Type_of_Death)
+pheno_new[pheno_new$Type_of_Death == "Natural", "Type_of_Death"] <- "1"
+pheno_new[pheno_new$Type_of_Death == "Non-violent", "Type_of_Death"] <- "2"
+pheno_new[pheno_new$Type_of_Death == "Violent", "Type_of_Death"] <- "3"
+pheno_new$Type_of_Death <- as.numeric(pheno_new$Type_of_Death)
 # save categorical and continuous variable names
-classes <- sapply(pData_new, class) # get type of columns
-categorical.cov = names(classes[classes == "factor"])
-continuous.cov = names(classes[classes == "numeric"])
+classes <- sapply(pheno_new, class) # get type of columns
+categorical_cov = names(classes[classes == "factor"])
+continuous_cov = names(classes[classes == "numeric"])
 # generate contrast for design matrix
-contrast <- lapply(categorical.cov, function(x) {fac = pData_new[, x]; return(contrasts(fac))})
-names(contrast) <- categorical.cov
+contrast <- lapply(categorical_cov, function(x) {fac = pheno_new[, x]; return(contrasts(fac))})
+names(contrast) <- categorical_cov
 # generate design matrix
-design <- model.matrix(~ . + Age + Sex + Dx + pH + PMI + RIN + Type_of_Death + C1 + C2 + C3 + C4, pData_new, contrasts.arg = contrast)
-design.cor <- corr.test(design[, -1], use='pairwise.complete.obs', method = "pearson", adjust = "none")
-corrplot(design.cor$r, method = "circle", col = viridis(200, direction = -1))
+design <- model.matrix(~ . + Age + Sex + Dx + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pheno_new, contrasts.arg = contrast)
+design_cor <- corr.test(design[, -1], use='pairwise.complete.obs', method = "pearson", adjust = "none")
+colnames(design_cor$r) <- c("Age", "Sex", "Diagnosis", "pH", "PMI", "RIN", "RIN2", "Batch", "Suicide", "Type of Death", "PC1", "PC2", "PC3", "PC4", "SV1")
+rownames(design_cor$r) <- c("Age", "Sex", "Diagnosis", "pH", "PMI", "RIN", "RIN2", "Batch", "Suicide", "Type of Death", "PC1", "PC2", "PC3", "PC4", "SV1")
+corrplot(design_cor$r, method = "circle", col = brewer.pal(11, "RdBu"), tl.col = "black")
+# save plot
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_corrplot_all_covariates.pdf", width = 6, height = 6)
+corrplot(design_cor$r, method = "circle", col = brewer.pal(11, "RdBu"), tl.col = "black")
+dev.off()
 ```
 
-## Check MDS (C1-C10)
 
-First, we will check the mds values (C1-C10) of the genotypes given in the phenotype data. For some samples (`r length(is.na(pData$C1))`), we do not have any mds values given. 
+## Ancestry dimension plots
+
+The ancestry information was not available for all samples (see section before), which is the reason, why we used the genotype data to calculate the ancestry information (mds: C1-C20). We will generate dimension plots using these informations. 
+
+### Check MDS (C1-C10)
+
+First, we will check the first ten mds values (C1-C10) of the genotypes given in the phenotype data against the given ancestry. For the 169 samples, 40 samples have no ancestry information given.  
 
 ```{r, echo = F}
 # check mds
-pData_new <- pData[, c(14, 22:31)]
-pData_new[, c(2:11)] <- apply(pData_new[, c(2:11)], 2, function(x) as.numeric(as.character(x)))#
-pData_new$Ancestry <- sapply(pData_new$Ancestry, function(x) as.character(x))
-pData_new[pData_new$Ancestry == "", "Ancestry"] <- "NA" # set all empty ancestry values to NA
-pData_new <- pData_new[order(pData_new$Ancestry),] # sort for ancestry type
-ggpairs(pData_new, mapping = aes(colour = Ancestry), cardinality_threshold = 178)
+pheno_new <- pheno[, c(14, 22:31)]
+pheno_new[, c(2:11)] <- apply(pheno_new[, c(2:11)], 2, function(x) as.numeric(as.character(x)))#
+pheno_new$Ancestry <- sapply(pheno_new$Ancestry, function(x) as.character(x))
+pheno_new[pheno_new$Ancestry == "", "Ancestry"] <- "NA" # set all empty ancestry values to NA
+pheno_new <- pheno_new[order(pheno_new$Ancestry),] # sort for ancestry type
+p <- ggpairs(pheno_new, mapping = aes(colour = Ancestry), cardinality_threshold = 178)
+for(i in 1:p$nrow) {
+  for(j in 1:p$ncol){
+    p[i,j] <- p[i,j] + 
+        scale_fill_manual(values = viridis(4, begin = 0.3, end = 0.9, option = "D")) +
+        scale_color_manual(values = viridis(4, begin = 0.3, end = 0.9, option = "D"))  
+  }
+}
+p
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_mds_plot.pdf", width = 8, height = 6, units = "in")
 ```
 
 We can not find any outliers in the figure above, so we will not remove any further samples from the dataset.
 
-## Check MDS Eigenvalues
+### Check MDS Eigenvalues
 
 To find out, which of the 10 mds C-values have an impact on the samples and should be included as covariates in our model, we first need to plot (scree plot) their eigenvalues.   
 
 ```{r, echo = F}
-mds.eigenval <- read.csv2("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/dean.eigenval", stringsAsFactors = F)
-mds.eigenval <- apply(mds.eigenval, 1, function(x) as.numeric(x))
-plot(mds.eigenval, type = "p", xlab = "Ancestry dimension number", ylab = "Eigenvalue", col = "black", pch = 19, ylim = c(1.0, 1.6))
+mds_eigenval <- read.csv2("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/dean.eigenval", stringsAsFactors = F)
+mds_eigenval <- apply(mds_eigenval, 1, function(x) as.numeric(x))
+plot(mds_eigenval, type = "p", xlab = "Ancestry dimension number", ylab = "Eigenvalue", col = "black", pch = 19, ylim = c(1.0, 1.6), yaxt = "n", xaxt = "n")
+axis(2, las = 2, tck=-.05, at = c(1.0, 1.2, 1.4, 1.6), lwd = 0, lwd.ticks = 1)
+axis(1, las = 1, tck=-.05, at = c(1, 3, 5, 7, 9, 11, 13, 15, 17, 19), lwd = 0, lwd.ticks = 1)
 abline(v = 4.5, col = c("red"), lty = c(2), lwd = c(2))
-pdf("/home/icb/karolina.worf/plot_eigenvalues_MDS_ancestry_dimensions.pdf", width = 7, height = 3)
-plot(mds.eigenval, type = "p", xlab = "Ancestry dimension number", ylab = "Eigenvalue", col = "black", pch = 19, ylim = c(1.0, 1.6))
+
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_plot_eigenvalues_MDS_ancestry_dimensions.pdf", width = 7, height = 3)
+plot(mds_eigenval, type = "p", xlab = "Ancestry dimension number", ylab = "Eigenvalue", col = "black", pch = 19, ylim = c(1.0, 1.6), yaxt = "n", xaxt = "n")
+axis(2, las = 2, tck=-.05, at = c(1.0, 1.2, 1.4, 1.6), lwd = 0, lwd.ticks = 1)
+axis(1, las = 1, tck=-.05, at = c(1, 3, 5, 7, 9, 11, 13, 15, 17, 19), lwd = 0, lwd.ticks = 1)
 abline(v = 4.5, col = c("red"), lty = c(2), lwd = c(2))
 dev.off()
 ```
 
 In the plot, we can see, that the biggest differences are between C1, C2, C3 and C4. After C4 the eigenvalues differ hardly, so we decided to only take C1 to C4 as covariates into account. 
 
+### Dimension plots
+
+We will also plot the first four dimensions against each other (into a single plot). Not necessary if the mds plot is already included, but it is easier to see something here.  
+
+```{r}
+pheno$Ancestry <- as.character(pheno$Ancestry)
+pheno[pheno$Ancestry == "", "Ancestry"] <- "NA"
+
+# C1 to C2
+ggplot(pheno, aes(x = C1, y = C2, shape = Ancestry, colour = Dx)) +
+  geom_point(size = 2) +
+  theme(text = element_text(size = 24),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(colour = "black", size = 1, fill = NA)) +
+  xlab("PC1") +
+  ylab("PC2") +
+  scale_color_viridis_d(begin = 0.3, end = 0.9, option = "D") +
+  labs(color = 'Diagnosis') 
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_ancestry_dimension_plot_c1_c2.pdf", width = 10, height = 6, units = "in")
+
+# C1 to C3
+ggplot(pheno, aes(x = C1, y = C3, shape = Ancestry, colour = Dx)) +
+  geom_point(size = 2) +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(colour = "black", size = 1, fill = NA)) +
+  xlab("PC1") +
+  ylab("PC3") +
+  scale_color_viridis_d(begin = 0.3, end = 0.9, option = "D") +
+  labs(color = 'Diagnosis')
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_ancestry_dimension_plot_c1_c3.pdf", width = 10, height = 6, units = "in")
+
+# C1 to C4
+ggplot(pheno, aes(x = C1, y = C4, shape = Ancestry, colour = Dx)) +
+  geom_point(size = 2) +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(colour = "black", size = 1, fill = NA)) +
+  xlab("PC1") +
+  ylab("PC4") +
+  scale_color_viridis_d(begin = 0.3, end = 0.9, option = "D") +
+  labs(color = 'Diagnosis')
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_ancestry_dimension_plot_c1_c4.pdf", width = 10, height = 6, units = "in")
+
+# C2 to C3
+ggplot(pheno, aes(x = C2, y = C3, shape = Ancestry, colour = Dx)) +
+  geom_point(size = 2) +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(colour = "black", size = 1, fill = NA)) +
+  xlab("PC2") +
+  ylab("PC3") +
+  scale_color_viridis_d(begin = 0.3, end = 0.9, option = "D") +
+  labs(color = 'Diagnosis')
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_ancestry_dimension_plot_c2_c3.pdf", width = 10, height = 6, units = "in")
+
+# C2 to C4
+ggplot(pheno, aes(x = C2, y = C4, shape = Ancestry, colour = Dx)) +
+  geom_point(size = 2) +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(colour = "black", size = 1, fill = NA)) +
+  xlab("PC2") +
+  ylab("PC4") +
+  scale_color_viridis_d(begin = 0.3, end = 0.9, option = "D") +
+  labs(color = 'Diagnosis')
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_ancestry_dimension_plot_c2_c4.pdf", width = 10, height = 6, units = "in")
+
+# C3 to C4
+ggplot(pheno, aes(x = C3, y = C4, shape = Ancestry, colour = Dx)) +
+  geom_point(size = 2) +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(colour = "black", size = 1, fill = NA)) +
+  xlab("PC3") +
+  ylab("PC4") +
+  scale_color_viridis_d(begin = 0.3, end = 0.9, option = "D") +
+  labs(color = 'Diagnosis')
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_ancestry_dimension_plot_c3_c4.pdf", width = 10, height = 6, units = "in")
+rm(contrast, design, design_cor, nat, nsui, nvio, p, pheno_new, plot_data, sui, sui_combined, tod_combined, vio, i, j, mds_eigenval, categorical_cov, classes, continuous_cov)
+```
+
+
+## Check surrogate eigenvalues
+
+```{r}
+# calculate the eigenvalues for the surrogate variable to our dataset (expression data of the probeset summarized data)
+dat <- exprs(probeset_summaries)
+pprob <- svobj$pprob.gam * (1 - svobj$pprob.b)
+dats <- dat * pprob
+dats <- dats - rowMeans(dats)
+uu <- eigen(t(dats) %*% dats)
+uu_val <-uu$values / sum(uu$values)
+uu_val2 <- uu$values^2 / sum(uu$values^2)
+
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_plot_surrogate_variables_variance_explained.pdf", width = 7, height = 3)
+plot(uu_val2[1:20], type = "p", xlab = "Singular dimension index", ylab = "Percent variance explained", col = "black", pch = 19, yaxt = "n", xaxt = "n")
+axis(2, las = 2, tck=-.05, at = c(0, 0.2, 0.4, 0.6, 0.8, 1.0), lwd = 0, lwd.ticks = 1)
+axis(1, las = 1, tck=-.05, at = c(1, 3, 5, 7, 9, 11, 13, 15, 17, 19), lwd = 0, lwd.ticks = 1)
+abline(v = 1.5, col = c("red"), lty = c(2), lwd = c(2))
+dev.off()
+rm(svobj, surrogates, dat, pprob, dats, uu, uu_val, uu_val2, pheno, probeset_summaries)
+```
+
+In the plot above we can prove that the first surrogate variable is the only one that we need to include into our model. 
+
+
 # Quality Control of Raw Data
+
+# Load raw data
+
+```{r}
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/1_affymetrix_exon_microarray_raw_data.RData")
+pheno <- pData(raw_data)
+```
 
 ## Plot sample generation dates
 
 ```{r, echo = F}
 # get dates of newer files (2014)
-dates <- rawData@protocolData@data$dates[grep("-", rawData@protocolData@data$dates)]
+dates <- raw_data@protocolData@data$dates[grep("-", raw_data@protocolData@data$dates)]
 dates <- unlist(lapply(dates, function(x) strsplit(as.character(x), "T")[[1]][1]))
 # get dates of older files (2009) and change to new format
-dates2 <- rawData@protocolData@data$dates[grep("/", rawData@protocolData@data$dates)]
+dates2 <- raw_data@protocolData@data$dates[grep("/", raw_data@protocolData@data$dates)]
 dates2 <- unlist(lapply(dates2, function(x) strsplit(as.character(x), " ")[[1]][1]))
-betterDates <- as.Date(dates2, format = "%m/%d/%y")
+better_dates <- as.Date(dates2, format = "%m/%d/%y")
 # add all dates together
-datesNew <- c(dates[0:90], as.character(betterDates), dates[91:length(dates)])
+dates_new <- c(dates[0:90], as.character(better_dates), dates[91:length(dates)])
 # sort dates
-datesSorted <- datesNew[order(datesNew)]
-datefreq <- table(as.Date(datesSorted, format='%Y-%m-%d'))
-datefreq
-plot(levels(factor(as.Date(datesSorted, format='%Y-%m-%d') - as.Date('2009-07-16'))), as.vector(datefreq), ylim = c(0, max(datefreq)), type='h', xlab='Days since start', ylab='No of arrays per day', main = "Dates - All Files", col = col[1])
+dates_sorted <- dates_new[order(dates_new)]
+date_freq <- table(as.Date(dates_sorted, format='%Y-%m-%d'))
+date_freq
+plot(levels(factor(as.Date(dates_sorted, format='%Y-%m-%d') - as.Date('2009-07-16'))), as.vector(date_freq), ylim = c(0, max(date_freq)), type = 'h', xlab = 'Days since start', ylab = '# of arrays per day', main = "Dates - All Files")
 # without 2009 samples
-datesSorted <- datesSorted[41:length(datesSorted)] # remove 2009 samples
-datefreq <- table(as.Date(datesSorted, format = '%Y-%m-%d'))
-plot(levels(factor(as.Date(datesSorted, format='%Y-%m-%d') - as.Date('2014-06-06'))), as.vector(datefreq), ylim = c(0, max(datefreq)), type='h', xlab='Days since start', ylab='No of arrays per day', main = "Dates - 2014 Files", col = col[1])
-rm(dates, dates2, betterDates, datesNew, datesSorted, datefreq)
+dates_sorted <- dates_sorted[41:length(dates_sorted)] # remove 2009 samples
+date_freq <- table(as.Date(dates_sorted, format = '%Y-%m-%d'))
+plot(levels(factor(as.Date(dates_sorted, format='%Y-%m-%d') - as.Date('2014-06-06'))), as.vector(date_freq), ylim = c(0, max(date_freq)), type='h', xlab='Days since start', ylab='# arrays per day', main = "Dates - 2014 Files")
+rm(dates, dates2, better_dates, dates_new, dates_sorted, date_freq)
 ```
 
 We also check if the sample generation dates are overlapping with the different given batches. 
 
 ```{r, include = F}
 # check all dates of samples from Batch A
-a <- rawData[, c(rawData@phenoData@data$Batch == "A")]
+a <- raw_data[, c(raw_data@phenoData@data$Batch == "A")]
 a <- unlist(lapply(a@protocolData@data$dates, function(x) strsplit(as.character(x), " ")[[1]][1]))
 table(a)
 # check all dates of samples from batch 1
-one <- rawData[, c(rawData@phenoData@data$Batch == 1)]
+one <- raw_data[, c(raw_data@phenoData@data$Batch == 1)]
 one <- unlist(lapply(one@protocolData@data$dates, function(x) strsplit(as.character(x), "T")[[1]][1]))
 table(one)
 # check all dates of samples from batch 2
-two <- rawData[, c(rawData@phenoData@data$Batch == 2)]
+two <- raw_data[, c(raw_data@phenoData@data$Batch == 2)]
 two <- unlist(lapply(two@protocolData@data$dates, function(x) strsplit(as.character(x), "T")[[1]][1]))
 table(two)
 # check all dates of samples from batch 3
-three <- rawData[, c(rawData@phenoData@data$Batch == 3)]
+three <- raw_data[, c(raw_data@phenoData@data$Batch == 3)]
 three <- unlist(lapply(three@protocolData@data$dates, function(x) strsplit(as.character(x), "T")[[1]][1]))
 table(three)
 # check all dates of samples from batch 4
-four <- rawData[, c(rawData@phenoData@data$Batch == 4)]
+four <- raw_data[, c(raw_data@phenoData@data$Batch == 4)]
 four <- unlist(lapply(four@protocolData@data$dates, function(x) strsplit(as.character(x), "T")[[1]][1]))
 table(four)
 ```
@@ -662,217 +718,177 @@ table(four)
 | 2009-07-16 | - | - | - | - | 21 |
 | 2009-07-17 | - | - | - | - | 19 |
 | ... |   |   |   |   |   |
-| 2014-06-05 | 8 | - | - | - | - |
+| 2014-06-05 | 9 | - | - | - | - |
 | 2014-06-06 | 39 | - | - | - | - |
 | ... |   |   |   |   |   |
 | 2014-06-11 | 10 | - | - | - | - |
 | 2014-06-12 | 6 | - | - | - | - |
 | ... |   |   |   |   |   |
-| 2014-07-29 | - | 7 | - | - | - |
+| 2014-07-29 | - | 8 | - | - | - |
 | 2014-07-30 | - | 34 | - | - | - |
 | 2014-07-31 | - | 5 | - | - | - |
 | 2014-08-01 | - | 6 | - | 1 | - |
 | 2014-08-02 | - | 33 | 1 | - | - |
 | ... |   |   |   |   |   |
-| 2014-08-08 | - | - | 6 | - | - |
+| 2014-08-08 | - | - | 7 | - | - |
 | 2014-08-09 | - | - | 3 | - | - |
 | ... |   |   |   |   |   |
 | 2014-08-27 | - | - | - | 2 | - |
 
-## Boxplots
+## Boxplot
 
 Now, we will represent the probe intensities in a boxplot graph, where each box corresponds to exactly one microarray sample. The boxplot function from the oligo package performs a log2-transformation by default, so we can use the boxplot function without any previous raw data transformation. The logarithmic scale simplifies the visualization of the data.
 
 ```{r, echo = F}
-colors <- c(replicate(length(pData[pData$File == "9", "File"]), col[2]), replicate(length(pData[pData$File == "a", "File"]), col[5]), replicate(length(pData[pData$File == "M", "File"]), col[3]))
-boxplot(rawData, target = "probeset", ylab = "log2 intensity", xlab = "Samples", las = 2, col = colors, main = "Boxplot of log2-intensities for the raw data")
-
-# boxplot of rawData
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/1_affymetrix_exon_microarray_raw_data.RData")
-colors <- c(replicate(length(pData(rawData)[pData(rawData)$Batch == "1", "Batch"]), viridis(5)[1]), replicate(length(pData(rawData)[pData(rawData)$Batch == "2", "Batch"]), viridis(5)[2]), replicate(length(pData(rawData)[pData(rawData)$Batch == "3", "Batch"]), viridis(5)[3]), replicate(length(pData(rawData)[pData(rawData)$Batch == "4", "Batch"]), viridis(5)[4]), replicate(length(pData(rawData)[pData(rawData)$Batch == "A", "Batch"]), viridis(5)[5]))
-pdf("/home/icb/karolina.worf/1_boxplot_rawData.pdf", width = 15)
-boxplot(rawData, target = "probeset", ylab = "log2 intensity", xlab = "Samples", las = 2, col = colors, main = "Boxplot of raw data")
-dev.off()
-
-# PCA of rawData
-expRaw <- log2(exprs(rawData))	
-PCAraw <- prcomp(t(expRaw), scale = FALSE)
-percentVar <- round(100*PCAraw$sdev^2 / sum(PCAraw$sdev^2), 1)
-sdRatio <- sqrt(percentVar[2] / percentVar[1])
-dataRAW <- data.frame(PC1 = PCAraw$x[,1], PC2 = PCAraw$x[,2], Batch = pData(rawData)$Batch)
-ggplot(dataRAW, aes(PC1, PC2)) +
-  geom_point(aes(color = Age)) +
-  ggtitle("PCA plot of raw data") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sdRatio) +
-  scale_fill_viridis()
-ggsave(filename = "/home/icb/karolina.worf/1_pca_rawData.png")
-
-# boxplot of probeset Data before batch correction
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/old/3_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered.RData")
-colors <- c(replicate(length(pData(probesetSummaries)[pData(probesetSummaries)$Batch == "1", "Batch"]), viridis(5)[1]), replicate(length(pData(probesetSummaries)[pData(probesetSummaries)$Batch == "2", "Batch"]), viridis(5)[2]), replicate(length(pData(probesetSummaries)[pData(probesetSummaries)$Batch == "3", "Batch"]), viridis(5)[3]), replicate(length(pData(probesetSummaries)[pData(probesetSummaries)$Batch == "4", "Batch"]), viridis(5)[4]), replicate(length(pData(probesetSummaries)[pData(probesetSummaries)$Batch == "A", "Batch"]), viridis(5)[5]))
-pdf("/home/icb/karolina.worf/2_boxplot_probesetSummaries_before_batch_correction.pdf", width = 15)
-boxplot(probesetSummaries, target = "probeset", ylab = "log2 intensity", xlab = "Samples", col = colors, las = 2, main = "Boxplot probesetSummaries before batch correction")
-dev.off()
-
-# PCA of probesetSummaries before batch correction
-expRaw <- log2(exprs(probesetSummaries))	
-PCAraw <- prcomp(t(expRaw), scale = FALSE)
-percentVar <- round(100*PCAraw$sdev^2 / sum(PCAraw$sdev^2), 1)
-sdRatio <- sqrt(percentVar[2] / percentVar[1])
-dataRAW <- data.frame(PC1 = PCAraw$x[,1], PC2 = PCAraw$x[,2], Batch = pData(probesetSummaries)$Batch)
-ggplot(dataRAW, aes(PC1, PC2)) +
-  geom_point(aes(color = Age)) +
-  ggtitle("PCA plot of raw data") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sdRatio) +
-  scale_fill_viridis()
-
-# boxplot of probeset Data after batch correction
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/old/4_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected.RData")
-colors <- c(replicate(length(pData(probesetSummaries)[pData(probesetSummaries)$Batch == "1", "Batch"]), viridis(5)[1]), replicate(length(pData(probesetSummaries)[pData(probesetSummaries)$Batch == "2", "Batch"]), viridis(5)[2]), replicate(length(pData(probesetSummaries)[pData(probesetSummaries)$Batch == "3", "Batch"]), viridis(5)[3]), replicate(length(pData(probesetSummaries)[pData(probesetSummaries)$Batch == "4", "Batch"]), viridis(5)[4]), replicate(length(pData(probesetSummaries)[pData(probesetSummaries)$Batch == "A", "Batch"]), viridis(5)[5]))
-pdf("/home/icb/karolina.worf/2_boxplot_probesetSummaries_after_batch_correction.pdf", width = 15)
-boxplot(probesetSummaries, target = "probeset", ylab = "log2 intensity", xlab = "Samples", col = colors, las = 2, main = "Boxplot probesetSummaries after batch correction")
-dev.off()
-
-# boxplot of core Summaries Data before batch correction
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/old/3_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered.RData")
-colors <- c(replicate(length(pData(coreSummaries)[pData(coreSummaries)$Batch == "1", "Batch"]), viridis(5)[1]), replicate(length(pData(coreSummaries)[pData(coreSummaries)$Batch == "2", "Batch"]), viridis(5)[2]), replicate(length(pData(coreSummaries)[pData(coreSummaries)$Batch == "3", "Batch"]), viridis(5)[3]), replicate(length(pData(coreSummaries)[pData(coreSummaries)$Batch == "4", "Batch"]), viridis(5)[4]), replicate(length(pData(coreSummaries)[pData(coreSummaries)$Batch == "A", "Batch"]), viridis(5)[5]))
-pdf("/home/icb/karolina.worf/3_boxplot_coreSummaries_before_batch_correction.pdf", width = 15)
-boxplot(coreSummaries, target = "core", ylab = "log2 intensity", xlab = "Samples", col = colors, las = 2, main = "Boxplot coreSummaries before batch corr.")
-dev.off()
-
-# boxplot of core Summaries after batch correction
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/old/4_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_batch_corrected.RData")
-colors <- c(replicate(length(pData(coreSummaries)[pData(coreSummaries)$Batch == "1", "Batch"]), viridis(5)[1]), replicate(length(pData(coreSummaries)[pData(coreSummaries)$Batch == "2", "Batch"]), viridis(5)[2]), replicate(length(pData(coreSummaries)[pData(coreSummaries)$Batch == "3", "Batch"]), viridis(5)[3]), replicate(length(pData(coreSummaries)[pData(coreSummaries)$Batch == "4", "Batch"]), viridis(5)[4]), replicate(length(pData(coreSummaries)[pData(coreSummaries)$Batch == "A", "Batch"]), viridis(5)[5]))
-pdf("/home/icb/karolina.worf/3_boxplot_coreSummaries_after_batch_correction.pdf", width = 15)
-boxplot(coreSummaries, target = "core", ylab = "log2 intensity", xlab = "Samples", col = colors, las = 2, main = "Boxplot coreSummaries after batch corr.")
+# boxplot of raw_data
+colors <- c(replicate(length(pheno[pheno$File == "9", "File"]), "darkcyan"), replicate(length(pheno[pheno$File == "a", "File"]), "darkorange"), replicate(length(pheno[pheno$File == "M", "File"]), "deeppink4"))
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S2_boxplot_raw_data.pdf", width = 15)
+boxplot(raw_data, target = "probeset", ylab = "log2 intensity", xlab = "Samples", las = 2, col = colors, main = "Boxplot of log2-intensities (raw data)")
 dev.off()
 ```
 
-Here, we can see that the density distributions of the individual samples are quite different, especially between the samples coming from the first cohort measured in 2009 (orange) compared to the second cohort measured in 2014 (cyan and pink). That is the reason, why we performed the RMA background correction, normalization and summarization step in the preprocessing pipeline. The boxplot for the normalized data will be shown in the next section. 
+Here, we can see that the density distributions of the individual samples are quite different, especially between the samples coming from the first cohort measured in 2009 (purple) compared to the second cohort measured in 2014 (pink and orange/yellow). That is the reason, why we performed the RMA background correction, normalization and summarization step in the preprocessing pipeline. The boxplot for the normalized data will be shown in the next section. 
 
 To also check the data on original intensity scale, we just need to set the transfo parameter to identity instead of the default log2. 
 
 ```{r, echo = F}
 # with original intensities
-boxplot(rawData, target = "probeset", transfo = identity, ylab = "Intensity", xlab = "Samples", las = 2, col = colors, main = "Boxplot of original intensities for the raw data")
+boxplot(raw_data, target = "probeset", transfo = identity, ylab = "Intensity", xlab = "Samples", las = 2, col = colors, main = "Boxplot of original intensities for the raw data")
 ```
 
 You can see, that the plot using original intensities shows bigger differences than the plot using log2 transformed intensities and is making it more difficult to interpret the plot.
 
-## PCA Plots
+## PCA Plot
 
 Before we can generate the different PCA plots, we need to calculate the log2 intensities of the raw data expression set as well as the first two principal components. 
 
 ```{r, echo = F, eval = F}
-expRaw <- log2(exprs(rawData))	
-PCAraw <- prcomp(t(expRaw), scale = FALSE)
-percentVar <- round(100*PCAraw$sdev^2 / sum(PCAraw$sdev^2), 1)
-sdRatio <- sqrt(percentVar[2] / percentVar[1])
-dataRAW <- data.frame(PC1 = PCAraw$x[,1], PC2 = PCAraw$x[,2], Diagnosis = pData$Dx, Age = pData$Age, pH = pData$pH , 
-                     File = pData$File, Sex = pData$Sex, Batch = pData$Batch, MHRI = pData$MHRIID, PMI = pData$PMI, 
-                     Suicide = pData$Suicide, RIN = pData$RIN, ShortName = pData$ShortName, Ancestry = pData$Ancestry)
-save(percentVar, sdRatio, dataRAW, file ="/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/RData_Files/5_affymetrix_exon_microarray_raw_data_for_PCA_plots.RData")
+exp_raw <- log2(exprs(raw_data))	
+pca_raw <- prcomp(t(exp_raw), scale = FALSE)
+percent_var <- round(100 * pca_raw$sdev^2 / sum(pca_raw$sdev ^ 2), 1)
+sd_ratio <- sqrt(percent_var[2] / percent_var[1])
+data_raw <- data.frame(PC1 = pca_raw$x[,1], PC2 = pca_raw$x[,2], Diagnosis = pheno$Dx, Age = pheno$Age, pH = pheno$pH , File = pheno$File, Sex = pheno$Sex, Batch = pheno$Batch, MHRI = pheno$MHRIID, PMI = pheno$PMI, Suicide = pheno$Suicide, RIN = pheno$RIN, ShortName = pheno$ShortName, Ancestry = pheno$Ancestry, ToD = pheno$Type_of_Death)
+save(percent_var, sd_ratio, data_raw, file ="/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/8_affymetrix_exon_microarray_raw_data_for_PCA_plots.RData")
 ```
 
 Now, we can generate the PCA plots coloring the different covariates of the phenotype dataset. 
 
 ```{r, echo = F, fig.height = 10, fig.width = 10}
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/RData_Files/5_affymetrix_exon_microarray_raw_data_for_PCA_plots.RData")
+#load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/8_affymetrix_exon_microarray_raw_data_for_PCA_plots.RData")
 # PCA only colouring Age
-g1 <- ggplot(dataRAW, aes(PC1, PC2)) +
+g1 <- ggplot(data_raw, aes(PC1, PC2)) +
   geom_point(aes(color = Age)) +
   ggtitle("PCA plot of the raw data") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
   theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sdRatio) +
+  coord_fixed(ratio = sd_ratio) +
   scale_fill_viridis()
+ggsave(plot = g1, filename = "storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S2_pca_raw_data_age_colored.png")
 # PCA only colouring Sex
-g2 <- ggplot(dataRAW, aes(PC1, PC2)) +
+g2 <- ggplot(data_raw, aes(PC1, PC2)) +
   geom_point(aes(colour = Sex)) +
   ggtitle("PCA plot of the raw data") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sdRatio) +
   scale_color_manual(values = c(col[2], col[5]))
 # PCA only colouring PMI
-g3 <- ggplot(dataRAW, aes(PC1, PC2)) +
+g3 <- ggplot(data_raw, aes(PC1, PC2)) +
   geom_point(aes(color = PMI)) +
   ggtitle("PCA plot of the raw data") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sdRatio) +
   scale_fill_viridis()
 # PCA only colouring pH
-g4 <- ggplot(dataRAW, aes(PC1, PC2)) +
+g4 <- ggplot(data_raw, aes(PC1, PC2)) +
   geom_point(aes(color = pH)) +
   ggtitle("PCA plot of the raw data") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sdRatio)+
   scale_fill_viridis()
 # PCA only colouring RIN
-g5 <- ggplot(dataRAW, aes(PC1, PC2)) +
+g5 <- ggplot(data_raw, aes(PC1, PC2)) +
   geom_point(aes(color = RIN)) +
   ggtitle("PCA plot of the raw data") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sdRatio) +
   scale_fill_viridis()
 # PCA only colouring Suicide
-g6 <- ggplot(dataRAW, aes(PC1, PC2)) +
+g6 <- ggplot(data_raw, aes(PC1, PC2)) +
   geom_point(aes(color = Suicide)) +
   ggtitle("PCA plot of the raw data") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sdRatio) +
   scale_color_manual(values = c(col[2], col[5]))
 # PCA only colouring Ancestry
-g7 <- ggplot(dataRAW, aes(PC1, PC2)) +
+g7 <- ggplot(data_raw, aes(PC1, PC2)) +
   geom_point(aes(color = Ancestry)) +
   ggtitle("PCA plot of the raw data") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sdRatio) +
   scale_color_manual(values = c(col[1], col[2], col[3], col[4]))
 # PCA only colouring Diagnosis
-g8 <- ggplot(dataRAW, aes(PC1, PC2)) +
+g8 <- ggplot(data_raw, aes(PC1, PC2)) +
   geom_point(aes(color = Diagnosis)) +
   ggtitle("PCA plot of the raw data") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sdRatio) +
   scale_color_manual(values = c(col[1], col[2], col[3], col[4]))
-g9 <- ggplot(dataRAW, aes(PC1, PC2)) +
+g9 <- ggplot(data_raw, aes(PC1, PC2)) +
   geom_point(aes(color = File)) +
   ggtitle("PCA plot of the raw data") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sdRatio) +
   scale_color_manual(values = c(col[1], col[2], col[3]))
-g10 <- ggplot(dataRAW, aes(PC1, PC2)) +
+g10 <- ggplot(data_raw, aes(PC1, PC2)) +
   geom_point(aes(color = Batch)) +
   ggtitle("PCA plot of the raw data") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sdRatio) +
   scale_color_manual(values = c(col[1], col[2], col[3], col[4], col[5]))
 ggarrange(g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, ncol = 2, nrow = 5)
+```
+
+## Heatmap of sample to sample distances
+
+```{r}
+# get distances
+dists <- as.matrix(dist(t(Biobase::exprs(raw_data)), method = "manhattan"))
+rownames(dists) <- row.names(pData(raw_data))
+hmcol <- rev(colorRampPalette(RColorBrewer::brewer.pal(11, "RdBu"))(255))
+colnames(dists) <- NULL
+diag(dists) <- NA
+# get annotations
+annotation_for_heatmap <- data.frame(Phenotype = phenotype_names, Disease = disease_names)
+ann_colors <- list(Phenotype = c(non_infl. = "chartreuse4", infl. = "burlywood3"), Disease = c(CD = "blue4", UC = "cadetblue2"))
+# generate heatmap
+pheatmap(dists, col = hmcol,
+          annotation_row = annotation_for_heatmap,
+          annotation_colors = ann_colors,
+          legend = TRUE,
+          treeheight_row = 0,
+          legend_breaks = c(min(dists, na.rm = TRUE),
+                            max(dists, na.rm = TRUE)),
+          legend_labels = (c("small distance", "large distance")),
+          main = "Clustering heatmap for the calibrated samples")
 ```
 
 ## arrayQualityMetrics
@@ -880,18 +896,19 @@ ggarrange(g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, ncol = 2, nrow = 5)
 One easy way to do quality control of Microarray data is the use of the package arrayQualityMetrics. This package performs different quality control metrics and produces a html file including all generated plots and suggested samples to remove from the dataset. We will store the html file and check its output separately. 
 
 ```{r, eval = F}
-rownames(pData) <- pData$ShortName
-phenoData <- new("AnnotatedDataFrame", data = pData)
-exprs <- exprs(rawData)
+rownames(pheno) <- pheno$ShortName
+phenoData <- new("AnnotatedDataFrame", data = pheno)
+exprs <- exprs(raw_data)
 exampleSet <- ExpressionSet(assayData = exprs, phenoData = phenoData)
-arrayQualityMetrics(expressionset = exampleSet, outdir = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/Figures/rawData/Report_before_rma", force = TRUE, do.logtransform = TRUE, intgroup = c("Dx"))
+arrayQualityMetrics(expressionset = exampleSet, outdir = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/raw_data/Report_before_rma", force = TRUE, do.logtransform = TRUE, intgroup = c("Dx"))
 ```
 
 # Load RMA Normalized Data
 
 ```{r}
 # load neccessary data
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/RData_Files/3_affymetrix_exon_microarray_data_after_rma_core_gene_summaries_annotated.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/2_affymetrix_exon_microarray_data_after_rma_probeset_summaries.RData")
+pheno <- pData(probeset_summaries)
 ```
 
 # Quality Control Of Normalized Data
@@ -900,8 +917,8 @@ load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/RData_Files/3_a
 
 ```{r, echo = F}
 # with log2 intensities
-colors <- c(replicate(length(pData[pData$File == "9", "File"]), "darkcyan"), replicate(length(pData[pData$File == "a", "File"]), "darkorange"), replicate(length(pData[pData$File == "M", "File"]), "deeppink4"))
-boxplot(geneSummaries, target = "full", ylab = "log2 intensity", xlab = "Samples", las = 2, col = colors, main = "Boxplot of log2-intensities after RMA calibration")
+colors <- c(replicate(length(pheno[pheno$File == "9", "File"]), "darkcyan"), replicate(length(pheno[pheno$File == "a", "File"]), "darkorange"), replicate(length(pheno[pheno$File == "M", "File"]), "deeppink4"))
+boxplot(probeset_summaries, target = "full", ylab = "log2 intensity", xlab = "Samples", las = 2, col = colors, main = "Boxplot of log2-intensities after RMA calibration")
 ```
 
 ## PCA Plots
@@ -909,103 +926,101 @@ boxplot(geneSummaries, target = "full", ylab = "log2 intensity", xlab = "Samples
 Here, we need to get the expression (NOT log 2 transformed as for the raw dataset) of the normalized data expression set and calculate the first two principal components. 
 
 ```{r, echo = F, eval = F}
-exprs_rma <- exprs(geneSummaries)
-PCA_RMA <- prcomp(t(exprs_rma), scale = FALSE)
-percentVar <- round(100 * PCA_RMA$sdev^2 / sum(PCA_RMA$sdev^2), 1)
-sd_ratio <- sqrt(percentVar[2] / percentVar[1])
-dataGG <- data.frame(PC1 = PCA_RMA$x[,1], PC2 = PCA_RMA$x[,2], Ancestry = pData$Ancestry, Diagnosis = pData$Dx, Age = pData$Age, 
-                     pH = pData$pH , File = pData$File, Sex = pData$Sex, Batch = pData$Batch, PMI = pData$PMI, Suicide = pData$Suicide,
-                     RIN = pData$RIN)
-save(percentVar, exprs_rma, sd_ratio, dataGG, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/RData_Files/6_affymetrix_exon_microarray_data_after_rma_core_gene_summaries_annotated_for_PCA_plots.RData")
+exprs_rma <- exprs(probeset_summaries)
+pca_rma <- prcomp(t(exprs_rma), scale = FALSE)
+percent_var <- round(100 * pca_rma$sdev^2 / sum(pca_rma$sdev^2), 1)
+sd_ratio <- sqrt(percent_var[2] / percent_var[1])
+data_gg <- data.frame(PC1 = pca_rma$x[,1], PC2 = pca_rma$x[,2], Ancestry = pheno$Ancestry, Diagnosis = pheno$Dx, Age = pheno$Age, pH = pheno$pH , File = pheno$File, Sex = pheno$Sex, Batch = pheno$Batch, PMI = pheno$PMI, Suicide = pheno$Suicide, RIN = pheno$RIN, ToD = pheno$Type_of_Death)
+save(percent_var, exprs_rma, sd_ratio, data_gg, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/8_affymetrix_exon_microarray_data_after_rma_probeset_summaries_for_PCA_plots.RData")
 ```
 
 Now, we can generate the PCA plots coloring the different covariates of the phenotype dataset. 
 
 ```{r, echo = F, fig.height = 10, fig.width = 10}
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/RData_Files/6_affymetrix_exon_microarray_data_after_rma_core_gene_summaries_annotated_for_PCA_plots.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/6_affymetrix_exon_microarray_data_after_rma_core_gene_summaries_annotated_for_PCA_plots.RData")
 # PCA only colouring Age
-g1 <- ggplot(dataGG, aes(PC1, PC2)) +
+g1 <- ggplot(data_gg, aes(PC1, PC2)) +
   geom_point(aes(color = Age)) +
   ggtitle("PCA plot of the normalized data") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sd_ratio)
 # PCA only colouring Sex
-g2 <- ggplot(dataGG, aes(PC1, PC2)) +
+g2 <- ggplot(data_gg, aes(PC1, PC2)) +
   geom_point(aes(color = Sex)) +
   ggtitle("PCA plot of the normalized data)") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sd_ratio) +
   scale_color_manual(values = c("darkorange", "dodgerblue4"))
 # PCA only colouring PMI
-g3 <- ggplot(dataGG, aes(PC1, PC2)) +
+g3 <- ggplot(data_gg, aes(PC1, PC2)) +
   geom_point(aes(color = PMI)) +
   ggtitle("PCA plot of the normalized data") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sd_ratio)
 # PCA only colouring pH
-g4 <- ggplot(dataGG, aes(PC1, PC2)) +
+g4 <- ggplot(data_gg, aes(PC1, PC2)) +
   geom_point(aes(color = pH)) +
   ggtitle("PCA plot of the normalized data") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sd_ratio) 
 # PCA only colouring RIN
-g5 <- ggplot(dataGG, aes(PC1, PC2)) +
+g5 <- ggplot(data_gg, aes(PC1, PC2)) +
   geom_point(aes(color = RIN)) +
   ggtitle("PCA plot of the normalized data") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sd_ratio) 
 # PCA only colouring Suicide
-g6 <- ggplot(dataGG, aes(PC1, PC2)) +
+g6 <- ggplot(data_gg, aes(PC1, PC2)) +
   geom_point(aes(color = Suicide)) +
   ggtitle("PCA plot of the normalized data") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sd_ratio) +
   scale_color_manual(values = c("darkorange", "dodgerblue4"))
 # PCA only colouring Ancestry
-g7 <- ggplot(dataGG, aes(PC1, PC2)) +
+g7 <- ggplot(data_gg, aes(PC1, PC2)) +
   geom_point(aes(color = Ancestry)) +
   ggtitle("PCA plot of the batch corrected data") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sd_ratio) +
   scale_color_manual(values = c("brown", "green", "darkorange2", "dodgerblue4"))
 # PCA only colouring Diagnosis
-g8 <- ggplot(dataGG, aes(PC1, PC2)) +
+g8 <- ggplot(data_gg, aes(PC1, PC2)) +
   geom_point(aes(color = Diagnosis)) +
   ggtitle("PCA plot of the normalized data") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sd_ratio) +
   scale_color_manual(values = c("brown", "green", "darkorange2", "dodgerblue4"))
 # PCA only coloring File
-g9 <- ggplot(dataGG, aes(PC1, PC2)) +
+g9 <- ggplot(data_gg, aes(PC1, PC2)) +
   geom_point(aes(color = File)) +
   ggtitle("PCA plot of the normalized data") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sd_ratio) +
   scale_color_manual(values = c("green", "darkorange2", "dodgerblue4"))
 # PCA only coloring Batches
-g10 <- ggplot(dataGG, aes(PC1, PC2)) +
+g10 <- ggplot(data_gg, aes(PC1, PC2)) +
   geom_point(aes(color = Batch)) +
   ggtitle("PCA plot of the normalized data") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sd_ratio) +
   scale_color_manual(values = c("brown", "red", "green", "darkorange2", "dodgerblue4"))
@@ -1015,8 +1030,8 @@ ggarrange(g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, ncol = 2, nrow = 5)
 ## PC1-10 for the different covariates
 
 ```{r, echo = F}
-pcr_rma <- prcomp(exprs_rma)
-pcr_rma_rot <- pcr_rma$rotation
+pca_rma <- prcomp(exprs_rma)
+pca_rma_rot <- pca_rma$rotation
 varnames =c("Age", "Sex", "PMI", "pH", "RIN", "Suicide", "Ancestry", "Dx", "Batch", "File")
 vartype = c("continuous", "categorical", "continuous", "continuous", "continuous", "categorical", "categorical","categorical","categorical","categorical")
 numPCs = 10  # Number of the top PCs to be used in subsequent association tests
@@ -1026,25 +1041,25 @@ rownames(results.assoc) = rownames(results.pval) = varnames
 for(i in 1:length(varnames)) {
   for(j in 1:numPCs) {
     if(vartype[i]  == "continuous") {
-      fit = lm(pcr_rma_rot[,j]~pData[,varnames[i]])
+      fit = lm(pca_rma_rot[,j]~pheno[,varnames[i]])
       results.pval[i,j] = summary(fit)[[4]][[8]]
     }
     else if(vartype[i] == "categorical") {
-      fit = aov(pcr_rma_rot[,j] ~ factor(pData[,varnames[i]]))
+      fit = aov(pca_rma_rot[,j] ~ factor(pheno[,varnames[i]]))
       results.pval[i,j] = summary(fit)[[1]][[5]][[1]]
     }
     results.assoc[i,] = results.pval[i,]
   }
 }
 results.assoc
-rm(pcr_rma, pcr_rma_rot, varnames, vartype, numPCs, results.pval, results.assoc)
+rm(pca_rma, pca_rma_rot, varnames, vartype, numPCs, results.pval, results.assoc)
 ```
 
 ## arrayQualityMetrics
 
 ```{r, eval = F}
 exampleSet2 <- ExpressionSet(assayData = exprs_rma, phenoData = phenoData)
-arrayQualityMetrics(expressionset = exampleSet2, outdir = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/Figures/afterRMA/Report_after_rma", force=TRUE, do.logtransform = TRUE, intgroup = c("Dx"))
+arrayQualityMetrics(expressionset = exampleSet2, outdir = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/afterRMA/Report_after_rma", force=TRUE, do.logtransform = TRUE, intgroup = c("Dx"))
 rm(exprs_rma, exampleSet2)
 ```
 
@@ -1052,7 +1067,8 @@ rm(exprs_rma, exampleSet2)
 
 ```{r}
 # load neccessary data
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/RData_Files/4_affymetrix_exon_microarray_data_after_rma_gene_summaries_annotated_combat_batch_corrected.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/5_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA.RData")
+pheno <- pData(probeset_summaries)
 ```
 
 # Quality Control Of Batch Corrected Data
@@ -1061,8 +1077,8 @@ load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/RData_Files/4_a
 
 ```{r, echo = F}
 # with log2 intensities
-colors <- c(replicate(length(pData[pData$File == "9", "File"]), "darkcyan"), replicate(length(pData[pData$File == "a", "File"]), "darkorange"), replicate(length(pData[pData$File == "M", "File"]), "deeppink4"))
-boxplot(geneSummaries, target = "full", ylab = "log2 intensity", xlab = "Samples", las = 2, col = colors, main = "Boxplot of log2-intensities after batch correction")
+colors <- c(replicate(length(pheno[pheno$File == "9", "File"]), "darkcyan"), replicate(length(pheno[pheno$File == "a", "File"]), "darkorange"), replicate(length(pheno[pheno$File == "M", "File"]), "deeppink4"))
+boxplot(probeset_summaries, target = "full", ylab = "log2 intensity", xlab = "Samples", las = 2, col = colors, main = "Boxplot of log2-intensities after batch correction")
 ```
 
 ## PCA Plots
@@ -1070,95 +1086,94 @@ boxplot(geneSummaries, target = "full", ylab = "log2 intensity", xlab = "Samples
 Exactly as for the PCA plots of the normalized data, we need to get the expression of the batch corrected data and calculate the first two principal components.
 
 ```{r, echo = F}
-exprs_bc <- exprs(geneSummaries)
-PCA_BC <- prcomp(t(exprs_bc), scale = FALSE)
-percentVar <- round(100 * PCA_BC$sdev^2 / sum(PCA_BC$sdev^2), 1)
-sd_ratio <- sqrt(percentVar[2] / percentVar[1])
-dataB <- data.frame(PC1 = PCA_BC$x[,1], PC2 = PCA_BC$x[,2], Ancestry = pData$Ancestry, Diagnosis = pData$Dx, Age = pData$Age, 
-                     pH = pData$pH , File = pData$File, Sex = pData$Sex, PMI = pData$PMI, Suicide = pData$Suicide, RIN = pData$RIN)
-save(percentVar, sd_ratio, dataB, file ="/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/RData_Files/7_affymetrix_exon_microarray_data_after_rma_gene_summaries_annotated_combat_batch_corrected_for_PCA_plots.RData")
+exprs_bc <- exprs(probeset_summaries)
+pca_bc <- prcomp(t(exprs_bc), scale = FALSE)
+percent_var <- round(100 * pca_bc$sdev^2 / sum(pca_bc$sdev^2), 1)
+sd_ratio <- sqrt(percent_var[2] / percent_var[1])
+data_bc <- data.frame(PC1 = pca_bc$x[,1], PC2 = pca_bc$x[,2], Ancestry = pheno$Ancestry, Diagnosis = pheno$Dx, Age = pheno$Age, pH = pheno$pH , File = pheno$File, Sex = pheno$Sex, PMI = pheno$PMI, Suicide = pheno$Suicide, RIN = pheno$RIN, ToD = pheno$Type_of_Death)
+save(percent_var, sd_ratio, data_bc, file ="/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/8_affymetrix_exon_microarray_data_after_rma_gene_summaries_annotated_combat_batch_corrected_SVA_for_PCA_plots.RData")
 ```
 
 Now, we can generate the PCA plots coloring the different covariates of the phenotype dataset. 
 
 ```{r, echo = F, fig.height = 10, fig.width = 10}
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/RData_Files/7_affymetrix_exon_microarray_data_after_rma_gene_summaries_annotated_combat_batch_corrected_for_PCA_plots.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/7_affymetrix_exon_microarray_data_after_rma_gene_summaries_annotated_combat_batch_corrected_for_PCA_plots.RData")
 
 # plot only PCA of Ancestry
-ggplot(dataB, aes(PC1, PC2)) +
+ggplot(data_bc, aes(PC1, PC2)) +
   geom_point(aes(color = Ancestry), size = 3) +
   ggtitle("PCA of batch corrected data (log-transformed)") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
   theme(plot.title = element_text(hjust = 0.5), text = element_text(size = 18)) +
   coord_fixed(ratio = sd_ratio) +
   scale_color_manual(labels = c("MISSING", "CEU", "CEU/CHB", "CHB"), values = viridis(4))
 
 # PCA only colouring Age
-g1 <- ggplot(dataB, aes(PC1, PC2)) +
+g1 <- ggplot(data_bc, aes(PC1, PC2)) +
   geom_point(aes(color = Age)) +
   ggtitle("PCA plot of the batch corrected data") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sd_ratio)
 # PCA only colouring Sex
-g2 <- ggplot(dataB, aes(PC1, PC2)) +
+g2 <- ggplot(data_bc, aes(PC1, PC2)) +
   geom_point(aes(color = Sex)) +
   ggtitle("PCA plot of the batch corrected data") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sd_ratio) +
   scale_color_manual(values = c("darkorange", "dodgerblue4"))
 # PCA only colouring PMI
-g3 <- ggplot(dataB, aes(PC1, PC2)) +
+g3 <- ggplot(data_bc, aes(PC1, PC2)) +
   geom_point(aes(color = PMI)) +
   ggtitle("PCA plot of the batch corrected data") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sd_ratio)
 # PCA only colouring pH
-g4 <- ggplot(dataB, aes(PC1, PC2)) +
+g4 <- ggplot(data_bc, aes(PC1, PC2)) +
   geom_point(aes(color = pH)) +
   ggtitle("PCA plot of the batch corrected data") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sd_ratio) 
 # PCA only colouring RIN
-g5 <- ggplot(dataB, aes(PC1, PC2)) +
+g5 <- ggplot(data_bc, aes(PC1, PC2)) +
   geom_point(aes(color = RIN)) +
   ggtitle("PCA plot of the batch corrected data") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sd_ratio) 
 # PCA only colouring Suicide
-g6 <- ggplot(dataB, aes(PC1, PC2)) +
+g6 <- ggplot(data_bc, aes(PC1, PC2)) +
   geom_point(aes(color = Suicide)) +
   ggtitle("PCA plot of the batch corrected data") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sd_ratio) +
   scale_color_manual(values = c("darkorange", "dodgerblue4"))
 # PCA only colouring Ancestry
-g7 <- ggplot(dataB, aes(PC1, PC2)) +
+g7 <- ggplot(data_bc, aes(PC1, PC2)) +
   geom_point(aes(color = Ancestry)) +
   ggtitle("PCA plot of the batch corrected data") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sd_ratio) +
   scale_color_manual(values = viridis(4))
 # PCA only colouring Diagnosis
-g8 <- ggplot(dataB, aes(PC1, PC2)) +
+g8 <- ggplot(data_bc, aes(PC1, PC2)) +
   geom_point(aes(color = Diagnosis)) +
   ggtitle("PCA plot of the batch corrected data") +
-  xlab(paste0("PC1, VarExp: ", percentVar[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percentVar[2], "%")) +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sd_ratio) +
   scale_color_manual(values = c("brown", "green", "darkorange2", "dodgerblue4"))
@@ -1170,7 +1185,7 @@ ggarrange(g1, g2, g3, g4, g5, g6, g7, g8, ncol = 2, nrow = 4)
 ```{r, eval = F}
 exprs_bc <- exprs(geneSummaries)
 exampleSet3 <- ExpressionSet(assayData = exprs_bc, phenoData = phenoData)
-arrayQualityMetrics(expressionset = exampleSet3, outdir = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/Figures/afterBatchCorrection/Report_after_batch_correction", force=TRUE, do.logtransform = TRUE, intgroup = c("Dx"))
+arrayQualityMetrics(expressionset = exampleSet3, outdir = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/afterBatchCorrection/Report_after_batch_correction", force=TRUE, do.logtransform = TRUE, intgroup = c("Dx"))
 rm(exprs_bc, exampleSet3)
 ```
 
