@@ -85,7 +85,7 @@ perm <- 10000
 states <- names(table(vepGR_hg19$code))
 
 # 2.4.1 annotation to ChromHMM Blood (parallelized)
-cl <- makeCluster(9)
+cl <- makeCluster(17)
 registerDoSNOW(cl)
 clusterCall(cl, function(x) .libPaths(x), .libPaths())  # load packages from above
 
@@ -107,7 +107,7 @@ results2 <- foreach (i = seq_along(states), .combine = rbind,
 stopCluster(cl)
 
 # 2.4.6 write results into a file
-write.table(results2, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/pmb_cis-eQTL_annotation_results_10000_permutations_VEP.tsv", row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")
+write.table(results2, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_annotation_results_10000_permutations_VEP.tsv", row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")
 
 
 ### Load public data

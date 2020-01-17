@@ -77,15 +77,15 @@ system("/storage/groups/ccm01/tools/PLINK/plink --bfile /storage/groups/ccm01/wo
 
 # 4. Get clumped SNP eQTLs
 # 4.1 cis-eQTLs of cases and controls (ALL) of genes, transcripts and exons
-GetClumpedSnpsEqtls(input = "03_pmb_cis-eQTL_gene.clumped", eqtls_gene, output = "pmb_cis-eQTL_gene_results_cases_vs_controls_clumped.txt")
-GetClumpedSnpsEqtls(input = "03_pmb_cis-eQTL_transcript.clumped", eqtls_transcript, output = "pmb_cis-eQTL_transcript_results_cases_vs_controls_clumped.txt")
-GetClumpedSnpsEqtls(input = "03_pmb_cis-eQTL_exon.clumped", eqtls_exon, output = "pmb_cis-eQTL_exon_results_cases_vs_controls_clumped.txt")
+GetClumpedSnpsEqtls(input = "03_pmb_cis-eQTL_gene.clumped", eqtls_gene, output = "pmb_cis-eQTL_gene_hits_cases_vs_controls_clumped.txt")
+GetClumpedSnpsEqtls(input = "03_pmb_cis-eQTL_transcript.clumped", eqtls_transcript, output = "pmb_cis-eQTL_transcript_hits_cases_vs_controls_clumped.txt")
+GetClumpedSnpsEqtls(input = "03_pmb_cis-eQTL_exon.clumped", eqtls_exon, output = "pmb_cis-eQTL_exon_hits_cases_vs_controls_clumped.txt")
 # 4.2 cis-eQTLs of cases only in genes, transcripts and exons
-GetClumpedSnpsEqtls(input = "03_pmb_cis-eQTL_gene_cases.clumped", eqtls_gene_cases, output = "pmb_cis-eQTL_gene_results_cases_only_clumped.txt")
-GetClumpedSnpsEqtls(input = "03_pmb_cis-eQTL_transcript_cases.clumped", eqtls_transcript_cases, output = "pmb_cis-eQTL_transcript_results_cases_only_clumped.txt")
-GetClumpedSnpsEqtls(input = "03_pmb_cis-eQTL_exon_cases.clumped", eqtls_exon_cases, output = "pmb_cis-eQTL_exon_results_cases_only_clumped.txt")
+GetClumpedSnpsEqtls(input = "03_pmb_cis-eQTL_gene_cases.clumped", eqtls_gene_cases, output = "pmb_cis-eQTL_gene_hits_cases_only_clumped.txt")
+GetClumpedSnpsEqtls(input = "03_pmb_cis-eQTL_transcript_cases.clumped", eqtls_transcript_cases, output = "pmb_cis-eQTL_transcript_hits_cases_only_clumped.txt")
+GetClumpedSnpsEqtls(input = "03_pmb_cis-eQTL_exon_cases.clumped", eqtls_exon_cases, output = "pmb_cis-eQTL_exon_hits_cases_only_clumped.txt")
 
-#eqtls_gene_clumped <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_gene_results_cases_only_clumped.txt")
+#eqtls_gene_clumped <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_gene_hits_cases_only_clumped.txt")
 #length(unique(sort(eqtls_gene_clumped$SNP)))
 #length(unique(sort(eqtls_gene_clumped$Gene)))
 #length(unique(sort(eqtls_gene_clumped$Transcript)))

@@ -87,7 +87,7 @@ perm <- 10000
 states <- names(table(hmm_brain$name))
 
 # 2.4.1 annotation to ChromHMM Brain (parallelized)
-cl <- makeCluster(8)
+cl <- makeCluster(15)
 registerDoSNOW(cl)
 clusterCall(cl, function(x) .libPaths(x), .libPaths())  # load packages from above
 

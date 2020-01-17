@@ -57,103 +57,103 @@ background <- as.data.frame(background_gr)[, c("seqnames", "start", "snp_id", "b
 colnames(background) <- c("CHR", "POS", "SNP", "bin")
 head(background)
 
-### Gene eQTLs
-geGenes <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_gene_hits_cases_vs_controls.txt", header = T, stringsAsFactors = F)
-geGenes_gr <- GenerateGrangesObject(input = geGenes,
+### Gene eQTLs: geSNPs
+geSNPs <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_gene_hits_cases_vs_controls.txt", header = T, stringsAsFactors = F)
+geSNPs_gr <- GenerateGrangesObject(input = geSNPs,
                                        mdata = background,
                                        ofile = "pmb_gene_hits_cases_vs_controls_cis_eQTL_SNPs.rds")
-length(geGenes_gr$snp_id) # 52,496 SNPs
-rm(geGenes, geGenes_gr)
+length(geSNPs_gr$snp_id) # 52,496 SNPs
+rm(geSNPs, geSNPs_gr)
 
-# clumped
-geGenes_clumped <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_gene_hits_cases_vs_controls_clumped.txt", header = T, stringsAsFactors = F)
-geGenes_clumped_gr <- GenerateGrangesObject(input = geGenes_clumped,
+# Clumped gene eQTLs: geSNPs
+geSNPs_clumped <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_gene_hits_cases_vs_controls_clumped.txt", header = T, stringsAsFactors = F)
+geSNPs_clumped_gr <- GenerateGrangesObject(input = geSNPs_clumped,
                                        mdata = background,
                                        ofile = "pmb_gene_hits_cases_vs_controls_cis_eQTL_SNPs_clumped.rds")
-length(geGenes_clumped_gr$snp_id) # 1,401 SNPs
-rm(geGenes_clumped, geGenes_clumped_gr)
+length(geSNPs_clumped_gr$snp_id) # 1,401 SNPs
+rm(geSNPs_clumped, geSNPs_clumped_gr)
 
-### Gene cases only eQTLs
-geGenes_cases <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_gene_hits_cases_only.txt", header = T, stringsAsFactors = F)
-geGenes_cases_gr <- GenerateGrangesObject(input = geGenes_cases,
+### Gene cases only eQTLs: geSNPs
+geSNPs_cases <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_gene_hits_cases_only.txt", header = T, stringsAsFactors = F)
+geSNPs_cases_gr <- GenerateGrangesObject(input = geSNPs_cases,
                                              mdata = background,
                                              ofile = "pmb_gene_hits_cases_only_cis_eQTL_SNPs.rds")
-length(geGenes_cases_gr$snp_id) # 18,944 SNPs
-rm(geGenes_cases, geGenes_cases_gr)
+length(geSNPs_cases_gr$snp_id) # 18,944 SNPs
+rm(geSNPs_cases, geSNPs_cases_gr)
 
-# clumped
-geGenes_cases_clumped <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_gene_hits_cases_only_clumped.txt", header = T, stringsAsFactors = F)
-geGenes_cases_clumped_gr <- GenerateGrangesObject(input = geGenes_cases_clumped,
+# Clumped gene cases only eQTLs: geSNPs
+geSNPs_cases_clumped <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_gene_hits_cases_only_clumped.txt", header = T, stringsAsFactors = F)
+geSNPs_cases_clumped_gr <- GenerateGrangesObject(input = geSNPs_cases_clumped,
                                              mdata = background,
                                              ofile = "pmb_gene_hits_cases_only_cis_eQTL_SNPs_clumped.rds")
-length(geGenes_cases_clumped_gr$snp_id) # 485 SNPs
-rm(geGenes_cases_clumped, geGenes_cases_clumped_gr)
+length(geSNPs_cases_clumped_gr$snp_id) # 485 SNPs
+rm(geSNPs_cases_clumped, geSNPs_cases_clumped_gr)
 
-### Transcript eQTLs
-teGenes <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_transcript_hits_cases_vs_controls.txt", header = T, stringsAsFactors = F)
-teGenes_gr <- GenerateGrangesObject(input = teGenes,
+### Transcript eQTLs: teSNPs
+teSNPs <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_transcript_hits_cases_vs_controls.txt", header = T, stringsAsFactors = F)
+teSNPs_gr <- GenerateGrangesObject(input = teSNPs,
                                              mdata = background,
                                              ofile = "pmb_transcript_hits_cases_vs_controls_cis_eQTL_SNPs.rds")
-length(teGenes_gr$snp_id) # 112,861 SNPs
-rm(teGenes, teGenes_gr)
+length(teSNPs_gr$snp_id) # 124,888 SNPs
+rm(teSNPs, teSNPs_gr)
 
-# clumped 
-teGenes_clumped <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_transcript_hits_cases_vs_controls_clumped.txt", header = T, stringsAsFactors = F)
-teGenes_clumped_gr <- GenerateGrangesObject(input = teGenes_clumped,
+# Clumped transcript eQTLs: teSNPs
+teSNPs_clumped <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_transcript_hits_cases_vs_controls_clumped.txt", header = T, stringsAsFactors = F)
+teSNPs_clumped_gr <- GenerateGrangesObject(input = teSNPs_clumped,
                                     mdata = background,
                                     ofile = "pmb_transcript_hits_cases_vs_controls_cis_eQTL_SNPs_clumped.rds")
-length(teGenes_clumped_gr$snp_id) # 3,750 SNPs
-rm(teGenes_clumped, teGenes_clumped_gr)
+length(teSNPs_clumped_gr$snp_id) # 4,176 SNPs
+rm(teSNPs_clumped, teSNPs_clumped_gr)
 
-### Transcript cases only eQTLs
-teGenes_cases <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_transcript_hits_cases_only.txt", header = T, stringsAsFactors = F)
-teGenes_cases_gr <- GenerateGrangesObject(input = teGenes_cases,
+### Transcript cases only eQTLs: teSNPs
+teSNPs_cases <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_transcript_hits_cases_only.txt", header = T, stringsAsFactors = F)
+teSNPs_cases_gr <- GenerateGrangesObject(input = teSNPs_cases,
                                                   mdata = background,
                                                   ofile = "pmb_transcript_hits_cases_only_cis_eQTL_SNPs.rds")
-length(teGenes_cases_gr$snp_id) # 40,791 SNPs
-rm(teGenes_cases, teGenes_cases_gr)
+length(teSNPs_cases_gr$snp_id) # 46,461 SNPs
+rm(teSNPs_cases, teSNPs_cases_gr)
 
-# clumped
-teGenes_cases_clumped <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_transcript_hits_cases_only_clumped.txt", header = T, stringsAsFactors = F)
-teGenes_cases_clumped_gr <- GenerateGrangesObject(input = teGenes_cases_clumped,
+# Clumped transcript cases only eQTLs: teSNPs
+teSNPs_cases_clumped <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_transcript_hits_cases_only_clumped.txt", header = T, stringsAsFactors = F)
+teSNPs_cases_clumped_gr <- GenerateGrangesObject(input = teSNPs_cases_clumped,
                                           mdata = background,
                                           ofile = "pmb_transcript_hits_cases_only_cis_eQTL_SNPs_clumped.rds")
-length(teGenes_cases_clumped_gr$snp_id) # 1,303 SNPs
-rm(teGenes_cases_clumped, teGenes_cases_clumped_gr)
+length(teSNPs_cases_clumped_gr$snp_id) # 1,481 SNPs
+rm(teSNPs_cases_clumped, teSNPs_cases_clumped_gr)
 
-### Exon eQTLs
-eeGenes <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_exon_hits_cases_vs_controls.txt", header = T, stringsAsFactors = F)
-eeGenes_gr <- GenerateGrangesObject(input = eeGenes,
+### Exon eQTLs: eeSNPs
+eeSNPs <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_exon_hits_cases_vs_controls.txt", header = T, stringsAsFactors = F)
+eeSNPs_gr <- GenerateGrangesObject(input = eeSNPs,
                                        mdata = background,
                                        ofile = "pmb_exon_hits_cases_vs_controls_cis_eQTL_SNPs.rds")
-length(eeGenes_gr$snp_id) # 190,313 SNPs
-rm(eeGenes, eeGenes_gr)
+length(eeSNPs_gr$snp_id) # 314,185 SNPs
+rm(eeSNPs, eeSNPs_gr)
 
-# clumped
-eeGenes_clumped <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_exon_hits_cases_vs_controls_clumped.txt", header = T, stringsAsFactors = F)
-eeGenes_clumped_gr <- GenerateGrangesObject(input = eeGenes_clumped,
+# Clumped exon eQTLs: eeSNPs
+eeSNPs_clumped <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_exon_hits_cases_vs_controls_clumped.txt", header = T, stringsAsFactors = F)
+eeSNPs_clumped_gr <- GenerateGrangesObject(input = eeSNPs_clumped,
                                     mdata = background,
                                     ofile = "pmb_exon_hits_cases_vs_controls_cis_eQTL_SNPs_clumped.rds")
-length(eeGenes_clumped_gr$snp_id) # 6,049 SNPs
-rm(eeGenes_clumped, eeGenes_clumped_gr)
+length(eeSNPs_clumped_gr$snp_id) # 10,135 SNPs
+rm(eeSNPs_clumped, eeSNPs_clumped_gr)
 
-### Exon cases only eQTLs
-eeGenes_cases <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_exon_hits_cases_only.txt", header = T, stringsAsFactors = F)
-eeGenes_cases_gr <- GenerateGrangesObject(input = eeGenes_cases,
+### Exon cases only eQTLs: eeSNPs
+eeSNPs_cases <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_exon_hits_cases_only.txt", header = T, stringsAsFactors = F)
+eeSNPs_cases_gr <- GenerateGrangesObject(input = eeSNPs_cases,
                                              mdata = background,
                                              ofile = "pmb_exon_hits_cases_only_cis_eQTL_SNPs.rds")
-length(eeGenes_cases_gr$snp_id) # 79,524 SNPs
-rm(eeGenes_cases, eeGenes_cases_gr)
+length(eeSNPs_cases_gr$snp_id) # 138,662 SNPs
+rm(eeSNPs_cases, eeSNPs_cases_gr)
 
-# clumped
-eeGenes_cases_clumped <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_exon_hits_cases_only_clumped.txt", header = T, stringsAsFactors = F)
-eeGenes_cases_clumped_gr <- GenerateGrangesObject(input = eeGenes_cases_clumped,
+# Clumped exon cases only eQTLs: eeSNPs
+eeSNPs_cases_clumped <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_exon_hits_cases_only_clumped.txt", header = T, stringsAsFactors = F)
+eeSNPs_cases_clumped_gr <- GenerateGrangesObject(input = eeSNPs_cases_clumped,
                                           mdata = background,
                                           ofile = "pmb_exon_hits_cases_only_cis_eQTL_SNPs_clumped.rds")
-length(eeGenes_cases_clumped_gr$snp_id) # 2,504 SNPs
-rm(eeGenes_cases_clumped, eeGenes_cases_clumped_gr)
+length(eeSNPs_cases_clumped_gr$snp_id) # 4,367 SNPs
+rm(eeSNPs_cases_clumped, eeSNPs_cases_clumped_gr)
 
-### CMC (Fromer et al.) gene eQTLs
+### CMC (Fromer et al.) gene eQTLs: geSNPs
 cmc_gene <- data.table::fread("/storage/groups/ccm01/datasets/2019_CMC_Fromer_et_al/eQTL/CMC_MSSM-Penn-Pitt_DLPFC_Analysis_eQTL-adjustedSVA.txt")
 cmc_gene <- cmc_gene[cmc_gene$FDR < 0.05, ]  # filter for FDR <= 0.05
 cmc_gene_gr <- GenomicRanges::GRanges(seqnames = cmc_gene$SNP_location, 
@@ -164,7 +164,7 @@ seqlevels(cmc_gene_gr, pruning.mode = "coarse") <- setdiff(seqlevels(cmc_gene_gr
 saveRDS(cmc_gene_gr, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/RData/CMC_adjustedSVA_eQTL_SNPs.rds")
 rm(cmc_gene, cmc_gene_gr)
 
-### CMC (Fromer et al.) isoform eQTLs
+### CMC (Fromer et al.) isoform eQTLs: ieSNPs
 cmc_iso <- data.table::fread("/storage/groups/ccm01/datasets/2019_CMC_Fromer_et_al/eQTL/CMC_MSSM-Penn-Pitt_DLPFC_Analysis_isoQTL-adjustedSVA.txt")
 cmc_iso <- cmc_iso[cmc_iso$FDR < 0.05, ]  # filter for FDR <= 0.05
 cmc_iso_gr <- GenomicRanges::GRanges(seqnames = cmc_iso$SNP_location,
