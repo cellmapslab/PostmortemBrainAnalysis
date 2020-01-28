@@ -1,31 +1,29 @@
 ########################################################
 ### Change genotype file to matrix EQTL input format ###
 ########################################################
-# Invoke the script in the commandline as follows: R CMD BATCH --slave '--args geno=<path/genotype-file> sample=<path/sample-file> ids=<path/ids-file> output=<path/output-file>" prepare_geno.R
+# Invoke the script in the commandline as follows: R CMD BATCH --slave '--args geno=<path/genotype-file> sample=<path/sample-file> ids=<path/ids-file> output=<path/output-file>" 02b_prepare_geno.R
 # Change genotype probabilites file to matrixEQTL input file format (only one instead of three probabilities)
-# karolina.worf@helmholtz-muenchen.de
-# last modified: 1st February 2019
 
-# add installed packages from home path, to the library search path
+# add installed packages from home path to the library search path
 .libPaths("/home/icb/karolina.worf/R/x86_64-pc-linux-gnu-library/3.6/")
 
 # load packages
 library(data.table)
 
 # First read the arguments listed in the commandline, trailingOnly uses only the parameters after --args
-args=(commandArgs(trailingOnly=TRUE))	
+args = (commandArgs(trailingOnly = TRUE))	
 
 # go through the list of arguments
-if(length(args)==0){
-    	cat("\nScript to change the genotype probabilities (.gen.gz) file into the matrixEQTL input file format with only one probability value instead of three.\n\nYou can invoke the script as follows:\nR CMD BATCH --slave '--args geno=\"/home/.../genotype-file.gen.gz\" sample=\"/home/.../file.sample\" ids=\"/home/.../ids.txt\" output=\"/home/.../out-file.gen\"' prepare_geno.R\nCommandline parameters:\n\ngeno\t\tpath and filename of the merged genotype probabilites (ending in gen.gz)\nsample\t\tpath and filename of the sample file corresponding to the genotype file\nids\t\tpath and filename, which includes the ids of overlapping samples from the gene expression and the genotype dataset (here: 180)\noutput\t\tpath and filename of the output (input file for matrixEQTL)\n\n")
+if(length(args) == 0){
+    	cat("\nScript to change the genotype probabilities (.gen.gz) file into the matrixEQTL input file format with only one probability value instead of three.\n\nYou can invoke the script as follows:\nR CMD BATCH --slave '--args geno=\"/home/.../genotype-file.gen.gz\" sample=\"/home/.../file.sample\" ids=\"/home/.../ids.txt\" output=\"/home/.../out-file.gen\"' 02b_prepare_geno.R\nCommandline parameters:\n\ngeno\t\tpath and filename of the merged genotype probabilites (ending in gen.gz)\nsample\t\tpath and filename of the sample file corresponding to the genotype file\nids\t\tpath and filename, which includes the ids of overlapping samples from the gene expression and the genotype dataset (here: 180)\noutput\t\tpath and filename of the output (input file for matrixEQTL)\n\n")
 } else {
     for(i in 1:length(args)){
-    	eval(parse(text=args[[i]]))
+    	eval(parse(text = args[[i]]))
    	}
 
    	# 1. Load sample file and save sample IDs
    	sam <- read.delim(sample, head = T, sep = "")
-   	all_ids <-as.character(sam$ID_1)[-1]  # number of all genotype samples
+   	all_ids <- as.character(sam$ID_1)[-1]  # number of all genotype samples
    	ninds <- length(all_ids)  # number of individuals in genotype data (215)
 
    	# 2. Load sample IDs (overlapping between gene expression and genotype data) and save them
