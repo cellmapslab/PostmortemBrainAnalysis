@@ -1,0 +1,463 @@
+---
+title: "Affymetrix Exon Array Analysis - Gene Set Enrichment and Figure generation"
+author:
+  - name: Karolina Worf
+    affiliation: 
+    - Institute of Computational Biology, Helmholtz Zentrum München, Neuherberg 85764, Germany
+    - TUM School of Life Sciences Weihenstephan, Technical University of Munich, Freising 85354, Germany
+    email: karolina.worf@helmholtz-muenchen.de
+header-includes:
+  - \usepackage{float}
+date: "`r doc_date()`"
+graphics: yes
+abstract: In this R markdown file, we will provide a gene set enrichment analysis (GSEA) and figure generation for differential expressed gene hits using different Bioconductor and R packages. 
+output: 
+    BiocStyle::pdf_document:
+      toc: true
+      number_sections: true
+editor_options: 
+  chunk_output_type: console
+vignette: >
+  %\VignetteIndexEntry{Affymetrix Exon Array Analysis}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+---
+
+```{r global_options, include = FALSE}
+library(BiocStyle)
+require(knitr)
+knitr::opts_chunk$set(warning = F, message = F, cache = T, cache.lazy = F)
+options(stringsAsFactors = T)
+```
+
+<p>
+**R version**: `r R.version.string`
+<br />
+**Bioconductor version**: `r BiocManager::version()`
+</p>
+
+
+# Load Packages
+
+Below you can find the list of packages that are required for all analysis steps. 
+
+```{r, echo = F}
+library(qvalue)
+
+# Packages for pathway enrichment
+library(GSEABase)   # to load or generate gene set data
+library(mgsa)  # load MGSA: a pathway enrichment analysis tool
+
+# Packages for plotting
+library(ggplot2)
+library(VennDiagram)
+```
+
+
+# Functions
+
+To reduce code, we will generate some functions here. 
+
+```{r definition, echo=F}
+# function, which first generates the contingency table for two datasets and then calculates the p-value using fisher exact test
+# return: the p-value calculated using fisher exact test
+FishersExactTest <- function(data1, data2, background){
+  data1  <- unique(sort(unlist(data1)))
+  data2 <- intersect(data2, background)  # take only the genes, which are also in the background data
+  a <- length(intersect(data1, data2))  # all genes in data1 and data2
+  b <- length(data1) - a  # all genes in data1, but NOT in data2
+  x <- length(setdiff(data2, data1))  # all genes in data2, but NOT data1
+  y <- length(background) - length(data1) - x  # all genes NOT in data1 or data2
+  contingency_matrix <- matrix(c(a, x, b, y), 2, 2)
+  #print(contingency_matrix)
+  result <- fisher.test(contingency_matrix, alternative = "greater")
+  return(result$p.value)
+}
+```
+
+
+# Age DEGenes
+
+## Load data
+
+First, we need to load the gene-based (gDEGenes), transcript-based (tDEGenes) and exon-based (eDEGenes) differentially expressed genes for age. Then, we filter the data for only significant (FDR < 10%) genes. 
+
+```{r}
+# gene-level
+gDEGenes_age <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.1_diff_expr_genes_for_age.csv", select = c("Ensembl Gene ID", "Gene Symbol", "FDR estimate"), data.table = F)
+bck_gDEGenes_age <- unique(sort(gDEGenes_age$`Ensembl Gene ID`))
+gDEGenes_age <- gDEGenes_age[gDEGenes_age$`FDR estimate` < 0.1, ]
+
+# transcript-level
+tDEGenes_age <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.3_diff_expr_transcripts_for_age_new_pvalue_and_fdr.csv", select = c("FDR estimate", "Gene Symbol", "Ensembl Gene ID"), data.table = F)
+bck_tDEGenes_age <- unique(sort(tDEGenes_age$`Ensembl Gene ID`))
+tDEGenes_age <- tDEGenes_age[tDEGenes_age$`FDR estimate` < 0.1, ]
+
+# exon-level
+eDEGenes_age <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.3_diff_expr_exons_for_age_new_pvalue_and_fdr.csv", select = c("FDR estimate", "Gene Symbol", "Ensembl Gene ID"), data.table = F)
+bck_eDEGenes_age <- unique(sort(eDEGenes_age$`Ensembl Gene ID`))
+eDEGenes_age <- eDEGenes_age[eDEGenes_age$`FDR estimate` < 0.1, ]
+```
+
+## Overlap to known ageing genes
+
+Now, we are interested in how many of the differentially expressed age genes are overlapping to a database of known ageing genes for human. Therefore, we use the ageing gene database called GenAge and download all human age related genes from their website: https://genomics.senescence.info/download.html
+
+First, we load the known ageing genes from the GenAge database. 
+
+```{r}
+ageing_genes <- fread("/storage/groups/ccm01/datasets/2019_Human_Ageing_Genomic_Resources/genage_human.csv", select = "symbol", data.table = F)
+```
+
+Then, we calculate the overlap to the single age DEGenes from our dataset:
+
+```{r}
+# gDEGenes
+length(intersect(ageing_genes$symbol, gDEGenes_age$`Gene Symbol`))
+
+# tDEGenes
+length(intersect(ageing_genes$symbol, tDEGenes_age$`Gene Symbol`))
+
+# eDEGenes
+length(intersect(ageing_genes$symbol, eDEGenes_age$`Gene Symbol`))
+```
+
+Now, we can also check the significance (p-value) of the overlap from our age DEGenes to the known age genes. Therefore, we first need to generate a contingency table and then run Fisher's exact test:
+
+1. gDEGenes: `r FishersExactTest(gDEGenes_age$`Gene Symbol`, ageing_genes$symbol, bck_gDEGenes_age)`
+2. tDEGenes: `r FishersExactTest(tDEGenes_age$`Gene Symbol`, ageing_genes$symbol, bck_tDEGenes_age)`
+3. eDEGenes: `r FishersExactTest(eDEGenes_age$`Gene Symbol`, ageing_genes$symbol, bck_eDEGenes_age)`
+
+## VENN diagram
+
+When, we will generate a VENN diagram for the overlap of found eDEGenes, tDEGenes and eDEGenes for age and save it into a pdf file.  
+
+```{r}
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/1.1_VENN_DEGenes_for_age.pdf")
+grid.newpage()
+overrideTriple=T
+draw.triple.venn(area1 = length(gDEGenes_age$`Ensembl Gene ID`), area2 = length(tDEGenes_age$`Ensembl Gene ID`), 
+                 area3 = length(eDEGenes_age$`Ensembl Gene ID`), 
+                 n12 = length(intersect(gDEGenes_age$`Ensembl Gene ID`, tDEGenes_age$`Ensembl Gene ID`)), 
+                 n23 = length(intersect(tDEGenes_age$`Ensembl Gene ID`, eDEGenes_age$`Ensembl Gene ID`)), 
+                 n13 = length(intersect(gDEGenes_age$`Ensembl Gene ID`, eDEGenes_age$`Ensembl Gene ID`)), euler.d = F, scaled = F, 
+                 n123 = length(intersect(gDEGenes_age$`Ensembl Gene ID`, intersect(tDEGenes_age$`Ensembl Gene ID`, eDEGenes_age$`Ensembl Gene ID`))),  
+                 category = c(paste("gDEGenes", length(gDEGenes_age$`Ensembl Gene ID`), sep = "\n"), paste("tDEGenes", length(tDEGenes_age$`Ensembl Gene ID`), sep = "\n"), paste("eDEGenes", length(eDEGenes_age$`Ensembl Gene ID`), sep = "\n")), 
+                 lty = "blank", fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
+dev.off()
+```
+
+After finishing all the analysis, we will delete unnecessary data. 
+
+```{r}
+rm(gDEGenes_age, tDEGenes_age, eDEGenes_age, ageing_genes)
+```
+
+
+# pH DEGenes
+
+Here, we do not have any known pH related genes, so we just will generate a VENN diagram of the overlapping pH DEGenes. 
+
+## Load data
+
+First, we need to load the gDEGenes, tDEGenes and eDEGenes for pH and filter the data for only significant (FDR < 10%) genes. 
+
+```{r}
+# gene-level
+gDEGenes_ph <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.1_diff_expr_genes_for_ph.csv", select = c("Ensembl Gene ID", "FDR estimate"), data.table = F)
+gDEGenes_ph <- gDEGenes_ph[gDEGenes_ph$`FDR estimate` < 0.1, ]
+
+# transcript-level
+tDEGenes_ph <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.3_diff_expr_transcripts_for_ph_new_pvalue_and_fdr.csv", select = c("Ensembl Gene ID", "FDR estimate",), data.table = F)
+tDEGenes_ph <- tDEGenes_ph[tDEGenes_ph$`FDR estimate` < 0.1, ]
+
+# exon-level
+eDEGenes_ph <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.3_diff_expr_exons_for_ph_new_pvalue_and_fdr.csv", select = c("Ensembl Gene ID", "FDR estimate"), data.table = F)
+eDEGenes_ph <- eDEGenes_ph[eDEGenes_ph$`FDR estimate` < 0.1, ]
+```
+
+## VENN diagram
+
+When, we will generate a VENN diagram for the overlap of found eDEGenes, tDEGenes and eDEGenes for age and save it into a pdf file.  
+
+```{r}
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/1.1_VENN_DEGenes_for_ph.pdf")
+grid.newpage()
+overrideTriple=T
+draw.triple.venn(area1 = length(gDEGenes_ph$"Ensembl Gene ID"), 
+                 area2 = length(tDEGenes_ph$"Ensembl Gene ID"), 
+                 area3 = length(eDEGenes_ph$"Ensembl Gene ID"), 
+                 n12 = length(intersect(gDEGenes_ph$"Ensembl Gene ID", tDEGenes_ph$"Ensembl Gene ID")), 
+                 n23 = length(intersect(tDEGenes_ph$"Ensembl Gene ID", eDEGenes_ph$"Ensembl Gene ID")), 
+                 n13 = length(intersect(gDEGenes_ph$"Ensembl Gene ID", eDEGenes_ph$"Ensembl Gene ID")), euler.d = F, scaled = F, 
+                 n123 = length(intersect(gDEGenes_ph$"Ensembl Gene ID", intersect(tDEGenes_ph$"Ensembl Gene ID", eDEGenes_ph$"Ensembl Gene ID"))),  
+                 category = c(paste("gDEGenes", length(gDEGenes_ph$"Ensembl Gene ID"), sep = "\n"), paste("tDEGenes", length(tDEGenes_ph$"Ensembl Gene ID"), sep = "\n"), paste("eDEGenes", length(eDEGenes_ph$"Ensembl Gene ID"), sep = "\n")), 
+                 lty = "blank", fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
+dev.off()
+```
+
+After finishing all the analysis, we will delete unnecessary data. 
+
+```{r}
+rm(gDEGenes_ph, tDEGenes_ph, eDEGenes_ph)
+```
+
+
+# PMI DEGenes 
+
+Here, we do not have any known postmortem interval (PMI) related genes, so we just will generate a VENN diagram of the overlapping PMI DEGenes. 
+
+## Load data
+
+First, we need to load the gDEGenes, tDEGenes and eDEGenes for PMI and filter the data for only significant (FDR < 10%) genes. 
+
+```{r}
+# gene-level
+gDEGenes_pmi <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.1_diff_expr_genes_for_pmi.csv", select = c("Ensembl Gene ID", "FDR estimate"), data.table = F)
+gDEGenes_pmi <- gDEGenes_pmi[gDEGenes_pmi$`FDR estimate` < 0.1, "Ensembl Gene ID"]
+
+# transcript-level
+tDEGenes_pmi <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.3_diff_expr_transcripts_for_pmi_new_pvalue_and_fdr.csv", select = c("Ensembl Gene ID", "FDR estimate"), data.table = F)
+tDEGenes_pmi <- tDEGenes_pmi[tDEGenes_pmi$`FDR estimate` < 0.1, "Ensembl Gene ID"]
+
+# exon-level
+eDEGenes_pmi <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.3_diff_expr_exons_for_pmi_new_pvalue_and_fdr.csv", select = c("Ensembl Gene ID", "FDR estimate"), data.table = F)
+eDEGenes_pmi <- eDEGenes_pmi[eDEGenes_pmi$`FDR estimate` < 0.1, "Ensembl Gene ID"]
+```
+
+## VENN diagram
+
+When, we will generate a VENN diagram for the overlap of found eDEGenes, tDEGenes and eDEGenes for PMI and save it into a pdf file.  
+
+```{r}
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/1.1_VENN_DEGenes_for_pmi.pdf")
+grid.newpage()
+overrideTriple=T
+draw.triple.venn(area1 = length(gDEGenes_pmi), area2 = length(tDEGenes_pmi), 
+                 area3 = length(eDEGenes_pmi), 
+                 n12 = length(intersect(gDEGenes_pmi, tDEGenes_pmi)), 
+                 n23 = length(intersect(tDEGenes_pmi, eDEGenes_pmi)), 
+                 n13 = length(intersect(gDEGenes_pmi, eDEGenes_pmi)), euler.d = F, scaled = F, 
+                 n123 = length(intersect(gDEGenes_pmi, intersect(tDEGenes_pmi, eDEGenes_pmi))),  
+                 category = c(paste("gDEGenes", length(gDEGenes_pmi), sep = "\n"), paste("tDEGenes", length(tDEGenes_pmi), sep = "\n"), paste("eDEGenes", length(eDEGenes_pmi), sep = "\n")), 
+                 lty = "blank", fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
+dev.off()
+```
+
+After finishing all the analysis, we will delete unnecessary data. 
+
+```{r}
+rm(gDEGenes_pmi, tDEGenes_pmi, eDEGenes_pmi)
+```
+
+
+# PC2 DEGenes
+
+Here, we do not have any known second ancestry dimension (PC2) related genes, so we just will generate a VENN diagram of the overlapping PC2 DEGenes. 
+
+## Load data
+
+First, we need to load the gDEGenes, tDEGenes and eDEGenes for PC2 and filter the data for only significant (FDR < 10%) genes. 
+
+```{r}
+# gene-level
+gDEGenes_c2 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.1_diff_expr_genes_for_pc2.csv", select = c("Ensembl Gene ID", "FDR estimate"), data.table = F)
+gDEGenes_c2 <- gDEGenes_c2[gDEGenes_c2$`FDR estimate` < 0.1, "Ensembl Gene ID"]
+
+# transcript-level
+tDEGenes_c2 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.3_diff_expr_transcripts_for_c2_new_pvalue_and_fdr.csv", select = c("FDR estimate", "Ensembl Gene ID"), data.table = F)
+tDEGenes_c2 <- tDEGenes_c2[tDEGenes_c2$`FDR estimate` < 0.1, "Ensembl Gene ID"]
+
+# exon-level
+eDEGenes_c2 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.3_diff_expr_exons_for_c2_new_pvalue_and_fdr.csv", select = c("FDR estimate", "Ensembl Gene ID"), data.table = F)
+eDEGenes_c2 <- eDEGenes_c2[eDEGenes_c2$`FDR estimate` < 0.1, "Ensembl Gene ID"]
+```
+
+## VENN diagram
+
+When, we will generate a VENN diagram for the overlap of found eDEGenes, tDEGenes and eDEGenes for PC2 and save it into a pdf file.  
+
+```{r}
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/1.1_VENN_DEGenes_for_c2.pdf")
+grid.newpage()
+overrideTriple=T
+draw.triple.venn(area1 = length(gDEGenes_c2), area2 = length(tDEGenes_c2), 
+                 area3 = length(eDEGenes_c2), 
+                 n12 = length(intersect(gDEGenes_c2, tDEGenes_c2)), 
+                 n23 = length(intersect(tDEGenes_c2, eDEGenes_c2)), 
+                 n13 = length(intersect(gDEGenes_c2, eDEGenes_c2)), euler.d = F, scaled = F, 
+                 n123 = length(intersect(gDEGenes_c2, intersect(tDEGenes_c2, eDEGenes_c2))),  
+                 category = c(paste("gDEGenes", length(gDEGenes_c2), sep = "\n"), paste("tDEGenes", length(tDEGenes_c2), sep = "\n"), paste("eDEGenes", length(eDEGenes_c2), sep = "\n")), 
+                 lty = "blank", fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
+dev.off()
+```
+
+After finishing all the analysis, we will delete unnecessary data. 
+
+```{r}
+rm(gDEGenes_c2, tDEGenes_c2, eDEGenes_c2)
+```
+
+
+# FUMA
+
+## Load data
+
+```{r}
+# tDEGenes
+tDEGenes_fuma <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/2.2.5_FUMA/Trans/FUMA_gene2func31297/gtex_v8_ts_DEG.txt", select = c("Category", "GeneSet", "p", "adjP"))
+tDEGenes_fuma$log_adjP <- -log10(tDEGenes_fuma$adjP)
+
+# eDEGenes
+eDEGenes_fuma <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/2.2.5_FUMA/Exon/FUMA_gene2func31296/gtex_v8_ts_DEG.txt", select = c("Category", "GeneSet", "p", "adjP"))
+eDEGenes_fuma <- eDEGenes_fuma[eDEGenes_fuma$adjP < 0.05, ]
+eDEGenes_fuma$log_adjP <- -log10(eDEGenes_fuma$adjP)
+eDEGenes_fuma <- eDEGenes_fuma[eDEGenes_fuma$Category == "DEG.twoside", ]
+
+# merge tDEGenes and eDEGenes
+tDEGenes_fuma <- tDEGenes_fuma[tDEGenes_fuma$GeneSet %in% eDEGenes_fuma$GeneSet, ]
+tDEGenes_fuma$type <- "tDEGenes"
+eDEGenes_fuma$type <- "eDEGenes"
+fuma <- rbind(tDEGenes_fuma, eDEGenes_fuma)
+```
+
+## Barplot
+
+Generate a barplot including the results of the down-regulated tDEGenes and eDEGenes. 
+
+```{r}
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/1.1_barplot_eDEGenes_tDEGenes_FUMA.pdf", width = 9, height = 8)
+ggplot(eDEGenes_fuma, aes(y = log_adjP, x = GeneSet)) +
+    geom_bar(stat = "identity") +
+    coord_flip() +
+    theme_minimal() +
+    ylab("-log10(adjP)") +
+    xlab("") +
+    ggtitle("eDEGenes") +
+    scale_y_continuous(expand = c(0.02, 0.01)) +
+    theme(axis.ticks = element_line(colour = NA), text = element_text(size = 22), panel.background = element_rect(fill = NA), panel.grid.major.x = element_line(colour = "grey"), panel.grid.minor.x = element_line(colour = "grey"), strip.background =element_rect(fill = NA))
+dev.off()
+
+p <- ggplot(fuma, aes(y = log_adjP, x = GeneSet)) +
+
+p + facet_wrap(~ type, scale = "free_x") + theme(panel.spacing = unit(2, "lines"))
+```
+
+After finishing all analysis, we will delete unnecessary data. 
+
+```{r}
+rm(tDEGenes_fuma, eDEGenes_fuma, fuma)
+```
+
+
+# Gene set (Pathway) enrichment analysis
+
+## Load data
+
+First, we will read in the tDEGenes and eDEGenes for diagnosis. 
+
+```{r}
+# tDEGenes 
+tDEGenes <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.3_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.csv", sep = "\t", select = c("Gene Symbol", "FDR estimate"), stringsAsFactors = F)
+tDEGenes <- tDEGenes[tDEGenes$`FDR estimate` < 0.1, `Gene Symbol`]
+
+# eDEGenes
+eDEGenes <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.3_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.csv", sep = "\t", select = c("Gene Symbol", "FDR estimate"), stringsAsFactors = F)
+
+# save background gene number (all given genes from the dataset)
+background_genes <- as.data.frame(eDEGenes[!is.na(eDEGenes$`Gene Symbol`) & eDEGenes$`Gene Symbol` != "", ])[, "Gene Symbol"]
+
+# get only significant hits
+eDEGenes <- eDEGenes[eDEGenes$`FDR estimate` < 0.1, `Gene Symbol`]
+```
+
+## VENN overlap
+
+Before, we perform the GSEA, we will generate a VENN diagram of the overlap of the tDEGenes and eDEGenes. As all six tDEGenes are also eDEGene hits, the VENN diagram should display a huge circle (2,224 eDEGenes) with a smaller circle (6 tDEGenes) inside. 
+
+```{r}
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/1.3_VENN_tDEGenes_eDEGenes_overlap.pdf")
+grid.newpage()
+draw.pairwise.venn(area1 = length(tDEGenes), area2 = length(eDEGenes), cross.area = length(intersect(tDEGenes, eDEGenes)), fill = c(rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)), category = c(paste("tDEGenes", length(tDEGenes), sep = "\n"), paste("eDEGenes", length(eDEGenes), sep = "\n")), lty = "blank", cex = 2)
+dev.off()
+```
+
+## Load MSigDB
+
+For the gene set enrichment, sometimes also called pathway enrichment, we will use the sub-collection of "Canonical pathways" from the "C2: curated gene sets" and the "c5: gene ontology (GO) gene sets" of the Molecular Signature DataBase (MSigDB) downloaded from the GSEA website: http://software.broadinstitute.org/gsea/downloads.jsp
+
+We load the data as Gene Set Collections (multiple Gene Sets), where the gene set (pathway) name is the key and all included genes (symbols) of the gene set are stored in a list (value). It is similar to a dictionary in python or a hashmap in Java with a key (gene set name) and value (list of included genes) pair.
+
+```{r}
+# load MSigDB c2 - canonical pathways
+all_canonical <- getGmt("/storage/groups/ccm01/datasets/2020_MSigDB/msigdb_v7.0_files_to_download_locally/msigdb_v7.0_GMTs/c2.cp.v7.0.symbols.gmt", 
+                  collectionType = BroadCollection(category = "c2"),  
+                  geneIdType = SymbolIdentifier())
+# load MSigDB c5 - gene ontology (GO) 
+all_go <- getGmt("/storage/groups/ccm01/datasets/2020_MSigDB/msigdb_v7.0_files_to_download_locally/msigdb_v7.0_GMTs/c5.all.v7.0.symbols.gmt", 
+                  collectionType = BroadCollection(category = "c5"),  
+                  geneIdType = SymbolIdentifier())
+```
+
+**TODO:** As the gene symbols are not as sufficient as Ensembl Gene IDs, we will map the gene symbols to Ensembl IDs using the latest GENCODE file created on GRCh37 (hg19) release 19 (downloaded from: https://www.gencodegenes.org/human/release_19.html). 
+
+## Gene set (Pathway) enrichment analysis
+
+Now, we use the MGSA tool to find pathways which are enriched for our dataset.
+
+### MSigDB - Canonical Pathways
+
+```{r}
+cp_mgsa <- list()
+for (gset in all_canonical) {
+  t <- list(gset@geneIds)
+ cp_mgsa <- c(cp_mgsa, t)
+}
+names(cp_mgsa) <- names(all_canonical)
+#set.seed(0)  # necessary to get the same results all the time!!
+cp_res <- mgsa(o = as.character(eDEGenes[!is.na(eDEGenes)]), sets = cp_mgsa, population = as.character(background_genes))
+plot(cp_res)
+
+mgsa_res_cp <- setsResults(cp_res)
+head(mgsa_res_cp[order(mgsa_res_cp$estimate, decreasing = T),])
+write.table(mgsa_res_cp, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/3_GSEA_MGSA_MSigDB_c2_canonical_pathways_results.tsv")
+
+# save only the significant pathways (score > 0.5)
+plot_mgsa_cp <- as.data.frame(head(mgsa_res_cp[order(mgsa_res_cp$estimate, decreasing = T), ], 10))
+## set the levels in order we want
+bp <- ggplot(data = plot_mgsa_cp, aes(x = reorder(row.names(plot_mgsa_cp), estimate), y = estimate)) + geom_bar(stat = "identity") + xlab("") + coord_flip() + theme_minimal() + ggtitle("MsigDB: c2 - cp")
+bp + geom_hline(yintercept = 0.5, linetype="dashed", color = "red")
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/1.1_barplot_eDEGenes_MSigDB_top10_enriched_c2_canonical_pathways.pdf", width = 5, height = 4)
+```
+
+### MSigDB - GO gene sets
+
+```{r}
+go_mgsa <- list()
+for (gset in all_go) {
+  t <- list(gset@geneIds)
+ go_mgsa <- c(go_mgsa, t)
+}
+names(go_mgsa) <- names(all_go)
+set.seed(0)  # necessary to get the same results all the time!!
+go_res <- mgsa(o = as.character(eDEGenes[!is.na(eDEGenes)]), sets = go_mgsa, population = as.character(background_genes))
+plot(go_res)
+
+mgsa_res_go <- setsResults(go_res)
+head(mgsa_res_go[order(mgsa_res_go$estimate, decreasing = T),])
+write.table(mgsa_res_go, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/3_GSEA_MGSA_MSigDB_c5_all_GO_gene_sets_results.tsv")
+
+# save only the 10 pathways with the highest estimate
+plot_mgsa_go <- as.data.frame(head(mgsa_res_go[order(mgsa_res_go$estimate, decreasing = T), ], 10))
+## set the levels in order we want
+bp <- ggplot(data = plot_mgsa_go, aes(x = reorder(row.names(plot_mgsa_go), estimate), y = estimate)) + geom_bar(stat = "identity") + xlab("") + coord_flip() + theme_minimal() + ggtitle("MsigDB: c5 - GO")
+bp + geom_hline(yintercept = 0.5, linetype="dashed", color = "red")
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/1.1_barplot_eDEGenes_MSigDB_top10_enriched_c5_all_GO_gene_sets.pdf", width = 6, height = 4)
+```
+
+
+# Session Info
+
+```{r, eval = F}
+sessionInfo()
+```
