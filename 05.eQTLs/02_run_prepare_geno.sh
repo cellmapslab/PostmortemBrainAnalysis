@@ -15,4 +15,3 @@ $tools_path/PLINK/plink --bfile ${output_path}/1.3_duplicated_SNPs_removed/pmb_i
 
 # echo "Start matrixEQTL genotype input transformation"
 R CMD BATCH --slave "--args geno=\"${gen_file}\" sample=\"${sample_file}\" ids=\"${eqtl_samples}\" output=\"${output_path2}\"" ${script_path}/02b_prepare_geno.R
-
