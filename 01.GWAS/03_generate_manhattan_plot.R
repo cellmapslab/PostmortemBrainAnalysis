@@ -18,12 +18,12 @@ library(svglite)
 pdf.options(useDingbats = TRUE)
 
 # 2. Load Data
-gwasResults <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/01.GWAS/GWAS_results/pmb_info06_all_chr_maf0.01_merged_GEX_filtered_GWAS.assoc.logistic", header = T, stringsAsFactors = F, data.table = F)
+gwasResults <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/01.GWAS/02_GWAS_results/pmb_info06_all_chr_maf0.01_merged_GEX_filtered_GWAS.assoc.logistic", header = T, stringsAsFactors = F, data.table = F)
 gwasResults <- gwasResults[!is.na(gwasResults$P), ]  # remove NA values
 
 # 3. Generate Manhattan Plot for the GWAS (logistic regression) with covariates
 # 3.1 The easy way using the qqman package:
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/01.GWAS/figures/manhattan_plot_GWAS_logistic_with_covariates.pdf", width = 17, height = 7)
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/01.GWAS/03_figures/manhattan_plot_GWAS_logistic_with_covariates.pdf", width = 17, height = 7)
 manhattan(gwasResults, chr = "CHR", bp = "BP", snp = "SNP", p = "P", suggestiveline = -log10(1e-02))
 dev.off()
 
@@ -46,7 +46,7 @@ don <- gwasResults %>%
 axisdf = don %>% group_by(CHR) %>% summarize(center = (max(BPcum) + min(BPcum)) / 2)
 
 # Ready to make the plot using ggplot2:
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/01.GWAS/figures/manhattan_plot_GWAS_logistic_with_covariates2.pdf", width = 17, height = 7)
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/01.GWAS/03_figures/manhattan_plot_GWAS_logistic_with_covariates2.pdf", width = 17, height = 7)
 ggplot(don, aes(x = BPcum, y = -log10(P))) +
   # Show all points
   geom_point(aes(color = as.factor(CHR)), alpha = 0.8, size = 2) +

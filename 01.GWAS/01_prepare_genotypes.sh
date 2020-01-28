@@ -1,7 +1,7 @@
 #!/bin/bash
 
 read_genotypes="/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/2018-12-20_post_mortem_brain_imputation"
-out_genotypes="/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/01.GWAS/preprocessed_genotypes"
+out_genotypes="/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/01.GWAS/01_preprocessed_genotypes"
 tools_path="/storage/groups/ccm01/tools"
 
 chromosome=($(seq 1 1 22))
