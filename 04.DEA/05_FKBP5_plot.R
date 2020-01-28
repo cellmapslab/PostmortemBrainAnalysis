@@ -4,7 +4,7 @@ library(ggplot2)
 library(viridis)
 library(data.table)
 library(limma)
-library(griDEAtra)
+library(gridExtra)
 
 # different colors for genes, transcripts and exons as well as control datasets
 colors <- c("#FDAE6B", "#4292C6", "#A6D854")

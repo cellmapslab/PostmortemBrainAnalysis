@@ -79,12 +79,43 @@ length(background_gr@ranges) # ???
 #chromosomes <- merge(eqtls_chr, eqtls_hmm, by = "Var1")
 #wilcox.test(chromosomes$Freq.x, chromosomes$Freq.y, alternative = "two.sided")
 
-### Annotation ###
-# First, set parameters
-perm <- 10000
+### Load public data
+ipath <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/RData/"
+
+# CMC (Fromer et al.) gene eQTLs and isoQTLs
+cmc_eqtl <- readRDS(paste0(ipath, "CMC_adjustedSVA_eQTL_SNPs.rds"))
+cmc_isoqtl <- readRDS(paste0(ipath, "CMC_adjustedSVA_isoQTL_SNPs.rds"))
+
+### GTEx Whole Blood eQTLs and sQTLs
+gtex_wb_eqtl <- readRDS(paste0(ipath, "GTEx_v8_Whole_Blood_hg19_eQTL_SNPs.rds"))
+gtex_wb_sqtl <- readRDS(paste0(ipath, "GTEx_v8_Whole_Blood_hg19_sQTL_SNPs.rds"))
+
+### GTEx Brain (all brain tissues) eQTLs and sQTLs
+gtex_brains_eqtl <- readRDS(paste0(ipath, "GTEx_v8_Brains_hg19_eQTL_SNPs.rds"))
+gtex_brains_sqtl <- readRDS(paste0(ipath, "GTEx_v8_Brains_hg19_sQTL_SNPs.rds"))
 
 # ChromHMM states
 states <- names(table(hmm_brain$name))
+
+### Get overlap to CMC, GTEx wb and brain
+results <- data.frame()
+for (state in states) {
+  hmm_brain_selected <- hmm_brain[hmm_brain$name == state]
+  results[strsplit(state, "_d")[[1]], "CMC_eQTL"] <- sum(overlapsAny(cmc_eqtl, hmm_brain_selected))
+  results[strsplit(state, "_d")[[1]], "CMC_isoQTL"] <- sum(overlapsAny(cmc_isoqtl, hmm_brain_selected))
+  results[strsplit(state, "_d")[[1]], "GTEx_eQTL_wb"] <- sum(overlapsAny(gtex_wb_eqtl, hmm_brain_selected))
+  results[strsplit(state, "_d")[[1]], "GTEx_sQTL_wb"] <- sum(overlapsAny(gtex_wb_sqtl, hmm_brain_selected))
+  results[strsplit(state, "_d")[[1]], "GTEx_eQTL_brain"] <- sum(overlapsAny(gtex_brains_eqtl, hmm_brain_selected))
+  results[strsplit(state, "_d")[[1]], "GTEx_sQTL_brain"] <- sum(overlapsAny(gtex_brains_sqtl, hmm_brain_selected))
+}
+
+### write results into a file
+write.table(results, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/ChromHMM/CMC_GTEx_SNP_overlap_to_ChromHMM_brain_all_states.tsv", row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")
+
+
+### Annotation ###
+# First, set parameters
+perm <- 10000
 
 # 2.4.1 annotation to ChromHMM Brain (parallelized)
 cl <- makeCluster(15)
@@ -105,41 +136,11 @@ results2 <- foreach (i = seq_along(states), .combine = rbind,
   results[c(overlap, pval, or), "Exon"] <- annotatePublicData(eqtls_exon_gr, hmm_brain_selected, perm, background_gr)
   results[c(overlap, pval, or), "Exon_cases"] <- annotatePublicData(eqtls_exon_cases_gr, hmm_brain_selected, perm, background_gr)
   write.table(results, file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/ChromHMM/pmb_cis-eQTL_annotation_results_10000_permutations_ChromHMM_", states[i],".tsv"), row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")
+  results
 }
 
 stopCluster(cl)
 
 # 2.4.6 write results into a file
 write.table(results2, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/ChromHMM/pmb_cis-eQTL_annotation_results_10000_permutations_ChromHMM_brain_all_states.tsv", row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")
-
-
-### Load public data
-ipath <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/RData/"
-
-# CMC (Fromer et al.) gene eQTLs and isoQTLs
-cmc_eqtl <- readRDS(paste0(ipath, "CMC_adjustedSVA_eQTL_SNPs.rds"))
-cmc_isoqtl <- readRDS(paste0(ipath, "CMC_adjustedSVA_isoQTL_SNPs.rds"))
-
-### GTEx Whole Blood eQTLs and sQTLs
-gtex_wb_eqtl <- readRDS(paste0(ipath, "GTEx_v8_Whole_Blood_hg19_eQTL_SNPs.rds"))
-gtex_wb_sqtl <- readRDS(paste0(ipath, "GTEx_v8_Whole_Blood_hg19_sQTL_SNPs.rds"))
-
-### GTEx Brain (all brain tissues) eQTLs and sQTLs
-gtex_brains_eqtl <- readRDS(paste0(ipath, "GTEx_v8_Brains_hg19_eQTL_SNPs.rds"))
-gtex_brains_sqtl <- readRDS(paste0(ipath, "GTEx_v8_Brains_hg19_sQTL_SNPs.rds"))
-
-### Get overlap to CMC, GTEx wb and brain
-results <- data.frame()
-for (state in states) {
-  hmm_brain_selected <- hmm_brain[hmm_brain$name == state]
-  results[strsplit(state, "_d")[[1]], "CMC_eQTL"] <- sum(overlapsAny(cmc_eqtl, hmm_brain_selected))
-  results[strsplit(state, "_d")[[1]], "CMC_isoQTL"] <- sum(overlapsAny(cmc_isoqtl, hmm_brain_selected))
-  results[strsplit(state, "_d")[[1]], "GTEx_eQTL_wb"] <- sum(overlapsAny(gtex_wb_eqtl, hmm_brain_selected))
-  results[strsplit(state, "_d")[[1]], "GTEx_sQTL_wb"] <- sum(overlapsAny(gtex_wb_sqtl, hmm_brain_selected))
-  results[strsplit(state, "_d")[[1]], "GTEx_eQTL_brain"] <- sum(overlapsAny(gtex_brains_eqtl, hmm_brain_selected))
-  results[strsplit(state, "_d")[[1]], "GTEx_sQTL_brain"] <- sum(overlapsAny(gtex_brains_sqtl, hmm_brain_selected))
-}
-
-### write results into a file
-write.table(results, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/ChromHMM/CMC_GTEx_SNP_overlap_to_ChromHMM_brain_all_states.tsv", row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")
 

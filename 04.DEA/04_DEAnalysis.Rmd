@@ -214,21 +214,17 @@ GenerateVerticalBarplotOfDiffExprHits <- function(design, fit, from, to, adj, pl
   for (i in 1:nc){
     limma_res_padj[, i] = topTable(fit, adjust = "BH", sort.by = "none", number = Inf, coef = i + 1)[, adj]
     if(i == nc){
-      limma_res_padj$`Gene Symbol` = topTable(fit, adjust = "BH", sort.by = "none", number = Inf, coef = i + 1)[, adj - 5]
       limma_res_padj$`Ensembl Gene ID` = topTable(fit, adjust = "BH", sort.by = "none", number = Inf, coef = i + 1)[, adj - 6]
     }
   }
-  #head(limma_res_padj)
-  limma_res_padj <- limma_res_padj[, -c(length(limma_res_padj) - 2)]  # remove SV1
-  colnames(limma_res_padj) <- c("Diagnosis", "Age", "Sex", "pH", "PMI", "RIN", "RIN2", "Suicide", "Type_of_Death1", "Type_of_Death2", "C1", "C2", "C3", "C4", "Gene Symbol", "Ensembl Gene ID")
+  limma_res_padj <- limma_res_padj[, -c(length(limma_res_padj) - 1)] # remove SV1
+  colnames(limma_res_padj) <- c("Diagnosis", "Age", "Sex", "pH", "PMI", "RIN", "RIN2", "Suicide", "Type_of_Death1", "Type_of_Death2", "C1", "C2", "C3", "C4", "Ensembl Gene ID") # "Gene Symbol", "Ensembl Gene ID")
   limma_res_padj$Type_of_Death <- (limma_res_padj$Type_of_Death1 + limma_res_padj$Type_of_Death2) / 2
-  limma_res_padj <- limma_res_padj[, c("Diagnosis", "Age", "Sex", "pH", "PMI", "RIN", "RIN2", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4", "Gene Symbol", "Ensembl Gene ID")]
+  limma_res_padj <- limma_res_padj[, c("Diagnosis", "Age", "Sex", "pH", "PMI", "RIN", "RIN2", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4", "Ensembl Gene ID")]# "Gene Symbol", "Ensembl Gene ID")]
   # unmerge gene symbols and IDs and get only unique gene symbols/IDs as hits
   limma_res_padj <- unique(separate_rows(limma_res_padj, `Ensembl Gene ID`, sep = "\\|"))
-  limma_res_padj <- unique(separate_rows(limma_res_padj, `Gene Symbol`, sep = "\\|"))
-  # remove Gene symbols and IDs as we do not need them anymore (just for same results as in result tables)
-  limma_res_padj$`Gene Symbol` <- NULL
   limma_res_padj$`Ensembl Gene ID` <- NULL
+  limma_res_padj <- limma_res_padj[!duplicated(limma_res_padj$`Ensembl Gene ID`), ]
   # check, how many padj values are < 0.10
   limma_res_padj_0.05 <- apply(limma_res_padj, 2, function(x) sum(x < 0.1))
   limma_res_plot <- data.frame(sort(limma_res_padj_0.05, decreasing = T))
@@ -602,13 +598,13 @@ GenerateVolcanoPlot(fit, variable = "DxCASE", file = "1.3_volcano_plot_diff_expr
 
 Now, we have multiple hits on the transcript level. We could find transcripts on following genes as significant:
 
-1. with FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Gene Symbol"])` 
+1. with FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])` 
 
-2. with FDR < 10%: `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"])`
+2. with FDR < 10%: `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])`
 
-Four genes with an FDR < 0.05:  `r top_hits[top_hits$"FDR estimate" < 0.05, "Gene Symbol"]`
+Four genes with an FDR < 0.05:  `r top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"]`
 
-Six genes with an FDR < 0.1:  `r top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"]`
+Six genes with an FDR < 0.1:  `r top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]`
 
 Get significantly differentially expressed transcripts for all the different covariates (corrected for all the other covariates). 
 
@@ -672,7 +668,7 @@ for (hit in top_hits$`Ensembl Transcript ID`) {
     geom_boxplot(width = 0.2) +
     theme_classic() +
     theme(text = element_text(size = 20), plot.title = element_text(hjust = 0.5)) +
-    labs(title = top_hits[hit, "Gene Symbol"], x = element_blank(), y = "Expression values") +
+    labs(title = paste0(top_hits[hit, "Ensembl Gene ID"], ": ", top_hits[hit, "Gene Symbol"]), x = element_blank(), y = "Expression values") +
     scale_x_discrete(labels = c("Controls", "Cases")) +
     scale_fill_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D"), guide = FALSE, name = "", labels = c("Controls", "Cases"))
   ggsave(paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/1.3_violinplot_significant_DEA_hits_transcripts_new_pvalue_and_fdr_", top_hits[hit, "Gene Symbol"],".pdf"), width = 8, height = 6, units = "in")
@@ -805,11 +801,11 @@ GenerateVolcanoPlot(fit, variable = "PRS.SCZ", file = "2.2.1_volcano_plot_diff_e
 
 Now, we have some hits on the transcript level as shown below:
 
-1. with FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Gene Symbol"])` 
+1. with FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])` 
 
-2. with FDR < 10%: `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"])`
+2. with FDR < 10%: `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])`
 
-Here, are the 8 gene symbols:  `r top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"]`
+Here, are the 8 gene symbols:  `r top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]`
 
 **MDD PRS**
 
