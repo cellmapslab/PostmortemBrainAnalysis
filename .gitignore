@@ -1,7 +1,11 @@
-/04.DEA/01_Preprocessing_cache/*
-/04.DEA/01_Preprocessing_cache/latex/__packages
-/04.DEA/04_DEAnalysis_cache/*
-/04.DEA/04_DEAnalysis_files/*
+/04.DEA/01_preprocessing_cache/*
+/04.DEA/01_preprocessing_files/*
+/04.DEA/02_QC_and_cov_evaluation_cache/*
+/04.DEA/02_QC_and_cov_evaluation_files/*
+/04.DEA/03_DEA_cache/*
+/04.DEA/03_DEA_files/*
+/04.DEA/04_GSEA_and_figures_cache/*
+/04.DEA/04_GSEA_and_figures_files/*
 *.txt
 *.tex
 *.nopred
