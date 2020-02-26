@@ -28,7 +28,7 @@ GenerateGrangesObjecteQTL <- function(input, mdata, ofile){
     input_gr <- input_gr[!duplicated(input_gr)] 
     GenomeInfoDb::seqlevelsStyle(input_gr) <- "NCBI"
     # save GRanges object to an rds file
-    saveRDS(input_gr, file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/RData/", ofile))
+    saveRDS(input_gr, file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/06_RData_files/", ofile))
     # return finalized GRanges object
     return(input_gr)
 }

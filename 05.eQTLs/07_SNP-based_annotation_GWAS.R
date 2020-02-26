@@ -9,6 +9,8 @@ library(arules)
 library(S4Vectors)
 library(reshape2)
 library(rtracklayer)
+library(foreach)
+library(doSNOW)
 
 # function, to calculate the SNP annotation to a public dataset, but with respect to the MAF bins
 # @param own Own cis-eQTL data set as GRanges object
@@ -33,39 +35,44 @@ AnnotatePublicData <- function(own, public, nperm, background){
   return(c(as.character(overlap), as.character(p_value), as.character(or))) # return the resampling overlapping SNPs, p-value and odds ratio
 }
 
-# function, to calculate the annotation for one public dataset to all eQTL datasets
-# @param input  Public dataset (e.g. CMC eQTLs, GWAS AD-2019)
-# @param name   Name of the public dataset
-# @param res    Data frame in which the results should be stored
-# @return       the results data frame including the newly calculated results
-RunAnnotationForAllEQTLs <- function(input, name, results){
-  res <- data.frame()
-  res[c(paste0(name, "_overlap"), paste0(name, "_pVal"), paste0(name, "_odds_ratio")), "Gene"] <- AnnotatePublicData(gene_eqtl, input, perm, background)
-  res[c(paste0(name, "_overlap"), paste0(name, "_pVal"), paste0(name, "_odds_ratio")), "Gene_cases"] <- AnnotatePublicData(gene_cases_eqtl, input, perm, background)
-  res[c(paste0(name, "_overlap"), paste0(name, "_pVal"), paste0(name, "_odds_ratio")), "Transcript"] <- AnnotatePublicData(transcript_eqtl, input, perm, background)
-  res[c(paste0(name, "_overlap"), paste0(name, "_pVal"), paste0(name, "_odds_ratio")), "Transcript_cases"] <- AnnotatePublicData(transcript_cases_eqtl, input, perm, background)
-  res[c(paste0(name, "_overlap"), paste0(name, "_pVal"), paste0(name, "_odds_ratio")), "Exon"] <- AnnotatePublicData(exon_eqtl, input, perm, background)
-  res[c(paste0(name, "_overlap"), paste0(name, "_pVal"), paste0(name, "_odds_ratio")), "Exon_cases"] <- AnnotatePublicData(exon_cases_eqtl, input, perm, background)
-  # Write single runs into a file
-  write.table(res, file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/GWAS_CMC_GTEx/pmb_cis-eQTL_annotation_results_10000_permutations_", name, ".tsv"), row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")
-  results <- rbind(results, res)
-  print(paste0("Done ", name))
-  return(results)
-}
-
 # path, where all datasets are stored (as .rds files)
-ipath <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/RData/"
+ipath <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/06_RData/"
 
+
+###########
+### PMB ###
+###########
 ### Load eQTL results ###
-gene_eqtl <- readRDS(paste0(ipath, "pmb_gene_hits_cases_vs_controls_cis_eQTL_SNPs.rds"))  # gene based eQTLs
-gene_cases_eqtl <- readRDS(paste0(ipath, "pmb_gene_hits_cases_only_cis_eQTL_SNPs.rds"))  # cases only gene based eQTLs
-transcript_eqtl <- readRDS(paste0(ipath, "pmb_transcript_hits_cases_vs_controls_cis_eQTL_SNPs.rds"))  # transcript based eQTLs (similar to splice QTLs)
-transcript_cases_eqtl <- readRDS(paste0(ipath, "pmb_transcript_hits_cases_only_cis_eQTL_SNPs.rds"))  # cases only transcript eQTLs (similar to splice QTLs)
-exon_eqtl <- readRDS(paste0(ipath, "pmb_exon_hits_cases_vs_controls_cis_eQTL_SNPs.rds"))  # exon based eQTLs (eeQTLs)
-exon_cases_eqtl <- readRDS(paste0(ipath, "pmb_exon_hits_cases_only_cis_eQTL_SNPs.rds"))  # cases only exon based eQTLs (eeQTLs)
+eqtls_gene <- readRDS(paste0(ipath, "pmb_gene_hits_cases_vs_controls_cis_eQTL_SNPs.rds"))
+eqtls_transcript <- readRDS(paste0(ipath, "pmb_transcript_hits_cases_vs_controls_cis_eQTL_SNPs.rds"))
+eqtls_exon <- readRDS(paste0(ipath, "pmb_exon_hits_cases_vs_controls_cis_eQTL_SNPs.rds"))
+eqtls_gene_cases <- readRDS(paste0(ipath, "pmb_gene_hits_cases_only_cis_eQTL_SNPs.rds"))
+eqtls_transcript_cases <- readRDS(paste0(ipath, "pmb_transcript_hits_cases_only_cis_eQTL_SNPs.rds"))
+eqtls_exon_cases <- readRDS(paste0(ipath, "pmb_exon_hits_cases_only_cis_eQTL_SNPs.rds"))
 
 ### Load Background data ###
-background <- readRDS(paste0(ipath, "background_SNPs.rds"))
+background <- readRDS(paste0(ipath,"background_SNPs.rds"))
+length(background@ranges) #[1] 6,798,048
+
+
+###########
+### CMC ###
+###########
+# CMC (Fromer et al.) gene eQTLs and isoQTLs
+cmc_eqtl <- readRDS(paste0(ipath, "CMC_adjustedSVA_eQTL_SNPs.rds"))
+cmc_isoqtl <- readRDS(paste0(ipath, "CMC_adjustedSVA_isoQTL_SNPs.rds"))
+
+
+############
+### GTEx ###
+############
+### GTEx Whole Blood eQTLs and sQTLs
+gtex_wb_eqtl <- readRDS(paste0(ipath, "GTEx_v8_Whole_Blood_hg19_eQTL_SNPs.rds"))
+gtex_wb_sqtl <- readRDS(paste0(ipath, "GTEx_v8_Whole_Blood_hg19_sQTL_SNPs.rds"))
+
+### GTEx Brain (all brain tissues) eQTLs and sQTLs
+gtex_brains_eqtl <- readRDS(paste0(ipath, "GTEx_v8_Brains_hg19_eQTL_SNPs.rds"))
+gtex_brains_sqtl <- readRDS(paste0(ipath, "GTEx_v8_Brains_hg19_sQTL_SNPs.rds"))
 
 
 #############
@@ -124,42 +131,104 @@ scz2_gw <- scz2[scz2$p_value <= 5e-8, ]
 t2d_gw <- t2d[t2d$p_value <= 5e-8, ]
 ts_gw <- ts[ts$p_value <= 5e-8, ]
 
-# save names of all GWAS in the order they should be running
-#gwas <- GRangesList(scz2, bip, cdg1, cdg2, mdd1, mdd2, mdd3, adhd, asd, ea, bmi, ad, alcdep, an, audit, cad, cannabis, ed, height, intelligence, ocd, ptsd, t2d, ts)
-#gwas <- c("scz2", "bip", "cdg1", "cdg2", "mdd1", "mdd2", "mdd3", "adhd", "asd", "ea", "bmi", "ad", "alcdep", "an", "audit", "cad", "cannabis", "ed", "height", "intelligence", "ocd", "ptsd", "t2d", "ts")
-gwas_gw <- GRangesList(scz2_gw, bip_gw, cdg1_gw, cdg2_gw, mdd1_gw, mdd2_gw, mdd3_gw, adhd_gw, asd_gw, ea_gw, bmi_gw, ad_gw, alcdep_gw, an_gw, audit_gw, cad_gw, cannabis_gw, ed_gw, height_gw, intelligence_gw, ocd_gw, ptsd_gw, t2d_gw, ts_gw)
-#gwas_gw <- c("scz2_gw", "bip_gw", "cdg1_gw", "cdg2_gw", "mdd1_gw", "mdd2_gw", "mdd3_gw", "adhd_gw", "asd_gw", "ea_gw", "bmi_gw", "ad_gw", "alcdep_gw", "an_gw", "audit_gw", "cad_gw", "cannabis_gw", "ed_gw", "height_gw", "intelligence_gw", "ocd_gw", "ptsd_gw", "t2d_gw", "ts_gw")
+# save names of all GWAS (nominal p < 0.05) in the order they should be running
+gwas <- GRangesList("GWAS_SCZ-2014" = scz2, "GWAS_BIP-2018" = bip, "GWAS_MDD1-2012" = mdd1, "GWAS_MDD2-2018" = mdd2, "GWAS_MDD3-2019" = mdd3, "GWAS_CDG1-2013" = cdg1, "GWAS_CDG2-2019" = cdg2, "GWAS_ADHD-2017" = adhd, "GWAS_ASD-2017" = asd, "GWAS_EA-2018" = ea, "GWAS_BMI-2015" = bmi, "GWAS_AD-2019" = ad, "GWAS_ALCDEP-2018" = alcdep, "GWAS_AN-2019" = an, "GWAS_AUDIT-2018" = audit, "GWAS_CAD_2017" = cad, "GWAS_Cannabis-2018" = cannabis, "GWAS_ED-2017" = ed, "GWAS_Height-2014" = height, "GWAS_Intelligence-2018" = intelligence, "GWAS_OCD-2017" = ocd, "GWAS_PTSD-2019" = ptsd, "GWAS_T2D-2017" = t2d, "GWAS_TS-2018" = ts)
+rm(ad, adhd, alcdep, an, asd, audit, bip, bmi, cad, cannabis, cdg1, cdg2, ea, ed, height, intelligence, mdd1, mdd2, mdd3, ocd, ptsd, scz2, t2d, ts)
+# save names of all GWAS (genome-wide filtered: p < 5e-8) in the order they should be running
+gwas_gw <- GRangesList("GWAS_SCZ-2014" = scz2_gw, "GWAS_BIP-2018" = bip_gw, "GWAS_MDD1-2012" = mdd1_gw, "GWAS_MDD2-2018" = mdd2_gw, "GWAS_MDD3-2019" = mdd3_gw, "GWAS_CDG1-2013" = cdg1_gw, "GWAS_CDG2-2019" = cdg2_gw, "GWAS_ADHD-2017" = adhd_gw, "GWAS_ASD-2017" = asd_gw, "GWAS_EA-2018" = ea_gw, "GWAS_BMI-2015" = bmi_gw, "GWAS_AD-2019" = ad_gw, "GWAS_ALCDEP-2018" = alcdep_gw, "GWAS_AN-2019" = an_gw, "GWAS_AUDIT-2018" = audit_gw, "GWAS_CAD_2017" = cad_gw, "GWAS_Cannabis-2018" = cannabis_gw, "GWAS_ED-2017" = ed_gw, "GWAS_Height-2014" = height_gw, "GWAS_Intelligence-2018" = intelligence_gw, "GWAS_OCD-2017" = ocd_gw, "GWAS_PTSD-2019" = ptsd_gw, "GWAS_T2D-2017" = t2d_gw, "GWAS_TS-2018" = ts_gw)
+rm(ad_gw, adhd_gw, alcdep_gw, an_gw, asd_gw, audit_gw, bip_gw, bmi_gw, cad_gw, cannabis_gw, cdg1_gw, cdg2_gw, ea_gw, ed_gw, height_gw, intelligence_gw, mdd1_gw, mdd2_gw, mdd3_gw, ocd_gw, ptsd_gw, scz2_gw, t2d_gw, ts_gw)
 
-### Annotation to GWAS summary statistics ###
-# Set parameters
-results <- setNames(data.frame(matrix(ncol = 6, nrow = 0)), c("Gene", "Gene_cases", "Transcript", "Transcript_cases", "Exon", "Exon_cases"))
+
+### Get overlap of all GWAS (p < 0.05) to CMC, GTEx wb and brain
+results <- data.frame()
+for (i in seq_along(gwas)) {
+  gwas_selected <- gwas[[i]]
+  print(names(gwas)[[i]])
+  results[names(gwas)[[i]], "CMC_eQTL"] <- sum(overlapsAny(cmc_eqtl, gwas_selected))
+  results[names(gwas)[[i]], "CMC_isoQTL"] <- sum(overlapsAny(cmc_isoqtl, gwas_selected))
+  results[names(gwas)[[i]], "GTEx_eQTL_wb"] <- sum(overlapsAny(gtex_wb_eqtl, gwas_selected))
+  results[names(gwas)[[i]], "GTEx_sQTL_wb"] <- sum(overlapsAny(gtex_wb_sqtl, gwas_selected))
+  results[names(gwas)[[i]], "GTEx_eQTL_brain"] <- sum(overlapsAny(gtex_brains_eqtl, gwas_selected))
+  results[names(gwas)[[i]], "GTEx_sQTL_brain"] <- sum(overlapsAny(gtex_brains_sqtl, gwas_selected))
+}
+### write results into a file
+write.table(results, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/07_annotations/GWAS_CMC_GTEx/CMC_GTEx_SNP_overlap_to_all_GWAS_p0.05.tsv", row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")
+rm(results)
+
+### Get overlap of all GWAS (p < 0.05) to CMC, GTEx wb and brain
+results <- data.frame()
+for (i in seq_along(gwas_gw)) {
+  gwas_selected <- gwas_gw[[i]]
+  print(names(gwas_gw)[[i]])
+  results[names(gwas_gw)[[i]], "CMC_eQTL"] <- sum(overlapsAny(cmc_eqtl, gwas_selected))
+  results[names(gwas_gw)[[i]], "CMC_isoQTL"] <- sum(overlapsAny(cmc_isoqtl, gwas_selected))
+  results[names(gwas_gw)[[i]], "GTEx_eQTL_wb"] <- sum(overlapsAny(gtex_wb_eqtl, gwas_selected))
+  results[names(gwas_gw)[[i]], "GTEx_sQTL_wb"] <- sum(overlapsAny(gtex_wb_sqtl, gwas_selected))
+  results[names(gwas_gw)[[i]], "GTEx_eQTL_brain"] <- sum(overlapsAny(gtex_brains_eqtl, gwas_selected))
+  results[names(gwas_gw)[[i]], "GTEx_sQTL_brain"] <- sum(overlapsAny(gtex_brains_sqtl, gwas_selected))
+}
+### write results into a file
+write.table(results, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/07_annotations/GWAS_CMC_GTEx/CMC_GTEx_SNP_overlap_to_all_GWAS_p5e-8.tsv", row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")
+rm(results)
+
+### Annotation to genome-wide GWAS hits ###
+# First, set parameters
 perm <- 10000
 
-# Run annotation for all GWAS SNPs
-results <- RunAnnotationForAllEQTLs(ad, "GWAS_AD-2019", results)
-results <- RunAnnotationForAllEQTLs(adhd, "GWAS_ADHD-2017", results)
-results <- RunAnnotationForAllEQTLs(alcdep, "GWAS_ALCDEP-2018", results)
-results <- RunAnnotationForAllEQTLs(an, "GWAS_AN-2019", results)
-results <- RunAnnotationForAllEQTLs(asd, "GWAS_ASD-2017", results)
-results <- RunAnnotationForAllEQTLs(audit, "GWAS_AUDIT-2018", results)
-results <- RunAnnotationForAllEQTLs(bip, "GWAS_BIP-2018", results)
-results <- RunAnnotationForAllEQTLs(bmi, "GWAS_BMI-2015", results)
-results <- RunAnnotationForAllEQTLs(cad, "GWAS_CAD_2017", results)
-results <- RunAnnotationForAllEQTLs(cannabis, "GWAS_Cannabis-2018", results)
-results <- RunAnnotationForAllEQTLs(cdg1, "GWAS_CDG1-2013", results)
-results <- RunAnnotationForAllEQTLs(cdg2, "GWAS_CDG2-2019", results)
-results <- RunAnnotationForAllEQTLs(ea, "GWAS_EA-2018", results)
-results <- RunAnnotationForAllEQTLs(ed, "GWAS_ED-2017", results)
-results <- RunAnnotationForAllEQTLs(height, "GWAS_Height-2014", results)
-results <- RunAnnotationForAllEQTLs(intelligence, "GWAS_Intelligence-2018", results)
-results <- RunAnnotationForAllEQTLs(mdd1, "GWAS_MDD1-2012", results)
-results <- RunAnnotationForAllEQTLs(mdd2, "GWAS_MDD2-2018", results)
-results <- RunAnnotationForAllEQTLs(mdd3, "GWAS_MDD3-2019", results)
-results <- RunAnnotationForAllEQTLs(ocd, "GWAS_OCD-2017", results)
-results <- RunAnnotationForAllEQTLs(ptsd, "GWAS_PTSD-2019", results)
-results <- RunAnnotationForAllEQTLs(scz2, "GWAS_SCZ-2014", results)
-results <- RunAnnotationForAllEQTLs(t2d, "GWAS_T2D-2017", results)
-results <- RunAnnotationForAllEQTLs(ts, "GWAS_TS-2018", results)
+# 2.4.1 annotation to GWAS summary statistics (parallelized)
+cl <- makeCluster(12)
+registerDoSNOW(cl)
+clusterCall(cl, function(x) .libPaths(x), .libPaths())  # load packages from above
 
-# Write results into a file
-write.table(results, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_annotation_results_10000_permutations_GWAS_summary_statistics.tsv", row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")
+results2 <- foreach (i = seq_along(gwas_gw), .combine = rbind,
+                     .packages = c("GenomicRanges", "S4Vectors")) %dopar% {
+                       results <- data.frame()
+                       overlap <- paste0(names(gwas_gw)[i], "_SNP_overlap")
+                       pval <- paste0(names(gwas_gw)[i], "_SNP_pVal")
+                       or <- paste0(names(gwas_gw)[i], "_SNP_or")
+                       gwas_selected <- gwas_gw[[i]]
+                       results[c(overlap, pval, or), "Gene"] <- AnnotatePublicData(eqtls_gene, gwas_selected, perm, background)
+                       results[c(overlap, pval, or), "Gene_cases"] <- AnnotatePublicData(eqtls_gene_cases, gwas_selected, perm, background)
+                       results[c(overlap, pval, or), "Transcript"] <- AnnotatePublicData(eqtls_transcript, gwas_selected, perm, background)
+                       results[c(overlap, pval, or), "Transcript_cases"] <- AnnotatePublicData(eqtls_transcript_cases, gwas_selected, perm, background)
+                       results[c(overlap, pval, or), "Exon"] <- AnnotatePublicData(eqtls_exon, gwas_selected, perm, background)
+                       results[c(overlap, pval, or), "Exon_cases"] <- AnnotatePublicData(eqtls_exon_cases, gwas_selected, perm, background)
+                       write.table(results, file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/07_annotations/GWAS_CMC_GTEx/pmb_cis-eQTL_annotation_results_10000_permutations_", names(gwas_gw)[i],"_p5e-8.tsv"), row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")
+                       results
+                     }
+stopCluster(cl)
+
+# 2.4.6 write results into a file
+write.table(results2, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/07_annotations/GWAS_CMC_GTEx/pmb_cis-eQTL_annotation_results_10000_permutations_ALL_GWAS_hits_p5e-8.tsv", row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")
+rm(results, results2)
+
+
+### Annotation to nominal GWAS hits ###
+# First, set parameters
+perm <- 10000
+
+# 2.4.1 annotation to GWAS summary statistics (parallelized)
+cl <- makeCluster(12)
+registerDoSNOW(cl)
+clusterCall(cl, function(x) .libPaths(x), .libPaths())  # load packages from above
+
+results2 <- foreach (i = seq_along(gwas), .combine = rbind,
+                     .packages = c("GenomicRanges", "S4Vectors")) %dopar% {
+                       results <- data.frame()
+                       overlap <- paste0(names(gwas)[i], "_SNP_overlap")
+                       pval <- paste0(names(gwas)[i], "_SNP_pVal")
+                       or <- paste0(names(gwas)[i], "_SNP_or")
+                       gwas_selected <- gwas[[i]]
+                       results[c(overlap, pval, or), "Gene"] <- AnnotatePublicData(eqtls_gene, gwas_selected, perm, background)
+                       results[c(overlap, pval, or), "Gene_cases"] <- AnnotatePublicData(eqtls_gene_cases, gwas_selected, perm, background)
+                       results[c(overlap, pval, or), "Transcript"] <- AnnotatePublicData(eqtls_transcript, gwas_selected, perm, background)
+                       results[c(overlap, pval, or), "Transcript_cases"] <- AnnotatePublicData(eqtls_transcript_cases, gwas_selected, perm, background)
+                       results[c(overlap, pval, or), "Exon"] <- AnnotatePublicData(eqtls_exon, gwas_selected, perm, background)
+                       results[c(overlap, pval, or), "Exon_cases"] <- AnnotatePublicData(eqtls_exon_cases, gwas_selected, perm, background)
+                       write.table(results, file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/07_annotations/GWAS_CMC_GTEx/pmb_cis-eQTL_annotation_results_10000_permutations_", names(gwas)[i],"_p0.05.tsv"), row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")
+                       results
+                     }
+stopCluster(cl)
+
+# 2.4.6 write results into a file
+write.table(results2, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/07_annotations/GWAS_CMC_GTEx/pmb_cis-eQTL_annotation_results_10000_permutations_ALL_GWAS_hits_p0.05.tsv", row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")

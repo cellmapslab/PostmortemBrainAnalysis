@@ -42,15 +42,15 @@ vepGR_hg19 <- readRDS("/storage/groups/ccm01/datasets/2019_VEP/VEP_hg19_collapse
 seqlevels(vepGR_hg19, pruning.mode = "coarse") <- setdiff(seqlevels(vepGR_hg19), c("X", "Y", "M"))
 
 ### LOAD eQTL results ###
-ipath <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/RData/"
+ipath <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/06_RData/"
 #ipath=""
 # cis-eQTLs of cases and controls (ALL) in genes, transcripts and exons
-eqtls_gene_gr <- readRDS(paste0(ipath,"pmb_gene_hits_cases_vs_controls_cis_eQTL_SNPs.rds"))
-eqtls_transcript_gr <- readRDS(paste0(ipath,"pmb_transcript_hits_cases_vs_controls_cis_eQTL_SNPs.rds"))
-eqtls_exon_gr <- readRDS(paste0(ipath,"pmb_exon_hits_cases_vs_controls_cis_eQTL_SNPs.rds"))
-eqtls_gene_cases_gr <- readRDS(paste0(ipath,"pmb_gene_hits_cases_only_cis_eQTL_SNPs.rds"))
-eqtls_transcript_cases_gr <- readRDS(paste0(ipath,"pmb_transcript_hits_cases_only_cis_eQTL_SNPs.rds"))
-eqtls_exon_cases_gr <- readRDS(paste0(ipath,"pmb_exon_hits_cases_only_cis_eQTL_SNPs.rds"))
+eqtls_gene_gr <- readRDS(paste0(ipath, "pmb_gene_hits_cases_vs_controls_cis_eQTL_SNPs.rds"))
+eqtls_transcript_gr <- readRDS(paste0(ipath, "pmb_transcript_hits_cases_vs_controls_cis_eQTL_SNPs.rds"))
+eqtls_exon_gr <- readRDS(paste0(ipath, "pmb_exon_hits_cases_vs_controls_cis_eQTL_SNPs.rds"))
+eqtls_gene_cases_gr <- readRDS(paste0(ipath, "pmb_gene_hits_cases_only_cis_eQTL_SNPs.rds"))
+eqtls_transcript_cases_gr <- readRDS(paste0(ipath, "pmb_transcript_hits_cases_only_cis_eQTL_SNPs.rds"))
+eqtls_exon_cases_gr <- readRDS(paste0(ipath, "pmb_exon_hits_cases_only_cis_eQTL_SNPs.rds"))
 
 ### Load Background data ###
 background_gr <- readRDS(paste0(ipath,"background_SNPs.rds"))
@@ -87,7 +87,7 @@ for (state in states) {
 }
 
 ### write results into a file
-write.table(results, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/VEP/CMC_GTEx_SNP_overlap_to_VEP_all_states.tsv", row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")
+write.table(results, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/07_annotations/VEP/CMC_GTEx_SNP_overlap_to_VEP_all_states.tsv", row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")
 
 ### Annotation ###
 # First, set parameters
@@ -111,10 +111,10 @@ results2 <- foreach (i = seq_along(states), .combine = rbind,
                        results[c(overlap, pval, or), "Transcript_cases"] <- AnnotatePublicData(eqtls_transcript_cases_gr,  vep_selected, perm, background_gr)
                        results[c(overlap, pval, or), "Exon"] <- AnnotatePublicData(eqtls_exon_gr, vep_selected, perm, background_gr)
                        results[c(overlap, pval, or), "Exon_cases"] <- AnnotatePublicData(eqtls_exon_cases_gr,  vep_selected, perm, background_gr)
-                       write.table(results, file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/VEP/pmb_cis-eQTL_annotation_results_10000_permutations_VEP_", strsplit(states[i], "_d$")[[1]],".tsv"), row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")
-                       print(paste0("Done with ", states[i]))
+                       write.table(results, file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/07_annotations/VEP/pmb_cis-eQTL_annotation_results_10000_permutations_VEP_", strsplit(states[i], "_d$")[[1]],".tsv"), row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")
+                       results
                      }
 stopCluster(cl)
 
 # 2.4.6 write results into a file
-write.table(results2, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/VEP/pmb_cis-eQTL_annotation_results_10000_permutations_VEP_all_states.tsv", row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")
+write.table(results2, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/07_annotations/VEP/pmb_cis-eQTL_annotation_results_10000_permutations_VEP_all_states.tsv", row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")

@@ -32,6 +32,8 @@ GetClumpedSnpsEqtls <- function(input, eqtls, output){
   write.table(eqtls, file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/", output), row.names = F, quote = F, dec = ".", sep = " ")
 }
 
+### TODO: add generation of result tables
+
 ### 1. LOAD eQTL results ###
 # 1.1 cis-eQTLs of cases and controls (ALL) in genes, transcripts and exons
 eqtls_gene <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_gene_hits_cases_vs_controls.txt", header = T, stringsAsFactors = F)

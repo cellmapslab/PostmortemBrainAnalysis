@@ -50,9 +50,9 @@ for (i in seq(1, nrow(transcript_expr), 10000)) {
 # 3. Generate exon expression input files
 exon_expr <- fread(paste0(input_path, "01_pmb_exon_expr_CASE_CTL.txt"), header = T, stringsAsFactors = F, data.table = F)
 count <- 1
-for (i in seq(1, nrow(exon_expr), 10000)) {
-  if (i < 240000) {
-    chunk <- exon_expr[i : (i + 10000 - 1), ]
+for (i in seq(1, nrow(exon_expr), 50000)) {
+  if (i < 200000) {
+    chunk <- exon_expr[i : (i + 50000 - 1), ]
     # Save exon expression data into a new chunk file
     oname <- paste0(output_path, "exon/01_pmb_exon_expr_CASE_CTL_chunk", count, ".txt")
     fwrite(x = chunk, file = oname, row.names = F, col.names = T, sep = "\t", quote = F)

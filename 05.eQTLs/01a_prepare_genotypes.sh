@@ -24,7 +24,7 @@ all except for the first occassion of the multiallelic SNP. PLINK v1.90 removes 
 appearance of each SNP for the clumping as PLINK otherwise gives a lot of warnings and can not do LD 
 analysis for thousands of SNPs.
 
-Usage: bash 01b_prepare_genotypes.sh -g <path/to/genotype-files> -e <exclude-file> -i <include-file> -o <path/to/store/output-files> -t <path/to/tools>
+Usage: bash 01a_prepare_genotypes.sh -g <path/to/genotype-files> -e <exclude-file> -i <include-file> -o <path/to/store/output-files> -t <path/to/tools>
 
 -g  --genotypes   path to the genotype (chromosome based) files after imputation
 -e  --exclude     file (name with path) including all sample IDs to exclude for further analyses steps (samples coming from other projects)

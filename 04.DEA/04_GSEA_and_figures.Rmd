@@ -42,7 +42,11 @@ options(stringsAsFactors = T)
 Below you can find the list of packages that are required for all analysis steps. 
 
 ```{r, echo = F}
+# genral packages
 library(qvalue)
+library(data.table)
+library(tidyr)
+library(rtracklayer)
 
 # Packages for pathway enrichment
 library(GSEABase)   # to load or generate gene set data
@@ -51,6 +55,7 @@ library(mgsa)  # load MGSA: a pathway enrichment analysis tool
 # Packages for plotting
 library(ggplot2)
 library(VennDiagram)
+library(viridis)  # color blind color palette
 ```
 
 
@@ -84,17 +89,17 @@ First, we need to load the gene-based (gDEGenes), transcript-based (tDEGenes) an
 
 ```{r}
 # gene-level
-gDEGenes_age <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.1_diff_expr_genes_for_age.csv", select = c("Ensembl Gene ID", "Gene Symbol", "FDR estimate"), data.table = F)
+gDEGenes_age <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_results/1.1_diff_expr_genes_for_age.csv", select = c("Ensembl Gene ID", "Gene Symbol", "FDR estimate"), data.table = F)
 bck_gDEGenes_age <- unique(sort(gDEGenes_age$`Ensembl Gene ID`))
 gDEGenes_age <- gDEGenes_age[gDEGenes_age$`FDR estimate` < 0.1, ]
 
 # transcript-level
-tDEGenes_age <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.3_diff_expr_transcripts_for_age_new_pvalue_and_fdr.csv", select = c("FDR estimate", "Gene Symbol", "Ensembl Gene ID"), data.table = F)
+tDEGenes_age <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_results/1.3_diff_expr_transcripts_for_age_new_pvalue_and_fdr.csv", select = c("FDR estimate", "Gene Symbol", "Ensembl Gene ID"), data.table = F)
 bck_tDEGenes_age <- unique(sort(tDEGenes_age$`Ensembl Gene ID`))
 tDEGenes_age <- tDEGenes_age[tDEGenes_age$`FDR estimate` < 0.1, ]
 
 # exon-level
-eDEGenes_age <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.3_diff_expr_exons_for_age_new_pvalue_and_fdr.csv", select = c("FDR estimate", "Gene Symbol", "Ensembl Gene ID"), data.table = F)
+eDEGenes_age <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_results/1.3_diff_expr_exons_for_age_new_pvalue_and_fdr.csv", select = c("FDR estimate", "Gene Symbol", "Ensembl Gene ID"), data.table = F)
 bck_eDEGenes_age <- unique(sort(eDEGenes_age$`Ensembl Gene ID`))
 eDEGenes_age <- eDEGenes_age[eDEGenes_age$`FDR estimate` < 0.1, ]
 ```
@@ -124,25 +129,28 @@ length(intersect(ageing_genes$symbol, eDEGenes_age$`Gene Symbol`))
 
 Now, we can also check the significance (p-value) of the overlap from our age DEGenes to the known age genes. Therefore, we first need to generate a contingency table and then run Fisher's exact test:
 
-1. gDEGenes: `r FishersExactTest(gDEGenes_age$`Gene Symbol`, ageing_genes$symbol, bck_gDEGenes_age)`
-2. tDEGenes: `r FishersExactTest(tDEGenes_age$`Gene Symbol`, ageing_genes$symbol, bck_tDEGenes_age)`
-3. eDEGenes: `r FishersExactTest(eDEGenes_age$`Gene Symbol`, ageing_genes$symbol, bck_eDEGenes_age)`
+1. gDEGenes: `r FishersExactTest(gDEGenes_age[, "Gene Symbol"], ageing_genes$symbol, bck_gDEGenes_age)`
+2. tDEGenes: `r FishersExactTest(tDEGenes_age[, "Gene Symbol"], ageing_genes$symbol, bck_tDEGenes_age)`
+3. eDEGenes: `r FishersExactTest(eDEGenes_age[, "Gene Symbol"], ageing_genes$symbol, bck_eDEGenes_age)`
 
 ## VENN diagram
 
 When, we will generate a VENN diagram for the overlap of found eDEGenes, tDEGenes and eDEGenes for age and save it into a pdf file.  
 
 ```{r}
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/1.1_VENN_DEGenes_for_age.pdf")
+gDEGenes_age <- unique(gDEGenes_age$`Ensembl Gene ID`)
+tDEGenes_age <- unique(tDEGenes_age$`Ensembl Gene ID`)
+eDEGenes_age <- unique(eDEGenes_age$`Ensembl Gene ID`)
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/04_figures/1.1_VENN_DEGenes_for_age.pdf")
 grid.newpage()
 overrideTriple=T
-draw.triple.venn(area1 = length(gDEGenes_age$`Ensembl Gene ID`), area2 = length(tDEGenes_age$`Ensembl Gene ID`), 
-                 area3 = length(eDEGenes_age$`Ensembl Gene ID`), 
-                 n12 = length(intersect(gDEGenes_age$`Ensembl Gene ID`, tDEGenes_age$`Ensembl Gene ID`)), 
-                 n23 = length(intersect(tDEGenes_age$`Ensembl Gene ID`, eDEGenes_age$`Ensembl Gene ID`)), 
-                 n13 = length(intersect(gDEGenes_age$`Ensembl Gene ID`, eDEGenes_age$`Ensembl Gene ID`)), euler.d = F, scaled = F, 
-                 n123 = length(intersect(gDEGenes_age$`Ensembl Gene ID`, intersect(tDEGenes_age$`Ensembl Gene ID`, eDEGenes_age$`Ensembl Gene ID`))),  
-                 category = c(paste("gDEGenes", length(gDEGenes_age$`Ensembl Gene ID`), sep = "\n"), paste("tDEGenes", length(tDEGenes_age$`Ensembl Gene ID`), sep = "\n"), paste("eDEGenes", length(eDEGenes_age$`Ensembl Gene ID`), sep = "\n")), 
+draw.triple.venn(area1 = length(gDEGenes_age), area2 = length(tDEGenes_age),                  area3 = length(eDEGenes_age), 
+                 n12 = length(intersect(gDEGenes_age, tDEGenes_age)), 
+                 n23 = length(intersect(tDEGenes_age, eDEGenes_age)), 
+                 n13 = length(intersect(gDEGenes_age, eDEGenes_age)),
+                 euler.d = F, scaled = F, 
+                 n123 = length(intersect(gDEGenes_age, intersect(tDEGenes_age, eDEGenes_age))),  
+                 category = c(paste("gDEGenes", length(gDEGenes_age), sep = "\n"), paste("tDEGenes", length(tDEGenes_age), sep = "\n"), paste("eDEGenes", length(eDEGenes_age), sep = "\n")), 
                  lty = "blank", fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
 dev.off()
 ```
@@ -164,16 +172,16 @@ First, we need to load the gDEGenes, tDEGenes and eDEGenes for pH and filter the
 
 ```{r}
 # gene-level
-gDEGenes_ph <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.1_diff_expr_genes_for_ph.csv", select = c("Ensembl Gene ID", "FDR estimate"), data.table = F)
-gDEGenes_ph <- gDEGenes_ph[gDEGenes_ph$`FDR estimate` < 0.1, ]
+gDEGenes_ph <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_results/1.1_diff_expr_genes_for_ph.csv", select = c("Ensembl Gene ID", "FDR estimate"), data.table = F)
+gDEGenes_ph <- unique(gDEGenes_ph[gDEGenes_ph$`FDR estimate` < 0.1, "Ensembl Gene ID"])
 
 # transcript-level
-tDEGenes_ph <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.3_diff_expr_transcripts_for_ph_new_pvalue_and_fdr.csv", select = c("Ensembl Gene ID", "FDR estimate",), data.table = F)
-tDEGenes_ph <- tDEGenes_ph[tDEGenes_ph$`FDR estimate` < 0.1, ]
+tDEGenes_ph <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_results/1.3_diff_expr_transcripts_for_ph_new_pvalue_and_fdr.csv", select = c("Ensembl Gene ID", "FDR estimate"), data.table = F)
+tDEGenes_ph <- unique(tDEGenes_ph[tDEGenes_ph$`FDR estimate` < 0.1, "Ensembl Gene ID"])
 
 # exon-level
-eDEGenes_ph <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.3_diff_expr_exons_for_ph_new_pvalue_and_fdr.csv", select = c("Ensembl Gene ID", "FDR estimate"), data.table = F)
-eDEGenes_ph <- eDEGenes_ph[eDEGenes_ph$`FDR estimate` < 0.1, ]
+eDEGenes_ph <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_results/1.3_diff_expr_exons_for_ph_new_pvalue_and_fdr.csv", select = c("Ensembl Gene ID", "FDR estimate"), data.table = F)
+eDEGenes_ph <- unique(eDEGenes_ph[eDEGenes_ph$`FDR estimate` < 0.1, "Ensembl Gene ID"])
 ```
 
 ## VENN diagram
@@ -181,17 +189,18 @@ eDEGenes_ph <- eDEGenes_ph[eDEGenes_ph$`FDR estimate` < 0.1, ]
 When, we will generate a VENN diagram for the overlap of found eDEGenes, tDEGenes and eDEGenes for age and save it into a pdf file.  
 
 ```{r}
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/1.1_VENN_DEGenes_for_ph.pdf")
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/04_figures/1.1_VENN_DEGenes_for_ph.pdf")
 grid.newpage()
 overrideTriple=T
-draw.triple.venn(area1 = length(gDEGenes_ph$"Ensembl Gene ID"), 
-                 area2 = length(tDEGenes_ph$"Ensembl Gene ID"), 
-                 area3 = length(eDEGenes_ph$"Ensembl Gene ID"), 
-                 n12 = length(intersect(gDEGenes_ph$"Ensembl Gene ID", tDEGenes_ph$"Ensembl Gene ID")), 
-                 n23 = length(intersect(tDEGenes_ph$"Ensembl Gene ID", eDEGenes_ph$"Ensembl Gene ID")), 
-                 n13 = length(intersect(gDEGenes_ph$"Ensembl Gene ID", eDEGenes_ph$"Ensembl Gene ID")), euler.d = F, scaled = F, 
-                 n123 = length(intersect(gDEGenes_ph$"Ensembl Gene ID", intersect(tDEGenes_ph$"Ensembl Gene ID", eDEGenes_ph$"Ensembl Gene ID"))),  
-                 category = c(paste("gDEGenes", length(gDEGenes_ph$"Ensembl Gene ID"), sep = "\n"), paste("tDEGenes", length(tDEGenes_ph$"Ensembl Gene ID"), sep = "\n"), paste("eDEGenes", length(eDEGenes_ph$"Ensembl Gene ID"), sep = "\n")), 
+draw.triple.venn(area1 = length(gDEGenes_ph), 
+                 area2 = length(tDEGenes_ph), 
+                 area3 = length(eDEGenes_ph), 
+                 n12 = length(intersect(gDEGenes_ph, tDEGenes_ph)), 
+                 n23 = length(intersect(tDEGenes_ph, eDEGenes_ph)), 
+                 n13 = length(intersect(gDEGenes_ph, eDEGenes_ph)), 
+                 euler.d = F, scaled = F, 
+                 n123 = length(intersect(gDEGenes_ph, intersect(tDEGenes_ph, eDEGenes_ph))),  
+                 category = c(paste("gDEGenes", length(gDEGenes_ph), sep = "\n"), paste("tDEGenes", length(tDEGenes_ph), sep = "\n"), paste("eDEGenes", length(eDEGenes_ph), sep = "\n")), 
                  lty = "blank", fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
 dev.off()
 ```
@@ -213,16 +222,16 @@ First, we need to load the gDEGenes, tDEGenes and eDEGenes for PMI and filter th
 
 ```{r}
 # gene-level
-gDEGenes_pmi <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.1_diff_expr_genes_for_pmi.csv", select = c("Ensembl Gene ID", "FDR estimate"), data.table = F)
-gDEGenes_pmi <- gDEGenes_pmi[gDEGenes_pmi$`FDR estimate` < 0.1, "Ensembl Gene ID"]
+gDEGenes_pmi <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_results/1.1_diff_expr_genes_for_pmi.csv", select = c("Ensembl Gene ID", "FDR estimate"), data.table = F)
+gDEGenes_pmi <- unique(gDEGenes_pmi[gDEGenes_pmi$`FDR estimate` < 0.1, "Ensembl Gene ID"])
 
 # transcript-level
-tDEGenes_pmi <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.3_diff_expr_transcripts_for_pmi_new_pvalue_and_fdr.csv", select = c("Ensembl Gene ID", "FDR estimate"), data.table = F)
-tDEGenes_pmi <- tDEGenes_pmi[tDEGenes_pmi$`FDR estimate` < 0.1, "Ensembl Gene ID"]
+tDEGenes_pmi <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_results/1.3_diff_expr_transcripts_for_pmi_new_pvalue_and_fdr.csv", select = c("Ensembl Gene ID", "FDR estimate"), data.table = F)
+tDEGenes_pmi <- unique(tDEGenes_pmi[tDEGenes_pmi$`FDR estimate` < 0.1, "Ensembl Gene ID"])
 
 # exon-level
-eDEGenes_pmi <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.3_diff_expr_exons_for_pmi_new_pvalue_and_fdr.csv", select = c("Ensembl Gene ID", "FDR estimate"), data.table = F)
-eDEGenes_pmi <- eDEGenes_pmi[eDEGenes_pmi$`FDR estimate` < 0.1, "Ensembl Gene ID"]
+eDEGenes_pmi <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_results/1.3_diff_expr_exons_for_pmi_new_pvalue_and_fdr.csv", select = c("Ensembl Gene ID", "FDR estimate"), data.table = F)
+eDEGenes_pmi <- unique(eDEGenes_pmi[eDEGenes_pmi$`FDR estimate` < 0.1, "Ensembl Gene ID"])
 ```
 
 ## VENN diagram
@@ -230,7 +239,7 @@ eDEGenes_pmi <- eDEGenes_pmi[eDEGenes_pmi$`FDR estimate` < 0.1, "Ensembl Gene ID
 When, we will generate a VENN diagram for the overlap of found eDEGenes, tDEGenes and eDEGenes for PMI and save it into a pdf file.  
 
 ```{r}
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/1.1_VENN_DEGenes_for_pmi.pdf")
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/04_figures/1.1_VENN_DEGenes_for_pmi.pdf")
 grid.newpage()
 overrideTriple=T
 draw.triple.venn(area1 = length(gDEGenes_pmi), area2 = length(tDEGenes_pmi), 
@@ -261,16 +270,16 @@ First, we need to load the gDEGenes, tDEGenes and eDEGenes for PC2 and filter th
 
 ```{r}
 # gene-level
-gDEGenes_c2 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.1_diff_expr_genes_for_pc2.csv", select = c("Ensembl Gene ID", "FDR estimate"), data.table = F)
-gDEGenes_c2 <- gDEGenes_c2[gDEGenes_c2$`FDR estimate` < 0.1, "Ensembl Gene ID"]
+gDEGenes_c2 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_results/1.1_diff_expr_genes_for_pc2.csv", select = c("Ensembl Gene ID", "FDR estimate"), data.table = F)
+gDEGenes_c2 <- unique(gDEGenes_c2[gDEGenes_c2$`FDR estimate` < 0.1, "Ensembl Gene ID"])
 
 # transcript-level
-tDEGenes_c2 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.3_diff_expr_transcripts_for_c2_new_pvalue_and_fdr.csv", select = c("FDR estimate", "Ensembl Gene ID"), data.table = F)
-tDEGenes_c2 <- tDEGenes_c2[tDEGenes_c2$`FDR estimate` < 0.1, "Ensembl Gene ID"]
+tDEGenes_c2 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_results/1.3_diff_expr_transcripts_for_c2_new_pvalue_and_fdr.csv", select = c("FDR estimate", "Ensembl Gene ID"), data.table = F)
+tDEGenes_c2 <- unique(tDEGenes_c2[tDEGenes_c2$`FDR estimate` < 0.1, "Ensembl Gene ID"])
 
 # exon-level
-eDEGenes_c2 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.3_diff_expr_exons_for_c2_new_pvalue_and_fdr.csv", select = c("FDR estimate", "Ensembl Gene ID"), data.table = F)
-eDEGenes_c2 <- eDEGenes_c2[eDEGenes_c2$`FDR estimate` < 0.1, "Ensembl Gene ID"]
+eDEGenes_c2 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_results/1.3_diff_expr_exons_for_c2_new_pvalue_and_fdr.csv", select = c("FDR estimate", "Ensembl Gene ID"), data.table = F)
+eDEGenes_c2 <- unique(eDEGenes_c2[eDEGenes_c2$`FDR estimate` < 0.1, "Ensembl Gene ID"])
 ```
 
 ## VENN diagram
@@ -278,7 +287,7 @@ eDEGenes_c2 <- eDEGenes_c2[eDEGenes_c2$`FDR estimate` < 0.1, "Ensembl Gene ID"]
 When, we will generate a VENN diagram for the overlap of found eDEGenes, tDEGenes and eDEGenes for PC2 and save it into a pdf file.  
 
 ```{r}
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/1.1_VENN_DEGenes_for_c2.pdf")
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/04_figures/1.1_VENN_DEGenes_for_c2.pdf")
 grid.newpage()
 overrideTriple=T
 draw.triple.venn(area1 = length(gDEGenes_c2), area2 = length(tDEGenes_c2), 
@@ -305,14 +314,15 @@ rm(gDEGenes_c2, tDEGenes_c2, eDEGenes_c2)
 
 ```{r}
 # tDEGenes
-tDEGenes_fuma <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/2.2.5_FUMA/Trans/FUMA_gene2func31297/gtex_v8_ts_DEG.txt", select = c("Category", "GeneSet", "p", "adjP"))
+tDEGenes_fuma <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_results/2.2.5_FUMA/Trans/FUMA_gene2func31297/gtex_v8_ts_DEG.txt", select = c("Category", "GeneSet", "p", "adjP"))
 tDEGenes_fuma$log_adjP <- -log10(tDEGenes_fuma$adjP)
 
 # eDEGenes
-eDEGenes_fuma <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/2.2.5_FUMA/Exon/FUMA_gene2func31296/gtex_v8_ts_DEG.txt", select = c("Category", "GeneSet", "p", "adjP"))
+eDEGenes_fuma <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_results/2.2.5_FUMA/Exon/FUMA_gene2func31296/gtex_v8_ts_DEG.txt", select = c("Category", "GeneSet", "p", "adjP"))
 eDEGenes_fuma <- eDEGenes_fuma[eDEGenes_fuma$adjP < 0.05, ]
 eDEGenes_fuma$log_adjP <- -log10(eDEGenes_fuma$adjP)
 eDEGenes_fuma <- eDEGenes_fuma[eDEGenes_fuma$Category == "DEG.twoside", ]
+eDEGenes_fuma <- eDEGenes_fuma[order(eDEGenes_fuma$GeneSet, decreasing = T), ]
 
 # merge tDEGenes and eDEGenes
 tDEGenes_fuma <- tDEGenes_fuma[tDEGenes_fuma$GeneSet %in% eDEGenes_fuma$GeneSet, ]
@@ -326,8 +336,8 @@ fuma <- rbind(tDEGenes_fuma, eDEGenes_fuma)
 Generate a barplot including the results of the down-regulated tDEGenes and eDEGenes. 
 
 ```{r}
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/1.1_barplot_eDEGenes_tDEGenes_FUMA.pdf", width = 9, height = 8)
-ggplot(eDEGenes_fuma, aes(y = log_adjP, x = GeneSet)) +
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/04_figures/1.1_barplot_eDEGenes_FUMA.pdf", width = 8, height = 8)
+ggplot(eDEGenes_fuma, aes(y = log_adjP, x = reorder(GeneSet, order(GeneSet, decreasing = T)))) +
     geom_bar(stat = "identity") +
     coord_flip() +
     theme_minimal() +
@@ -335,12 +345,8 @@ ggplot(eDEGenes_fuma, aes(y = log_adjP, x = GeneSet)) +
     xlab("") +
     ggtitle("eDEGenes") +
     scale_y_continuous(expand = c(0.02, 0.01)) +
-    theme(axis.ticks = element_line(colour = NA), text = element_text(size = 22), panel.background = element_rect(fill = NA), panel.grid.major.x = element_line(colour = "grey"), panel.grid.minor.x = element_line(colour = "grey"), strip.background =element_rect(fill = NA))
+    theme(axis.ticks = element_line(colour = NA), text = element_text(size = 22), panel.background = element_rect(fill = NA), panel.grid.major.x = element_line(colour = "grey"), panel.grid.minor.x = element_line(colour = "grey"), strip.background = element_rect(fill = NA))
 dev.off()
-
-p <- ggplot(fuma, aes(y = log_adjP, x = GeneSet)) +
-
-p + facet_wrap(~ type, scale = "free_x") + theme(panel.spacing = unit(2, "lines"))
 ```
 
 After finishing all analysis, we will delete unnecessary data. 
@@ -358,11 +364,11 @@ First, we will read in the tDEGenes and eDEGenes for diagnosis.
 
 ```{r}
 # tDEGenes 
-tDEGenes <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.3_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.csv", sep = "\t", select = c("Gene Symbol", "FDR estimate"), stringsAsFactors = F)
+tDEGenes <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_results/1.3_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.csv", sep = "\t", select = c("Gene Symbol", "FDR estimate"), stringsAsFactors = F)
 tDEGenes <- tDEGenes[tDEGenes$`FDR estimate` < 0.1, `Gene Symbol`]
 
 # eDEGenes
-eDEGenes <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/1.3_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.csv", sep = "\t", select = c("Gene Symbol", "FDR estimate"), stringsAsFactors = F)
+eDEGenes <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_results/1.3_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.csv", sep = "\t", select = c("Gene Symbol", "FDR estimate"), stringsAsFactors = F)
 
 # save background gene number (all given genes from the dataset)
 background_genes <- as.data.frame(eDEGenes[!is.na(eDEGenes$`Gene Symbol`) & eDEGenes$`Gene Symbol` != "", ])[, "Gene Symbol"]
@@ -376,7 +382,7 @@ eDEGenes <- eDEGenes[eDEGenes$`FDR estimate` < 0.1, `Gene Symbol`]
 Before, we perform the GSEA, we will generate a VENN diagram of the overlap of the tDEGenes and eDEGenes. As all six tDEGenes are also eDEGene hits, the VENN diagram should display a huge circle (2,224 eDEGenes) with a smaller circle (6 tDEGenes) inside. 
 
 ```{r}
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/1.3_VENN_tDEGenes_eDEGenes_overlap.pdf")
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/04_figures/1.3_VENN_tDEGenes_eDEGenes_overlap.pdf")
 grid.newpage()
 draw.pairwise.venn(area1 = length(tDEGenes), area2 = length(eDEGenes), cross.area = length(intersect(tDEGenes, eDEGenes)), fill = c(rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)), category = c(paste("tDEGenes", length(tDEGenes), sep = "\n"), paste("eDEGenes", length(eDEGenes), sep = "\n")), lty = "blank", cex = 2)
 dev.off()
@@ -414,20 +420,23 @@ for (gset in all_canonical) {
  cp_mgsa <- c(cp_mgsa, t)
 }
 names(cp_mgsa) <- names(all_canonical)
-#set.seed(0)  # necessary to get the same results all the time!!
+set.seed(0)  # necessary to get the same results all the time!!
 cp_res <- mgsa(o = as.character(eDEGenes[!is.na(eDEGenes)]), sets = cp_mgsa, population = as.character(background_genes))
 plot(cp_res)
+dev.off()
 
 mgsa_res_cp <- setsResults(cp_res)
 head(mgsa_res_cp[order(mgsa_res_cp$estimate, decreasing = T),])
-write.table(mgsa_res_cp, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/3_GSEA_MGSA_MSigDB_c2_canonical_pathways_results.tsv")
+write.table(mgsa_res_cp, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_results/3_GSEA_MGSA_MSigDB_c2_canonical_pathways_results.tsv")
 
 # save only the significant pathways (score > 0.5)
-plot_mgsa_cp <- as.data.frame(head(mgsa_res_cp[order(mgsa_res_cp$estimate, decreasing = T), ], 10))
+mgsa_res_cp <- mgsa_res_cp[mgsa_res_cp$estimate > 0.5, ]
+mgsa_res_cp <- mgsa_res_cp[!(row.names(mgsa_res_cp) == "NA"), ]
+plot_mgsa_cp <- as.data.frame(mgsa_res_cp[order(mgsa_res_cp$estimate, decreasing = T), ])
 ## set the levels in order we want
 bp <- ggplot(data = plot_mgsa_cp, aes(x = reorder(row.names(plot_mgsa_cp), estimate), y = estimate)) + geom_bar(stat = "identity") + xlab("") + coord_flip() + theme_minimal() + ggtitle("MsigDB: c2 - cp")
-bp + geom_hline(yintercept = 0.5, linetype="dashed", color = "red")
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/1.1_barplot_eDEGenes_MSigDB_top10_enriched_c2_canonical_pathways.pdf", width = 5, height = 4)
+bp + geom_hline(yintercept = 0.5, linetype = "dashed", color = "red")
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/04_figures/1.1_barplot_eDEGenes_MSigDB_top10_enriched_c2_canonical_pathways.pdf", width = 5, height = 2)
 ```
 
 ### MSigDB - GO gene sets
@@ -445,19 +454,106 @@ plot(go_res)
 
 mgsa_res_go <- setsResults(go_res)
 head(mgsa_res_go[order(mgsa_res_go$estimate, decreasing = T),])
-write.table(mgsa_res_go, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/3_GSEA_MGSA_MSigDB_c5_all_GO_gene_sets_results.tsv")
+write.table(mgsa_res_go, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_results/3_GSEA_MGSA_MSigDB_c5_all_GO_gene_sets_results.tsv")
 
 # save only the 10 pathways with the highest estimate
 plot_mgsa_go <- as.data.frame(head(mgsa_res_go[order(mgsa_res_go$estimate, decreasing = T), ], 10))
 ## set the levels in order we want
 bp <- ggplot(data = plot_mgsa_go, aes(x = reorder(row.names(plot_mgsa_go), estimate), y = estimate)) + geom_bar(stat = "identity") + xlab("") + coord_flip() + theme_minimal() + ggtitle("MsigDB: c5 - GO")
 bp + geom_hline(yintercept = 0.5, linetype="dashed", color = "red")
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/1.1_barplot_eDEGenes_MSigDB_top10_enriched_c5_all_GO_gene_sets.pdf", width = 6, height = 4)
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/04_figures/1.1_barplot_eDEGenes_MSigDB_top10_enriched_c5_all_GO_gene_sets.pdf", width = 6, height = 4)
 ```
 
 
+# Transcripts per Gene
+
+Now, we will plot the distribution of Ensembl Transcript IDs per Ensembl Gene ID. We will plot the distribution in our filtered expression dataset as well as the original transcripts per gene found in GENCODE (for hg19). 
+
+```{r, echo = F}
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_transcript_summaries_annotated.RData")
+features <- fData(transcript_summaries)[, c("transcript_id", "gene_id")]
+features <- separate_rows(features, transcript_id, gene_id, sep = "\\|")
+features <- features[!duplicated(features), ]
+freqs <- as.data.frame(table(as.data.frame(table(features$gene_id))$Freq))
+
+# load gene to transcript info from Gencode and filter exactly like in the preprocessing step
+genes <- import.gff("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/annotation_files/gencode.v19.annotation.gtf", format = "gtf")
+genes <- genes[genes$gene_type == "protein_coding"]  
+genes <- genes[genes$type == "transcript"]
+genes <- genes[genes$source == "HAVANA"]
+genes <- as.data.frame(genes)[, c("gene_id", "transcript_id")]
+
+# get only Ensembl gene IDs for which we have transcripts (see above)
+genes <- genes[genes$gene_id %in% features$gene_id, ]
+genes <- genes[!duplicated(genes), ]
+freqs2 <- as.data.frame(table(as.data.frame(table(genes$gene_id))$Freq))
+
+# merge the two datasets
+tfreq <- merge(freqs, freqs2, by = "Var1", all = T)
+tfreq[is.na(tfreq$Freq.x), "Freq.x"] <- 0
+tfreq[is.na(tfreq$Freq.y), "Freq.y"] <- 0
+colnames(tfreq) <- c("TranscriptCount", "ExpressionFreq", "OriginalFreq")
+tfreq <- reshape2::melt(tfreq, id.vars = "TranscriptCount")
+tfreq$TranscriptCount <- as.numeric(tfreq$TranscriptCount)
+
+ggplot(tfreq, aes(x = TranscriptCount, y = value, color = variable)) +
+  geom_line(size = 1.2) +
+  theme_minimal() +
+  theme(text = element_text(size = 15), legend.position = c(0.9, 0.9), legend.box.background = element_rect(colour = "black"), legend.title = element_blank()) +
+  scale_x_continuous(expand = c(0.015, 0)) +
+  scale_y_continuous(expand = c(0.01, 0)) +
+  labs(x = "# transcripts per gene", y = "# genes") +
+  scale_color_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D"), labels = c("Own data", "GENCODE"))  
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/04_figures/1.3_plot_transcripts_per_gene_gencode_vs_own_data.pdf")
+rm(features, genes, freqs, freqs2, tfreq)
+```
+
+
+# Exons per Gene
+
+Now, we will plot the distribution of Ensembl Exon IDs per Ensembl Gene ID. We will plot the distribution in our filtered expression dataset as well as the original exons per gene found in GENCODE (for hg19). 
+
+```{r, echo = F}
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_exon_summaries_annotated.RData")
+features <- fData(exon_summaries)[, c("exon_id", "gene_id")]
+features <- separate_rows(features, exon_id, gene_id, sep = "\\|")
+features <- features[!duplicated(features), ]
+freqs <- as.data.frame(table(as.data.frame(table(features$gene_id))$Freq))
+
+# load gene to transcript info from Gencode and filter exactly like in the preprocessing step
+genes <- import.gff("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/annotation_files/gencode.v19.annotation.gtf", format = "gtf")
+genes <- genes[genes$gene_type == "protein_coding"]  
+genes <- genes[genes$type == "exon"]
+genes <- genes[genes$source == "HAVANA"]
+genes <- as.data.frame(genes)[, c("gene_id", "exon_id")]
+
+# get only Ensembl gene IDs for which we have exons (see above)
+genes <- genes[genes$gene_id %in% features$gene_id, ]
+genes <- genes[!duplicated(genes), ]
+freqs2 <- as.data.frame(table(as.data.frame(table(genes$gene_id))$Freq))
+
+# merge the two datasets
+tfreq <- merge(freqs, freqs2, by = "Var1", all = T)
+tfreq[is.na(tfreq$Freq.x), "Freq.x"] <- 0
+tfreq[is.na(tfreq$Freq.y), "Freq.y"] <- 0
+colnames(tfreq) <- c("ExonCount", "ExpressionFreq", "OriginalFreq")
+tfreq <- reshape2::melt(tfreq, id.vars = "ExonCount")
+tfreq$ExonCount <- as.numeric(tfreq$ExonCount)
+
+ggplot(tfreq, aes(x = ExonCount, y = value, color = variable)) +
+  geom_line(size = 1.2) +
+  theme_minimal() +
+  theme(text = element_text(size = 15), legend.position = c(0.9, 0.9), legend.box.background = element_rect(colour = "black"), legend.title = element_blank()) +
+  scale_x_continuous(expand = c(0.015, 0)) +
+  scale_y_continuous(expand = c(0.01, 0)) +
+  labs(x = "# transcripts per gene", y = "# genes") +
+  scale_color_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D"), labels = c("Own data", "GENCODE"))  
+ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/04_figures/1.3_plot_exons_per_gene_gencode_vs_own_data.pdf")
+rm(features, genes, freqs, freqs2, tfreq)
+```
+
 # Session Info
 
-```{r, eval = F}
+```{r}
 sessionInfo()
 ```
