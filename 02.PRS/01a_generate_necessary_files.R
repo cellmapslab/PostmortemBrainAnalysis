@@ -67,5 +67,12 @@ if(length(args) == 0){
 
   ### 4. Save only FID, IID and DX (Diagnosis)
   pheno <- pData[, c("IID", "Dx")]
+  pheno[, ] <- lapply(pheno[, ], as.character) # change all factors to character
+
+  # change Diagnosis (Dx) from characters to numbers with all NON controls as one case (CTL = , SCZ/BPD/MDD = 2) 
+  pheno[pheno$Dx == "CTL", "Dx"] <- "1"
+  pheno[pheno$Dx %in% c("SCZ", "BPD", "MDD"), "Dx"] <- "2"
+
+  # write phenotypes into file
   write.table(pheno, file = output4, sep = "\t", quote = FALSE, row.names = FALSE, col.names = FALSE)
 }

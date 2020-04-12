@@ -11,17 +11,20 @@ Steps done by running this script:
    - exclude samples with ZNP or MD in the IID (we assume that they come from other projects), 
    - filter for MAF > 1% (0.01) + HWE < 6 (-log10(1e-06)), 
    - remove NA in first column using the -omit-chromosome parameter
-2. Merge all chr files together to generate one .gen.gz file and copy the sample file of chr1
-3. Use PLINK to generate .bed/.bim/.fam files out of the merged chr files
-4. Use PLINK to filter genotype data for samples with gene expression data (169 samples in total)
+2. Change SNP IDs to Chr:Pos and remove multiallelic SNPs
+3. Merge all chr files together to generate one .gen.gz file and copy the sample file of chr1
+4. Use PLINK to generate .bed/.bim/.fam files out of the merged chr files
+5. Remove duplicated SNPs
+6. Use PLINK to filter genotype data for samples with gene expression data (169 samples in total)
 
-Usage: bash 01b_prepare_genotypes.sh -g <path/to/genotype-files> -e <exclude-file> -i <include-file> -o <path/to/store/output-files> -t <path/to/tools>
+Usage: bash 01b_prepare_genotypes.sh -g <path/to/genotype-files> -e <exclude-file> -i <include-file> -o <path/to/store/output-files> -t <path/to/tools> -s <path/to/scripts>
 
 -g  --genotypes   path to the genotype (chromosome based) files after imputation
 -e  --exclude     file (name with path) including all sample IDs to exclude for further analyses steps (samples coming from other projects)
 -i  --include     file (name with path) including all sample IDs for which expression data is also available and we want to keep for further analyses
 -o  --out         path to store the output files into
 -t  --tools       path to the neccessary tools
+-s  --scripts     path to the script (code) files
 
 optional:
 -h  --help        show this help text
@@ -34,6 +37,7 @@ exclude=  # file with IDs to exclude
 include=  # file with IDs to include (samples with expression data)
 out_path=  # directory, to store the output files into, here: /storage/groups/groups_ccm/workspace/MPIP-Dean_postmortem_brain/01.GWAS/01_preprocessed_genotypes"
 tools_path=  # path to the tools needed for the script 
+scripts_path=  # path to the script (code) files
 
 # Function which prints the help variable
 opt_h() {
@@ -59,6 +63,9 @@ while [ "$1" != "" ]; do
         -t | --tools )      shift
                             tools_path=$1
                             ;;
+        -s | --scripts )    shift
+                            scripts_path=$1
+                            ;;
         -h | --help )       opt_h
                             exit
                             ;;
@@ -70,7 +77,7 @@ done
 
 
 # Check, if all necessary parameters are given
-if [ $genotypes ] && [ $exclude ] && [ $include ] && [ $out_path ] && [ $tools_path ]; then
+if [ $genotypes ] && [ $exclude ] && [ $include ] && [ $out_path ] && [ $tools_path ] && [ $scripts_path ]; then
 
     chromosome=($(seq 1 1 22))
 
@@ -95,7 +102,7 @@ if [ $genotypes ] && [ $exclude ] && [ $include ] && [ $out_path ] && [ $tools_p
 
     # 2. Reorder: recode SNP ID and remove Multiallelic SNPs
     for chr in ${chromosome[@]} ; do
-        Rscript ${script_path}/01c_prepare_genotypes.R ${maf_hwe_out_path}/pmb_info06_chr${chr}_maf0.01 ${recoded_out_path}/pmb_info06_chr${chr}_maf0.01 ${tools_path} &>> ${recoded_out_path}/1.2_changed_IDs_MAF0.01.log
+        Rscript ${scripts_path}/01c_prepare_genotypes.R ${maf_hwe_out_path}/pmb_info06_chr${chr}_maf0.01 ${recoded_out_path}/pmb_info06_chr${chr}_maf0.01 ${tools_path} &>> ${recoded_out_path}/1.2_changed_IDs_MAF0.01.log
         rm ${recoded_out_path}/pmb_info06_chr${chr}_maf0.01_renamed.*
         gzip ${recoded_out_path}/pmb_info06_chr${chr}_maf0.01_renamed_noMultiAllelicSNPs.gen
     done
