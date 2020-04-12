@@ -132,4 +132,15 @@ mv ${out_genotypes}/2.1_sumstats_liftover_and_removed_D_I/Cross_disorder_hg19.su
 # 4) Change all SNP IDs in the summary statistics file to following example format: chr10:10001753 & leave first line untouched
 awk 'NR>1 {$2=$1":"$5} 1' OFS="\t" ${out_genotypes}/2.1_sumstats_liftover_and_removed_D_I/Cross_disorder_hg19.sumstats > ${out_genotypes}/2.2_sumstats_changed_IDs/Cross_disorder_hg19.sumstats
 
+# 2.1.12 CDG2
+# -------------------------------------------------------
+# 1) cdg2 summary statistics file, change columns to order: CHR - MarkerName - POS (atm: MarkerName - CHR - POS)
+awk 'BEGIN {OFS="\t";} {tmp=$2; $2=$3; $3=tmp; print $0;}' OFS="\t" ${sum_stats_path}/CDG2-2019/pgc_cdg2_meta_no23andMe_oct2019_v2.txt.daner.txt > ${out_genotypes}/2.1_sumstats_liftover_and_removed_D_I/GWAS_CDG2_excl23andMe.txt
+# 2) Remove all deletions (D), insertions (I) and other strange alleles (<CN0>, <CN2>, <INS..:>) in the EA summary statistic file
+awk '{ if (!index($2, "D") && !index($2, "I") && !index($2, "<")) { print $0; } }' OFS="\t" ${out_genotypes}/2.1_sumstats_liftover_and_removed_D_I/GWAS_CDG2_excl23andMe.txt > ${out_genotypes}/2.1_sumstats_liftover_and_removed_D_I/CDG2_excl23andMe.sumstats
+# 3) Remove old BMI file
+rm ${out_genotypes}/2.1_sumstats_liftover_and_removed_D_I/GWAS_CDG2_excl23andMe.txt
+# 4) Change all SNP IDs in the summary statistic file to following example format: chr:pos, e.g. chr10:10001753 & leave first line untouched
+awk ' {$2="chr"$1":"$3} 1' OFS="\t" ${out_genotypes}/2.1_sumstats_liftover_and_removed_D_I/CDG2_excl23andMe.sumstats > ${out_genotypes}/2.2_sumstats_changed_IDs/CDG2_excl23andMe.sumstats
+
 

@@ -64,3 +64,6 @@ wait
 Rscript --slave ${script_path}/PRSice.R --prsice ${script_path}/PRSice_linux --base ${sumstats_path}/EA.sumstats --target ${target} --ld ${ld_reference} --pheno ${phenotypes} --cov ${covariates} --cov-factor Sex,Suicide,Type_of_Death  --ignore-fid --thread 1 --A1 A1 --A2 A2 --stat Beta --pvalue Pval --snp MarkerName --binary-target F --print-snp --beta --clump-kb 1000 --clump-r2 0.2 --score avg --all-score --out ${out_path}/EA/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_ea_filtered_PRSice-2_PRS &> ${out_path}/EA/PRSice-2
 wait
 
+####CDG2#########
+Rscript --slave ${script_path}/PRSice.R --prsice ${script_path}/PRSice_linux --base ${sumstats_path}/CDG2_excl23andMe.sumstats --target ${target} --ld ${ld_reference} --pheno ${phenotypes} --cov ${covariates} --cov-factor Sex,Suicide,Type_of_Death  --ignore-fid --thread 1 --A1 REF --A2 ALT --stat BETA --pvalue PVAL --snp ID --binary-target T --print-snp --clump-kb 1000 --clump-r2 0.2 --score avg --all-score --out ${out_path}/Cross_Disorder-2/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_cd_filtered_PRSice-2_PRS &> ${out_path}/Cross_Disorder-2/PRSice-2
+

@@ -31,8 +31,8 @@ Following analyses will be performed:
   - Run MatrixEQTL
   - Clump eSNPs using PLINK (LD clumping)
   - Generate GRanges objects (and save as .Rds files)
+  - eSNP based annotation and resampling 
   - Evaluate and plot results
-  - eSNP based annotation and resampling
 6. **Smoothing**
   - Generate trans-eQTLs
   - Filter, reweight and filter & reweight PRS using eQTLs or public data

@@ -53,28 +53,29 @@ if(length(args)==0){
         cvrt$fileSkipColumns = 1       # one column of row labels
         if(length(cov_file) > 0){
            cvrt$LoadFile(cov_file)  # read file if given
-    }
+        }
 
-    # 3. Run Matrix_eQTL
-    # Gene Expr x SNP
-    me = Matrix_eQTL_main(
-        snps = snps, 
-        gene = gene, 
-        cvrt = cvrt,
-        output_file_name = outfile_trans,
-        pvOutputThreshold = pvOutputThreshold_tra , #pvOutputThreshold_tra only cis
-        useModel = useModel, 
-        errorCovariance = errorCovariance, 
-        verbose = TRUE, 
-        output_file_name.cis = outfile_cis,
-        pvOutputThreshold.cis = pvOutputThreshold_cis,
-        snpspos = snpspos, 
-        genepos = genepos,
-        cisDist = cisDist,
-        pvalue.hist = "qqplot",
-        min.pv.by.genesnp = FALSE,
-        noFDRsaveMemory = FALSE)
-    return(me)
+        # 3. Run Matrix_eQTL
+        # Gene Expr x SNP
+        me = Matrix_eQTL_main(
+            snps = snps, 
+            gene = gene, 
+            cvrt = cvrt,
+            output_file_name = outfile_trans,
+            pvOutputThreshold = pvOutputThreshold_tra , #pvOutputThreshold_tra only cis
+            useModel = useModel, 
+            errorCovariance = errorCovariance, 
+            verbose = TRUE, 
+            output_file_name.cis = outfile_cis,
+            pvOutputThreshold.cis = pvOutputThreshold_cis,
+            snpspos = snpspos, 
+            genepos = genepos,
+            cisDist = cisDist,
+            pvalue.hist = "qqplot",
+            min.pv.by.genesnp = FALSE,
+            noFDRsaveMemory = FALSE
+        )
+        return(me)
     }
 
     # Load SNP and gene positions
@@ -82,11 +83,10 @@ if(length(args)==0){
     snpspos <- read.table("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/02_matrixeqtl_input/SNP_locations.txt", header = T, stringsAsFactors = FALSE, sep = "\t") # snp chr pos
     head(snpspos)
     # load exon location file
-    genepos <- read.table("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/02_matrixeqtl_input/exon_locations.txt", header = T, stringsAsFactors = FALSE, sep = "\t") # geneid chr start end
+    genepos <- read.table(pos, header = T, stringsAsFactors = FALSE, sep = "\t") # geneid chr start end
     genepos <- genepos[!is.na(genepos$start), ]  # remove NA's
     head(genepos)
 
     # Run matrixEQTL For cis-eQTLs
-    me.all <- run_matrix_eqtl(SNP_file = snps, expression_file = chunk, cov_file = cov, outfile_cis = ciso, outfile_trans = transo, cis = 1, trans = 0)
+    me.all <- run_matrix_eqtl(SNP_file = snps, expression_file = expr, cov_file = cov, outfile_cis = ciso, outfile_trans = transo, cis = 1, trans = 0)
 }
-

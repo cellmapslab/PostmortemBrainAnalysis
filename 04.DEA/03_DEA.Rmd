@@ -341,6 +341,7 @@ top_hits_age <- GenerateResultTableGene(fit, variable = "Age", file =  "1.1_diff
 top_hits_ph <- GenerateResultTableGene(fit, variable = "pH", file =  "1.1_diff_expr_genes_for_ph.csv")
 top_hits_pmi <- GenerateResultTableGene(fit, variable = "PMI", file =  "1.1_diff_expr_genes_for_pmi.csv")
 top_hits_c2 <- GenerateResultTableGene(fit, variable = "C2", file =  "1.1_diff_expr_genes_for_pc2.csv")
+top_hits_c1 <- GenerateResultTableGene(fit, variable = "C1", file =  "1.1_diff_expr_genes_for_pc1.csv")
 
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "DxCASE", file = "1.1_volcano_plot_diff_expr_genes_for_diagnosis.pdf")
@@ -555,6 +556,7 @@ top_hits_age <- GenerateResultTableTranscript(fit, variable = "Age", file =  "1.
 top_hits_ph <- GenerateResultTableTranscript(fit, variable = "pH", file =  "1.3_diff_expr_transcripts_for_ph_new_pvalue_and_fdr.csv")
 top_hits_pmi <- GenerateResultTableTranscript(fit, variable = "PMI", file =  "1.3_diff_expr_transcripts_for_pmi_new_pvalue_and_fdr.csv")
 top_hits_c2 <- GenerateResultTableTranscript(fit, variable = "C2", file =  "1.3_diff_expr_transcripts_for_c2_new_pvalue_and_fdr.csv")
+top_hits_c1 <- GenerateResultTableTranscript(fit, variable = "C1", file =  "1.3_diff_expr_transcripts_for_c1_new_pvalue_and_fdr.csv")
 
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "DxCASE", file = "1.3_volcano_plot_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.pdf")
@@ -941,7 +943,7 @@ top_hits_age <- GenerateResultTableExon(fit, variable = "Age", file =  "1.3_diff
 top_hits_ph <- GenerateResultTableExon(fit, variable = "pH", file =  "1.3_diff_expr_exons_for_ph_new_pvalue_and_fdr.csv")
 top_hits_pmi <- GenerateResultTableExon(fit, variable = "PMI", file =  "1.3_diff_expr_exons_for_pmi_new_pvalue_and_fdr.csv")
 top_hits_c2 <- GenerateResultTableExon(fit, variable = "C2", file =  "1.3_diff_expr_exons_for_c2_new_pvalue_and_fdr.csv")
-
+top_hits_c1 <- GenerateResultTableExon(fit, variable = "C1", file =  "1.3_diff_expr_exons_for_c1_new_pvalue_and_fdr.csv")
 
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "DxCASE", file = "1.3_volcano_plot_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.pdf")

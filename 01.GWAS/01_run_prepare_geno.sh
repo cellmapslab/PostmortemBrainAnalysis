@@ -3,7 +3,9 @@ genotypes="/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/2018-1
 sample_file="${genotypes}/pmb_info06_chr1.sample"
 sample_sheet="/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/2019-04-09_sample_sheet_KW.txt"
 outpath="/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/01.GWAS"
-outpath_geno="${outpath}/01_preprocessed_genotypes"
+# Generate the output directory (if not existing)
+outpath_geno="${outpath}/01_preprocessed_genotypes"  # quality control output path
+mkdir -p $outpath_geno
 output1="${outpath_geno}/exclude_samples.txt"
 output2="${outpath_geno}/samples_with_expression.txt"
 output3="${outpath}/covar.txt"

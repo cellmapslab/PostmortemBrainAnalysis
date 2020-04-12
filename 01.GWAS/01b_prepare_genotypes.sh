@@ -74,6 +74,12 @@ if [ $genotypes ] && [ $exclude ] && [ $include ] && [ $out_path ] && [ $tools_p
 
     chromosome=($(seq 1 1 22))
 
+    # Generate the output directory (if not existing)
+    maf_hwe_out_path="${out_path}/1.1_MAF_HWE_filtered"  # output path for maf and hwe filtered data
+    merged_out_path="${out_path}/1.2_merged_chr"  # output path for merged files
+    filtered_out_path="${out_path}/1.3_samples_filtered"  # output path for expression filtered sample data
+    mkdir -p $maf_hwe_out_path $merged_out_path $filtered_out_path
+
     ##############################
     ### Prepare Genotype Files ###
     ##############################
@@ -82,21 +88,21 @@ if [ $genotypes ] && [ $exclude ] && [ $include ] && [ $out_path ] && [ $tools_p
     # 	2) Filter for MAF > 1% (0.01) + HWE < 6 (-log10(1e-06))
     # 	3) Remove NA in first column using the -omit-chromosome parameter
     for chr in ${chromosome[@]} ; do # go through all genotype files
-        $tools_path/qctool_v1.5/qctool -g ${genotypes}/pmb_info06_chr${chr}.gen.gz -s ${genotypes}/pmb_info06_chr${chr}.sample -hwe 6 -maf 0.01 1 -excl-samples ${exclude} -filetype gen -omit-chromosome -og ${out_path}/1.1_MAF_HWE_filtered/pmb_info06_chr${chr}_maf0.01.gen.gz -os ${out_path}/1.1_MAF_HWE_filtered/pmb_info06_chr${chr}_maf0.01.sample &>> ${out_path}/1.1_MAF_HWE_filtered/1.1_MAF_0.01_HWE_6_filtered.log
+        $tools_path/qctool_v1.5/qctool -g ${genotypes}/pmb_info06_chr${chr}.gen.gz -s ${genotypes}/pmb_info06_chr${chr}.sample -hwe 6 -maf 0.01 1 -excl-samples ${exclude} -filetype gen -omit-chromosome -og ${maf_hwe_out_path}/pmb_info06_chr${chr}_maf0.01.gen.gz -os ${maf_hwe_out_path}/pmb_info06_chr${chr}_maf0.01.sample &>> ${maf_hwe_out_path}/1.1_MAF_0.01_HWE_6_filtered.log
     done
     echo "1. MAF & HWE filtering done"
 
     # 2. Merge all chr files together to generate one .gen.gz file and copy the sample file of chr1
     command=""
     for chr in ${chromosome[@]} ; do
-        command="${command}${out_path}/1.1_MAF_HWE_filtered/pmb_info06_chr${chr}_maf0.01.gen.gz "
+        command="${command}${maf_hwe_out_path}/pmb_info06_chr${chr}_maf0.01.gen.gz "
     done
-    cat $command > ${out_path}/1.2_merged_chr/pmb_info06_all_chr_maf0.01_merged.gen.gz  # run cat
-    cp ${out_path}/1.1_MAF_HWE_filtered/pmb_info06_chr1_maf0.01.sample ${out_path}/1.2_merged_chr/pmb_info06_all_chr_maf0.01_merged.sample  # copy sample file and change its name
+    cat $command > ${merged_out_path}/pmb_info06_all_chr_maf0.01_merged.gen.gz  # run cat
+    cp ${maf_hwe_out_path}/pmb_info06_chr1_maf0.01.sample ${merged_out_path}/pmb_info06_all_chr_maf0.01_merged.sample  # copy sample file and change its name
     echo "2. Merging done"
 
     # 3. Filter genotype data for samples with gene expression data (169 samples in total) and generate .bed/.bim/.fam files out of the merged chr files
-    $tools_path/PLINK/plink --gen ${out_path}/1.2_merged_chr/pmb_info06_all_chr_maf0.01_merged.gen.gz --sample ${out_path}/1.2_merged_chr/pmb_info06_all_chr_maf0.01_merged.sample --keep ${include} --allow-no-sex --make-bed --out ${out_path}/1.3_samples_filtered/pmb_info06_all_chr_maf0.01_merged_samples_filtered
+    $tools_path/PLINK/plink --gen ${merged_out_path}/pmb_info06_all_chr_maf0.01_merged.gen.gz --sample ${merged_out_path}/pmb_info06_all_chr_maf0.01_merged.sample --keep ${include} --allow-no-sex --make-bed --out ${filtered_out_path}/pmb_info06_all_chr_maf0.01_merged_samples_filtered
     echo "3. Transformation and Filtering done"
 
 else
