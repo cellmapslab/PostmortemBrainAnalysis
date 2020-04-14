@@ -1,7 +1,7 @@
 # Use packages from own library (R version 3.6)
 .libPaths("/home/icb/karolina.worf/R/x86_64-pc-linux-gnu-library/3.6/")
 
-# First, install all necessary packages as well as lassosum (only done once inthe beginning)
+# First, install all necessary packages as well as lassosum (only done once in the beginning)
 #install.packages(c("RcppArmadillo", "data.table", "Matrix"), dependencies=TRUE)
 # Then, download lassosum in the terminal using following command:
 # wget https://github.com/tshmak/lassosum/releases/download/v0.4.4/lassosum_0.4.4.tar.gz

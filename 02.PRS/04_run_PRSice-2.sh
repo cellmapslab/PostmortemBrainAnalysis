@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # load R version 3.6.1 and its packages
-source /storage/groups/ccm01/code/PostmortemBrainAnalysis/02.PRS/05_makeenv.sh
+source /storage/groups/ccm01/code/PostmortemBrainAnalysis/02.PRS/04a_makeenv.sh
 script_path="/storage/groups/ccm01/tools/PRSice-2"
 out_path="/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/PRSice-2"
 sumstats_path="/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/preprocessed_sumstats/2.2_sumstats_changed_IDs"

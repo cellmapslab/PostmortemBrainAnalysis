@@ -71,10 +71,10 @@ if [ $cohort_path ] && [ $out_path ] && [ $tools_path ] && [ $scripts_path ]; th
 chromosome=($(seq 1 1 22))
 
     # Generate the output directory (if not existing)
-    maf_hwe_out_path="${out_path}/1.1_MAF_HWE_filtered"  # output path for maf and hwe filtered data
-    recoded_out_path="${out_path}/1.2_changed_IDs"  # output path for recoded and multiallelic filtered SNP IDs
-    merged_out_path="${out_path}/1.3_merged_chr"  # output path for merged files
-    removed_dups_out_path="${out_path}/1.4_dups_removed"  # output path for removed duplicates
+    maf_hwe_out_path="${out_path}/2.1_MAF_HWE_filtered"  # output path for maf and hwe filtered data
+    recoded_out_path="${out_path}/2.2_changed_IDs"  # output path for recoded and multiallelic filtered SNP IDs
+    merged_out_path="${out_path}/2.3_merged_chr"  # output path for merged files
+    removed_dups_out_path="${out_path}/2.4_dups_removed"  # output path for removed duplicates
     mkdir -p $maf_hwe_out_path $recoded_out_path $merged_out_path $removed_dups_out_path
 
     #####################################
@@ -90,7 +90,7 @@ chromosome=($(seq 1 1 22))
 
     # 2. Reorder: recode SNP ID and remove Multiallelic SNPs
     for chr in ${chromosome[@]} ; do
-        Rscript ${script_path}/02_sub_prepare_cohorts.R ${maf_hwe_out_path}/03_updateMap_${chr}_maf0.01_hwe ${recoded_out_path}/03_updateMap_${chr}_maf0.01_hwe ${tools_path} &>> ${recoded_out_path}/1.2_changed_IDs_MAF0.01.log
+        Rscript ${scripts_path}/02b_prepare_cohorts.R ${maf_hwe_out_path}/03_updateMap_${chr}_maf0.01_hwe ${recoded_out_path}/03_updateMap_${chr}_maf0.01_hwe ${tools_path} &>> ${recoded_out_path}/1.2_changed_IDs_MAF0.01.log
         rm ${recoded_out_path}/03_updateMap_${chr}_maf0.01_hwe_renamed.*
         gzip ${recoded_out_path}/03_updateMap_${chr}_maf0.01_hwe_renamed_noMultiAllelicSNPs.gen
     done
