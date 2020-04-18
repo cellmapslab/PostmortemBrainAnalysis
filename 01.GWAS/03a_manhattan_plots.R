@@ -2,6 +2,7 @@
 ### GWAS ###
 ############
 # Invoke the script in the commandline as follows: R CMD BATCH --slave "--args input=<path/input-file> output=<path/output-file>" 03a_manhattan_plots.R
+# or with Rscript: Rscript --slave 03a_manhattan_plots.R input=<path/input-file> output=<path/output-file>
 
 # add installed packages from home path to the library search path
 .libPaths("/home/icb/karolina.worf/R/x86_64-pc-linux-gnu-library/3.6/")
@@ -21,7 +22,7 @@ args = (commandArgs(trailingOnly = TRUE))
 
 # go through the list of arguments
 if(length(args) == 0){
-    cat("\nScript to generate manhattan plots.\n\nYou can invoke the script as follows:\nR CMD BATCH --slave '--args input=\"/home/.../input-file.txt\" output=\"/home/.../out-file.txt\"' 03a_manhattan_plots.R\nCommandline parameters:\n\ninput\t\tpath and filename of the GWAS result file\noutput\t\tpath and filename of the manhattan plot without ending (e.g. /home/.../manhattan_plot)\n\n")
+    cat("\nScript to generate manhattan plots.\n\nYou can invoke the script as follows:\nRscript --slave 03a_manhattan_plots.R input=\"/home/.../input-file.txt\" output=\"/home/.../out-file.txt\"\nCommandline parameters:\n\ninput\t\tpath and filename of the GWAS result file\noutput\t\tpath and filename of the manhattan plot without ending (e.g. /home/.../manhattan_plot)\n\n")
 } else {
     for(i in 1:length(args)){
         eval(parse(text = args[[i]]))

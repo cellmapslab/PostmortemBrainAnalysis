@@ -51,7 +51,7 @@ awk 'NR>1 {$2="chr"$1":"$3} 1' OFS="\t" ${sumstats} > ${output_sumstats}
 ###################
 ### ALCDEP-2018 ###
 ###################
-sumstats="${sum_stats_path}/ALCDEP-2018/pgc_alcdep.discovery.aug2018_release.txt"
+sumstats="${sum_stats_path}/ALCDEP-2018/pgc_alcdep.trans_fe_unrel_geno.aug2018_release.txt"
 output_sumstats="${outpath_sumstats}/ALCDEP-2018.sumstats"
 # Remove comment lines and change all SNP IDs in the GWAS summary statistic file to following example format: chr:pos, e.g. chr10:10001753 & leave first line untouched
 awk 'NR>1 {$2="chr"$1":"$3} 1' OFS="\t" ${sumstats} > ${output_sumstats}
@@ -78,13 +78,30 @@ awk 'NR>1 {$2="chr"$1":"$3} 1' OFS="\t" ${sumstats} > ${output_sumstats}
 sumstats="${sum_stats_path}/AUDIT-2018/AUDIT_UKB_2018_AJP.txt"
 output_sumstats="${outpath_sumstats}/AUDIT-2018.sumstats"
 # Remove comment lines and change all SNP IDs in the GWAS summary statistic file to following example format: chr:pos, e.g. chr10:10001753 & leave first line untouched
-awk '{split($2,a,"_"); $2="chr"a[1]} 1' OFS="\t" ${sumstats} > ${output_sumstats}
+awk 'NR>1 {split($2,a,"_"); $2="chr"a[1]} 1' OFS="\t" ${sumstats} > ${output_sumstats}
 
 ################
 ### BIP-2018 ###
 ################
 sumstats="${sum_stats_path}/BIP-2018/daner_PGC_BIP32b_mds7a_0416a"
 output_sumstats="${outpath_sumstats}/BIP-2018.sumstats"
+# Remove comment lines and change all SNP IDs in the GWAS summary statistic file to following example format: chr:pos, e.g. chr10:10001753 & leave first line untouched
+awk 'NR>1 {$2="chr"$1":"$3} 1' OFS="\t" ${sumstats} > ${output_sumstats}
+
+####################
+### BIP+SCZ-2018 ###
+####################
+# 1. BIPvsSCZ
+# ------------
+sumstats="${sum_stats_path}/BIP+SCZ-2018/BDvsSCZ.sumstats"
+output_sumstats="${outpath_sumstats}/BIPvsSCZ-2018.sumstats"
+# Remove comment lines and change all SNP IDs in the GWAS summary statistic file to following example format: chr:pos, e.g. chr10:10001753 & leave first line untouched
+awk 'NR>1 {$2="chr"$1":"$3} 1' OFS="\t" ${sumstats} > ${output_sumstats}
+
+# 2. BIP+SCZvsCONT
+# -----------------
+sumstats="${sum_stats_path}/BIP+SCZ-2018/BDSCZvsCONT.sumstats"
+output_sumstats="${outpath_sumstats}/BIPSCZvsCONT-2018.sumstats"
 # Remove comment lines and change all SNP IDs in the GWAS summary statistic file to following example format: chr:pos, e.g. chr10:10001753 & leave first line untouched
 awk 'NR>1 {$2="chr"$1":"$3} 1' OFS="\t" ${sumstats} > ${output_sumstats}
 
@@ -99,7 +116,7 @@ awk 'NR>1 {$1="chr"$2":"$3} 1' OFS="\t" ${sumstats} > ${output_sumstats}
 ################
 ### CAD-2017 ###
 ################
-sumstats="${sum_stats_path}/CAD-2017/UKBB.GWAS1KG.EXOME.CAD.SOFT.META.PublicRelease.300517.hg19.txt"
+sumstats="${sum_stats_path}/CAD-2017/UKBB.GWAS1KG.EXOME.CAD.SOFT.META.PublicRelease.300517.hg19.OR.txt"
 output_sumstats="${outpath_sumstats}/CAD-2017.sumstats"
 # Remove comment lines and change all SNP IDs in the GWAS summary statistic file to following example format: chr:pos, e.g. chr10:10001753 & leave first line untouched
 awk 'NR>1 {$2="chr"$3":"$4} 1' OFS="\t" ${sumstats} > ${output_sumstats}
@@ -206,24 +223,7 @@ awk 'NR>1 {$2="chr"$1":"$3} 1' OFS="\t" ${sumstats} > ${output_sumstats}
 sumstats="${sum_stats_path}/SCZ2-2014/scz2.snp.results.txt"
 output_sumstats="${outpath_sumstats}/SCZ2-2014.sumstats"
 # Remove comment lines and change all SNP IDs in the GWAS summary statistic file to following example format: chr:pos, e.g. chr10:10001753 & leave first line untouched
-awk 'NR>1 {$2="chr"$1":"$5} 1' OFS="\t" ${sumstats} > ${output_sumstats}
-
-####################
-### BIP+SCZ-2018 ###
-####################
-# 1. BIPvsSCZ
-# ------------
-sumstats="${sum_stats_path}/BIP+SCZ-2018/BDvsSCZ.sumstats"
-output_sumstats="${outpath_sumstats}/BPDvsSCZ-2018.sumstats"
-# Remove comment lines and change all SNP IDs in the GWAS summary statistic file to following example format: chr:pos, e.g. chr10:10001753 & leave first line untouched
-awk 'NR>1 {$2="chr"$1":"$3} 1' OFS="\t" ${sumstats} > ${output_sumstats}
-
-# 2. BIP+SCZvsCONT
-# -----------------
-sumstats="${sum_stats_path}/BIP+SCZ-2018/BDSCZvsCONT.sumstats"
-output_sumstats="${outpath_sumstats}/BIPSCZvsCONT-2018.sumstats"
-# Remove comment lines and change all SNP IDs in the GWAS summary statistic file to following example format: chr:pos, e.g. chr10:10001753 & leave first line untouched
-awk 'NR>1 {$2="chr"$1":"$3} 1' OFS="\t" ${sumstats} > ${output_sumstats}
+awk 'NR>1 {$2=$1":"$5} 1' OFS="\t" ${sumstats} > ${output_sumstats}
 
 ################
 ### T2D-2017 ###
@@ -239,5 +239,5 @@ awk 'NR>1 {$1="chr"$1} 1' OFS="\t" ${sumstats} > ${output_sumstats}
 sumstats="${sum_stats_path}/TS-2018/TS_Oct2018"
 output_sumstats="${outpath_sumstats}/TS-2018.sumstats"
 # Remove comment lines and change all SNP IDs in the GWAS summary statistic file to following example format: chr:pos, e.g. chr10:10001753 & leave first line untouched
-awk 'NR>1 {$2="chr"$1":"$3} 1' OFS="\t" ${sumstats} > ${output_sumstats}
+awk 'NR>1 {$1="chr"$2":"$3} 1' OFS="\t" ${sumstats} > ${output_sumstats}
 

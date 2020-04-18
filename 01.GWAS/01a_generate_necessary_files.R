@@ -2,6 +2,7 @@
 ### Generate input files for the preprcoessing of genotypes ###
 ###############################################################
 # Invoke the script in the commandline as follows: R CMD BATCH --slave "--args input1=<path/sample-file> input2=<path/sample-sheet> output1=<path/output-file1> output2=<path/output-file2> output3=<path/output-file3> output4=<path/output-file4>" 01a_generate_input_files.R
+# or using Rscript: Rscript --slave 01a_generate_necessary_files.R input1=\"/home/.../input-file1.txt\" input2=\"/home/.../input2.txt\" output1=\"/home/.../out-file1.txt\" output2=\"/home/.../out-file2.txt\" output3=\"/home/.../out-file3.txt\" output4=\"/home/.../out-file4.txt
 
 # add installed packages from home path to the library search path
 .libPaths("/home/icb/karolina.worf/R/x86_64-pc-linux-gnu-library/3.6/")
@@ -11,7 +12,7 @@ args = (commandArgs(trailingOnly = TRUE))
 
 # go through the list of arguments
 if(length(args) == 0){
-  cat("\nScript to generate files nexessary for the genotype preprocesing.\n\nYou can invoke the script as follows:\nR CMD BATCH --slave '--args input1=\"/home/.../input-file1.txt\" input2=\"/home/.../input2.txt\" output1=\"/home/.../out-file1.txt\" output2=\"/home/.../out-file2.txt\" output3=\"/home/.../out-file3.txt\" output4=\"/home/.../out-file4.txt\"' 01a_generate_necessary_files.R\nCommandline parameters:\n\ninput1\t\tpath and filename of the merged genotype probabilites (ending in gen.gz)\ninput2\t\tpath and filename of the sample file corresponding to the genotype file\noutput1\t\tpath and filename of the output file including all sample IDs to exclude from further analysis as they are coming from other (unknown) cohorts\noutput2\t\tpath and filename of the output file including the 169 samples we want to include in all analysis (samples including genotype AND expression data)\noutput3\t\tpath and filename of the output file including all covariates\noutput4\t\tpath and filename of the output file including the phenotypes\n\n")
+  cat("\nScript to generate files necessary for the genotype preprocesing.\n\nYou can invoke the script as follows:\nRcript --slave 01a_generate_necessary_files.R input1=\"/home/.../input-file1.txt\" input2=\"/home/.../input2.txt\" output1=\"/home/.../out-file1.txt\" output2=\"/home/.../out-file2.txt\" output3=\"/home/.../out-file3.txt\" output4=\"/home/.../out-file4.txt\"\nCommandline parameters:\n\ninput1\t\tpath and filename of the merged genotype probabilites (ending in gen.gz)\ninput2\t\tpath and filename of the sample file corresponding to the genotype file\noutput1\t\tpath and filename of the output file including all sample IDs to exclude from further analysis as they are coming from other (unknown) cohorts\noutput2\t\tpath and filename of the output file including the 169 samples we want to include in all analysis (samples including genotype AND expression data)\noutput3\t\tpath and filename of the output file including all covariates\noutput4\t\tpath and filename of the output file including the phenotypes\n\n")
 } else {
   for(i in 1:length(args)){
     eval(parse(text = args[[i]]))
@@ -91,3 +92,4 @@ if(length(args) == 0){
   pheno <- covars[, c("FID", "IID", "DX")]
   write.table(pheno, file = output4, sep = "\t", quote = FALSE, row.names = FALSE)
 }
+

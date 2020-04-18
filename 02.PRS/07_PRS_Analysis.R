@@ -3,7 +3,7 @@
 ####################
 # In this R script, we will analyze and plot all generated polygenic risk scores
 
-# 1. Load packages (for own R installation - version 3)
+# Load packages (for own R installation - version 3.6)
 .libPaths("/home/icb/karolina.worf/R/x86_64-pc-linux-gnu-library/3.6/")
 library(viridis) # for colorblind color palette
 library(data.table)
@@ -16,14 +16,8 @@ library(rcompanion)
 library(oligo)
 library(RColorBrewer)
 
-# 2. Load data (all different generated PRS)
-# load, filter and save phenotype data
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
-index <- which(is.na(pData(geneSummaries)$C1))  # remove all samples with C1 = NA
-dim(geneSummaries)
-pData <- pData(geneSummaries)
-rm(geneSummaries)
-
+# function to calculate Nagelkerkes R2 and p-value 
+# and generate a boxplot figure for a given PRS file (best PRS of PRSice-2)
 EvaluatePRS <- function(input, gwas, seperator, output){
   # 1. read file
   prs <- fread(file = input, sep = seperator, header = T, stringsAsFactors = F, select = c("IID", "PRS"))
@@ -62,67 +56,77 @@ EvaluatePRS <- function(input, gwas, seperator, output){
   return(prs)
 }
 
+# get PRS output path and generate the figures folder
 path = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS"
+# generate output (05_figures) folder
+system(paste0("mkdir ", path, "/05_figures"))
 
-### LDpred ###
-scz2_ldpred <- EvaluatePRS(input = paste0(path, "/LDpred/SCZ2/03_validate/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_scz2_filtered_PRS_LDpred_p4.0000e-01.txt"),
-                         gwas = "schizophrenia", seperator = ",",
-                         output = paste0(path, "/figures/boxplot_LDpred_PRS_SCZ2.pdf"))
-mdd2_ldpred <- EvaluatePRS(input = paste0(path, "/LDpred/MDD2/03_validate/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_mdd2_filtered_PRS_LDpred_p1.0000e+00.txt"), 
-                           gwas = "major depression disorder", seperator = ",",
-                           output = paste0(path, "/figures/boxplot_LDpred_PRS_MDD2.pdf"))
-bip_ldpred <- EvaluatePRS(input = paste0(path, "/LDpred/BIP-2018/03_validate/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_bip_filtered_PRS_LDpred_p3.0000e-02.txt"),
-                          gwas = "bipolar disorder", seperator = ",",
-                          output = paste0(path, "/figures/boxplot_LDpred_PRS_BIP.pdf"))
-cd_ldpred <- EvaluatePRS(input = paste0(path, "/LDpred/Cross_Disorder/03_validate/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_cd_filtered_PRS_LDpred_p1.0000e-01.txt"),
-                         gwas = "cross-disorder", seperator = ",",
-                         output = paste0(path, "/figures/boxplot_LDpred_PRS_CD.pdf"))
-
-### P+T ###
-mdd2_pt <- EvaluatePRS(input = paste0(path, "/LDpred/MDD2/04_P+T/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_mdd2_filtered_PRS_P+T_r0.20_p1.0000e+00.txt"), 
-                       gwas = "major depression disorder", seperator = ",",
-                       output = paste0(path, "/figures/boxplot_P+T_PRS_MDD2.pdf"))
-bip_pt <- EvaluatePRS(input = paste0(path, "/LDpred/BIP-2018/04_P+T/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_bip_filtered_PRS_P+T_r0.20_p5.0000e-02.txt"),
-                      gwas = "bipolar disorder", seperator = ",",
-                      output = paste0(path, "/figures/boxplot_P+T_PRS_BIP.pdf"))
-cd_pt <- EvaluatePRS(input = paste0(path, "/LDpred/Cross_Disorder/04_P+T/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_cd_filtered_PRS_P+T_r0.20_p5.0000e-02.txt"),
-                     gwas = "cross-disorder", seperator = ",",
-                     output = paste0(path, "/figures/boxplot_P+T_PRS_CD.pdf"))
+# load, filter and save phenotype data
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
+index <- which(is.na(pData(gene_summaries)$C1))  # remove all samples with C1 = NA
+dim(gene_summaries)
+pData <- pData(gene_summaries)
+rm(gene_summaries)
 
 ### PRSice-2 ###
-scz2_prsice <- EvaluatePRS(input = paste0(path, "/PRSice-2/SCZ2/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_scz2_filtered_PRSice-2_PRS.best"),
-                           gwas = "schizophrenia", seperator = " ",
-                           output = paste0(path, "/figures/boxplot_PRSice-2_PRS_SCZ2.pdf"))
-mdd2_prsice <- EvaluatePRS(input = paste0(path, "/PRSice-2/MDD2/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_mdd2_filtered_PRSice-2_PRS.best"), 
-                           gwas = "major depression disorder", seperator = " ",
-                           output = paste0(path, "/figures/boxplot_PRSice-2_PRS_MDD2.pdf"))
-bip_prsice <- EvaluatePRS(input = paste0(path, "/PRSice-2/BIP-2018/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_bip_filtered_PRSice-2_PRS.best"),
-                          gwas = "bipolar disorder", seperator = " ",
-                          output = paste0(path, "/figures/boxplot_PRSice-2_PRS_BIP.pdf"))
-cd_prsice <- EvaluatePRS(input = paste0(path, "/PRSice-2/Cross_Disorder/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_cd_filtered_PRSice-2_PRS.best"),
-                         gwas = "cross-disorder", seperator = " ",
-                         output = paste0(path, "/figures/boxplot_PRSice-2_PRS_CD.pdf"))
-adhd_prsice <- EvaluatePRS(input = paste0(path, "/PRSice-2/ADHD-2017/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_adhd_filtered_PRSice-2_PRS.best"),
-                           gwas = "attention deficite hyperactivity disorder", seperator = " ",
-                           output = paste0(path, "/figures/boxplot_PRSice-2_PRS_ADHD.pdf"))
-asd_prsice <- EvaluatePRS(input = paste0(path, "/PRSice-2/ASD/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_asd_filtered_PRSice-2_PRS.best"),
-                          gwas = "autism", seperator = " ",
-                          output = paste0(path, "/figures/boxplot_PRSice-2_PRS_ASD.pdf"))
-ea_prsice <- EvaluatePRS(input = paste0(path, "/PRSice-2/EA/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_ea_filtered_PRSice-2_PRS.best"),
-                         gwas = "educational attainment", seperator = " ",
-                         output = paste0(path, "/figures/boxplot_PRSice-2_PRS_EA.pdf"))
-bmi_prsice <- EvaluatePRS(input = paste0(path, "/PRSice-2/BMI/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_bmi_filtered_PRSice-2_PRS.best"),
-                          gwas = "body mass index", seperator = " ",
-                          output = paste0(path, "/figures/boxplot_PRSice-2_PRS_BMI.pdf"))
-bip_vs_scz_prsice <- EvaluatePRS(input = paste0(path, "/PRSice-2/BIPvsSCZ/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_bip_vs_scz_filtered_PRSice-2_PRS.best"),
-                                 gwas = "bipolar disorder vs. schizophrenia", seperator = " ",
-                                 output = paste0(path, "/figures/boxplot_PRSice-2_PRS_BIP_vs_SCZ.pdf"))
-bip_scz_vs_ctl_prsice <- EvaluatePRS(input = paste0(path, "/PRSice-2/BIP+SCZvsCONT/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_bip_scz_vs_cont_filtered_PRSice-2_PRS.best"),
-                                     gwas = "bipolar disorder + schizophrenia", seperator = " ",
-                                     output = paste0(path, "/figures/boxplot_PRSice-2_PRS_BIP+SCZ_vs_CTL.pdf"))
+adhd_prsice <- EvaluatePRS(input = paste0(path, "/04_PRSice-2/ADHD-2017/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_ADHD-2017_PRSice-2_PRS.best"),
+                           gwas = "ADHD-2017", seperator = " ",
+                           output = paste0(path, "/05_figures/boxplot_PRSice-2_PRS_ADHD-2017.pdf"))
 
-### Load ALL Scores and get R2 + p-value for threshold of 1, 0.05 and 0.00000005 (5e-08)
-scz2.scores <- fread(input = paste0(path, "/PRSice-2/Cross_Disorder/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_cd_filtered_PRSice-2_PRS.all.score"))
+asd_prsice <- EvaluatePRS(input = paste0(path, "/04_PRSice-2/ASD-2017/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_ASD-2019_PRSice-2_PRS.best"),
+                          gwas = "ASD-2017", seperator = " ",
+                          output = paste0(path, "/05_figures/boxplot_PRSice-2_PRS_ASD-2017.pdf"))
+
+bpd_prsice <- EvaluatePRS(input = paste0(path, "/04_PRSice-2/BPD-2018/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_BPD-2018_PRSice-2_PRS.best"),
+                          gwas = "BPD-2018", seperator = " ",
+                          output = paste0(path, "/05_figures/boxplot_PRSice-2_PRS_BPD-2018.pdf"))
+
+bpd_vs_scz_prsice <- EvaluatePRS(input = paste0(path, "/04_PRSice-2/BPDvsSCZ-2018/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_BPDvsSCZ-2018_PRSice-2_PRS.best"),
+                                 gwas = "BPDvsSCZ-2018", seperator = " ",
+                                 output = paste0(path, "/05_figures/boxplot_PRSice-2_PRS_BPDvsSCZ-2018.pdf"))
+
+bpd_scz_vs_ctl_prsice <- EvaluatePRS(input = paste0(path, "/04_PRSice-2/BPDSCZvsCONT-2018/"),
+                                     gwas = "BPDSCZvsCONT-2018", seperator = " ",
+                                     output = paste0(path, "/05_figures/boxplot_PRSice-2_PRS_BPDSCZvsCONT-2018.pdf"))
+
+bmi_prsice <- EvaluatePRS(input = paste0(path, "/04_PRSice-2/BMI-2015/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_BMI-2015_PRSice-2_PRS.best"),
+                          gwas = "BMI-2015", seperator = " ",
+                          output = paste0(path, "/05_figures/boxplot_PRSice-2_PRS_BMI-2015.pdf"))
+
+cdg1_prsice <- EvaluatePRS(input = paste0(path, "/04_PRSice-2/CDG1-2013/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_CDG1-2013_PRSice-2_PRS.best"),
+                           gwas = "CDG1-2013", seperator = " ",
+                           output = paste0(path, "/05_figures/boxplot_PRSice-2_PRS_CDG1-2013.pdf"))
+
+cdg2_prsice <- EvaluatePRS(input = paste0(path, "/04_PRSice-2/CDG2-2018/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_CDG2-2018_PRSice-2_PRS.best"),
+                           gwas = "CDG2-2018", seperator = " ",
+                           output = paste0(path, "/05_figures/boxplot_PRSice-2_PRS_CDG2-2018.pdf"))
+
+ea_prsice <- EvaluatePRS(input = paste0(path, "/PRSice-2/EA-2018/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_EA-2018_PRSice-2_PRS.best"),
+                         gwas = "EA-2018", seperator = " ",
+                         output = paste0(path, "/05_figures/boxplot_PRSice-2_PRS_EA-2018.pdf"))
+
+intelligence_prsice <- EvaluatePRS(input = paste0(path, "/PRSice-2/Intelligence-2018/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_Intelligence-2018_PRSice-2_PRS.best"),
+                                   gwas = "Intelligence-2018", seperator = " ",
+                                   output = paste0(path, "/05_figures/boxplot_PRSice-2_PRS_Intelligence-2018.pdf"))
+
+mdd1_prsice <- EvaluatePRS(input = paste0(path, "/04_PRSice-2/MDD1-2012/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_MDD1-2012_PRSice-2_PRS.best"), 
+                           gwas = "MDD1-2012", seperator = " ",
+                           output = paste0(path, "/05_figures/boxplot_PRSice-2_PRS_MDD1-2012.pdf"))
+
+mdd2_prsice <- EvaluatePRS(input = paste0(path, "/04_PRSice-2/MDD2-2018/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_MDD2-2018_PRSice-2_PRS.best"), 
+                           gwas = "MDD2-2018", seperator = " ",
+                           output = paste0(path, "/05_figures/boxplot_PRSice-2_PRS_MDD2-2018.pdf"))
+
+mdd3_prsice <- EvaluatePRS(input = paste0(path, "/04_PRSice-2/MDD3-2019/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_MDD3-2019_PRSice-2_PRS.best"), 
+                           gwas = "MDD3-2019", seperator = " ",
+                           output = paste0(path, "/05_figures/boxplot_PRSice-2_PRS_MDD3-2019.pdf"))
+
+scz2_prsice <- EvaluatePRS(input = paste0(path, "/04_PRSice-2/SCZ2-2014/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_SCZ2-2014_PRSice-2_PRS.best"),
+                           gwas = "SCZ2-2014", seperator = " ",
+                           output = paste0(path, "/05_figures/boxplot_PRSice-2_PRS_SCZ2-2014.pdf"))
+
+### Load ALL Scores and get R2 + p-value for threshold of 1, 0.01 and 0.00000005 (5e-08)
+scz2.scores <- fread(input = paste0(path, "/04_PRSice-2/SCZ2-2014/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_SCZ2-2014_PRSice-2_PRS.all.score"))
 names <- colnames(scz2.scores)[-1]
 scz2.scores$`1` <- NULL
 colnames(scz2.scores) <- names
@@ -137,14 +141,15 @@ r2.2 <- nagelkerke(prs.scz2)$Pseudo.R.squared.for.model.vs.null["Cox and Snell (
 sum.prs <- summary(prs.scz2)
 p.value <- pf(sum.prs$fstatistic[1], sum.prs$fstatistic[2], sum.prs$fstatistic[3], lower.tail = FALSE)
 print(paste0("5e-08: Nagelkerke R2 = ", r2, "\nCos and Snell R2 = ", r2.2, "\nP-value = ", p.value))
-prs.scz2 <- lm(scz2.scores$Dx ~ scz2.scores$`0.0500001`)
+prs.scz2 <- lm(scz2.scores$Dx ~ scz2.scores$`0.01` + scz2.scores$Age + scz2.scores$Sex + scz2.scores$PMI + scz2.scores$Suicide + scz2.scores$Type_of_Death)
+prs.scz2 <- lm(scz2.scores$Dx ~ scz2.scores$`0.0222001`)
 r2 <- nagelkerke(prs.scz2)$Pseudo.R.squared.for.model.vs.null["Nagelkerke (Cragg and Uhler)", "Pseudo.R.squared"]
 r2.2 <- nagelkerke(prs.scz2)$Pseudo.R.squared.for.model.vs.null["Cox and Snell (ML)", "Pseudo.R.squared"]
 sum.prs <- summary(prs.scz2)
 p.value <- pf(sum.prs$fstatistic[1], sum.prs$fstatistic[2], sum.prs$fstatistic[3], lower.tail = FALSE)
-print(paste0("0.05: Nagelkerke R2 = ", r2, "\nCos and Snell R2 = ", r2.2, "\nP-value = ", p.value))
+print(paste0("0.01: Nagelkerke R2 = ", r2, "\nCos and Snell R2 = ", r2.2, "\nP-value = ", p.value))
 prs.scz2 <- lm(scz2.scores$Dx ~ scz2.scores$`1`)
-r2 <- nagelkerke(prs.scz2)$Pseudo.R.squared.for.model.vs.null["Nagelkerke (Cragg and Uhler)", "Pseudo.R.squared"]
+               r2 <- nagelkerke(prs.scz2)$Pseudo.R.squared.for.model.vs.null["Nagelkerke (Cragg and Uhler)", "Pseudo.R.squared"]
 r2.2 <- nagelkerke(prs.scz2)$Pseudo.R.squared.for.model.vs.null["Cox and Snell (ML)", "Pseudo.R.squared"]
 sum.prs <- summary(prs.scz2)
 p.value <- pf(sum.prs$fstatistic[1], sum.prs$fstatistic[2], sum.prs$fstatistic[3], lower.tail = FALSE)
@@ -224,7 +229,7 @@ cases$Diagnosis <- "CASE"
 prs.smoothed.plot <- rbind(prs.smoothed.plot, cases)
 prs.smoothed.plot$Diagnosis <- factor(prs.smoothed.plot$Diagnosis, levels = c("CTL", "CASE", "MDD", "BPD", "SCZ"))
 # plot boxplots
-pdf("/storage/scratch/users/karolina.worf/MPIP/02.PRS/figures/boxplot_PRS_SCZ2_smoothed.pdf", width = 12, height = 10)
+pdf("/storage/scratch/users/karolina.worf/MPIP/02.PRS/05_figures/boxplot_PRS_SCZ2_smoothed.pdf", width = 12, height = 10)
 ggplot(prs.smoothed.plot, aes(x = Diagnosis, y = PRS, fill = Diagnosis)) +
   scale_x_discrete(labels = c("Controls", "Cases", "Major depression disorder", "Bipolar disorder", "Schizophrenia")) +
   theme_classic() +
@@ -249,7 +254,7 @@ prs.scz2.plot <- rbind(prs.scz2.plot, cases)
 prs.scz2.plot$Diagnosis <- factor(prs.scz2.plot$Diagnosis, levels = c("CTL", "CASE", "MDD", "BPD", "SCZ"))
 
 # Boxplots of SCZ2 PRS
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/figures/boxplot_LDpred_PRS_SCZ2.pdf", width = 12, height = 10)
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/05_figures/boxplot_LDpred_PRS_SCZ2.pdf", width = 12, height = 10)
 ggplot(prs.scz2.plot, aes(x = Diagnosis, y = PRS, fill = Diagnosis)) +
   scale_x_discrete(labels = c("Controls", "Cases", "Major depression disorder", "Bipolar disorder", "Schizophrenia")) +
   theme_classic() +
@@ -269,7 +274,7 @@ prs.gr.score.plot <- rbind(prs.gr.score.plot, cases)
 prs.gr.score.plot$Diagnosis <- factor(prs.gr.score.plot$Diagnosis, levels = c("CTL", "CASE", "MDD", "BPD", "SCZ"))
 
 # Boxplots of GR Score
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/figures/boxplot_PRS_GRScore.pdf", width = 12, height = 10)
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/05_figures/boxplot_PRS_GRScore.pdf", width = 12, height = 10)
 ggplot(prs.gr.score.plot, aes(x = Diagnosis, y = gr_score, fill = Diagnosis)) +
   scale_x_discrete(labels = c("Controls", "Cases", "Major depression disorder", "Bipolar disorder", "Schizophrenia")) +
   theme_classic() +
@@ -321,7 +326,7 @@ design.cor <- corr.test(design[, -1], use = 'pairwise.complete.obs', method = "p
 # change colnames
 colnames(design.cor$r) <- c("Schizophrenia", "Major depression disorder", "Bipolar disorder", "Cross-disorder", "Attention deficite hyperactivity disorder", "Autism", "Educational attainment", "Body mass index", "Age", "Sex", "Diagnosis", "Suicide", "Non-violent type of death", "Violent type of death", "C1", "C2", "C3", "C4")
 rownames(design.cor$r) <- c("Schizophrenia", "Major depression disorder", "Bipolar disorder", "Cross-disorder", "Attention deficite hyperactivity disorder", "Autism", "Educational attainment", "Body mass index", "Age", "Sex", "Diagnosis", "Suicide", "Non-violent type of death", "Violent type of death", "C1", "C2", "C3", "C4")
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/figures/corrplot_covariates_PRS.pdf")
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/05_figures/corrplot_covariates_PRS.pdf")
 corrplot(as.matrix(design.cor$r), method = "circle", col = viridis(200, direction = -1), tl.col = "black")
 dev.off()
 
@@ -341,7 +346,7 @@ row.names(samples) <- samples$IID
 samples$IID <- NULL
 colnames(samples) <- c("Diagnosis", "Sex", "Age")
 ann_colors = list(Diagnosis = c(Cases = viridis(8)[2], Controls = "gray"), Age = brewer.pal(n = 9, name = "Blues"), Sex = c(F = "violetred", M = "darkblue"))
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/figures/heatmap_PRS_SCZ_BIP_MDD_CD_GWAS.pdf", width = 12, height = 9)
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/05_figures/heatmap_PRS_SCZ_BIP_MDD_CD_GWAS.pdf", width = 12, height = 9)
 pheatmap(t(pData.new[, 2:length(pData.new)]), scale = "row", cluster_rows = F, annotation_col = samples, annotation_colors = ann_colors, font_size = 0.6, show_colnames = F, 
          cex = 1.5, labels_row = c("Major depression disorder", "Bipolar disorder", "Schizophrenia", "Cross-Disorder"))#, color = rev(brewer.pal(n = 11, name = "RdBu")))
 dev.off()
@@ -355,7 +360,7 @@ row.names(pData.new2) <- as.character(pData.new2$IID)
 pData.new2$IID <- NULL
 pData.plot <- t(pData.new2[row_names, ])
 # generate heatmap
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/figures/heatmap_PRS_ADHD_ASD_EA_BMI_GWAS.pdf", width = 12, height = 9)
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/05_figures/heatmap_PRS_ADHD_ASD_EA_BMI_GWAS.pdf", width = 12, height = 9)
 pheatmap(pData.plot, scale = "row", cluster_rows = F, cluster_cols = F, font_size = 0.6, show_colnames = F, 
               cex = 1.5, labels_row = c("Attention deficite hyperactivity disorder", "Autism", "Educational attainment", "Body mass index"))#, color = rev(brewer.pal(n = 11, name = "RdBu")))
 dev.off()
@@ -378,7 +383,7 @@ row.names(samples) <- samples$IID
 samples$IID <- NULL
 colnames(samples) <- c("Diagnosis", "Sex", "Age")
 ann_colors = list(Diagnosis = c(Cases = viridis(2)[2], Controls = viridis(2)[1]), Age = brewer.pal(n = 9, name = "Blues"), Sex = c(F = "darkmagenta", M = "darkblue"))
-pdf("/storage/scratch/users/karolina.worf/MPIP/02.PRS/figures/heatmap_PRS_only_SCZ_BPD_MDD_CD_GWAS.pdf", width = 14, height = 8)
+pdf("/storage/scratch/users/karolina.worf/MPIP/02.PRS/05_figures/heatmap_PRS_only_SCZ_BPD_MDD_CD_GWAS.pdf", width = 14, height = 8)
 pheatmap(t(pData.new), scale = "row", annotation_col = samples, annotation_colors = ann_colors, font_size = 0.6, show_colnames = F,
          cex = 1.5, labels_row = c("Schizophrenia", "Major depression disorder", "Bipolar disorder", "Cross-disorder"), color = viridis(200))
 dev.off()

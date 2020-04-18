@@ -45,7 +45,6 @@ This document includes the differential gene expression analysis (DEA) for the g
 3. DEA using the polygenic risk score instead of the diagnosis (also correcting for covariates)
 
 Below you can find the list of packages that are required by the workflow. 
-
 ```{r, echo = F}
 # General Bioconductor packages
 library(biomaRt)
@@ -59,6 +58,7 @@ library(data.table)
 library(dplyr)
 library(tidyr)
 library(rtracklayer)
+library(plyr)
 
 # Color palettes
 library(RColorBrewer)
@@ -74,8 +74,19 @@ library(ggrepel)  # for volcanoplot
 # Functions
 
 As we have to do several analysis multiple times, we will put these into functions to reduce the lines of code. 
-
 ```{r definition, echo=F}
+# function to load the PRS all score file, change the colnames into right order and return only IID and 0.01 PRS
+GetPRS <- function(filename){
+  all_scores <- suppressWarnings(fread(filename, stringsAsFactors = F))
+  # set colnames right 
+  names <- colnames(all_scores)[-1] # remove first colname and save all others
+  all_scores$`1` <- NULL # remove last column with NAs
+  colnames(all_scores) <- names # set right colnames
+  # return only IID and PRS for 0.01
+  score <- all_scores[, c("IID", "0.01")]
+  return(score)  
+}
+
 # function to run the linear model (limma) using the normal model for genes only 
 RunLimma <- function(design, summary){
   # get top DE genes
@@ -98,7 +109,7 @@ GenerateResultTableGene <- function(fit, variable, file){
   colnames(top_hits) <- c("Ensembl Gene ID", "Location", "Gene Symbol", "logFC", "Average Expression", "t-statistic", "p-value", "FDR estimate", "B coefficient")
   top_hits <- unique(separate_rows(top_hits, `Ensembl Gene ID`, sep = "\\|"))
   top_hits <- unique(separate_rows(top_hits, `Gene Symbol`, sep = "\\|"))
-  write.table(top_hits, file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_results/", file), sep = "\t", row.names = F)
+  write.table(top_hits, file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_DEA_results/", file), sep = "\t", row.names = F)
   return(top_hits)
 }
 GenerateResultTableTranscript <- function(fit, variable, file){
@@ -108,7 +119,7 @@ GenerateResultTableTranscript <- function(fit, variable, file){
   colnames(top_hits) <- c("Ensembl Transcript ID", "Location", "Ensembl Gene ID", "Gene Symbol", "logFC", "Average Expression", "t-statistic", "p-value", "FDR estimate", "B coefficient")
   top_hits <- unique(separate_rows(top_hits, `Ensembl Gene ID`, sep = "\\|"))
   top_hits <- unique(separate_rows(top_hits, `Gene Symbol`, sep = "\\|"))
-  write.table(top_hits, file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_results/", file), sep = "\t", row.names = F)
+  write.table(top_hits, file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_DEA_results/", file), sep = "\t", row.names = F)
   return(top_hits)
 }
 GenerateResultTableExon <- function(fit, variable, file){
@@ -118,7 +129,7 @@ GenerateResultTableExon <- function(fit, variable, file){
   colnames(top_hits) <- c("Ensembl Exon ID", "Location", "Ensembl Transcript ID", "Ensembl Gene ID", "Gene Symbol", "logFC", "Average Expression", "t-statistic", "p-value", "FDR estimate", "B coefficient")
   top_hits <- unique(separate_rows(top_hits, `Ensembl Gene ID`, sep = "\\|"))
   top_hits <- unique(separate_rows(top_hits, `Gene Symbol`, sep = "\\|"))
-  write.table(top_hits, file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_results/", file), sep = "\t", row.names = F)
+  write.table(top_hits, file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_DEA_results/", file), sep = "\t", row.names = F)
   return(top_hits)
 }
 
@@ -155,42 +166,6 @@ GenerateVolcanoPlot <- function(fit, variable, file) {
     geom_text_repel(data = hits[index, ], aes(label = gene_name), colour = "red2") +
     geom_point(data = hits[(length(index) + 1):10, ], aes(x = logFC, y = -log10(P.Value)), size = 2) +
     geom_text_repel(data = hits[(length(index) + 1):10, ], aes(label = gene_name))
-  }
-  g
-  ggsave(paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/04_figures/", file), width = 8, height = 6, units = "in")
-}
-
-# function to generate a vulcano plot for differentially expressed genes
-GenerateVolcanoPlotPRS <- function(res, file) {
-  total <- nrow(res)
-  # get first hit after FDR 10% for drawing a p-value threshold line
-  index <- if(length(which(as.numeric(as.character(res$`FDR estimate`)) < 0.1)) == 0) 0 else which(as.numeric(as.character(res$`FDR estimate`)) < 0.1)
-  threshold <- res[index[length(index)] + 1, "p-value"]
-  ### volcano plot ###
-  # label only significant hits (if more than 10)
-  g <- ggplot(res, aes(x = logFC, y = -log10(as.numeric(as.character(res$`p-value`))))) + 
-    theme_bw(base_size = 22) + 
-    geom_point() + 
-    xlim(-2, 2) + 
-    ylim(0, 6) +
-    xlab(bquote(~Log[2]~ "fold change")) +
-    ylab(bquote(~-Log[10]~ italic(P))) +
-    theme(axis.line = element_line(),
-      panel.border = element_blank(),
-      panel.background = element_blank()) +
-    labs(caption = paste0("Total variables: ", total)) +
-    geom_hline(yintercept = -log10(threshold), linetype = "dashed")
- if(length(index) >= 10){
-    g + geom_point(data = res[index, ], aes(x = logFC, y = -log10(res$`p-value`)), colour = "red2", size = 2) +
-    geom_text_repel(data = res[index[1:10], ], aes(label = res$`Gene Symbol`), colour = "red2")
-  # else: label hit genes (if some are found) purple and following genes green until a maximum of 10 genes is labeled
-  } else if(length(index) == 1) {
-    g + geom_text_repel(data = res[1:10, ], aes(label = res[1:10, "Gene Symbol"]))
-  } else {
-    g + geom_point(data = res[index[length(index)] + 1, ], aes(x = logFC, y = -log10(res$`p-value`)), colour = "red2", size = 2) +
-    geom_text_repel(data = res[index[length(index)] + 1, ], aes(label = res$`Gene Symbol`), colour = "red2") +
-    geom_point(data = res[(length(index) + 1):10, ], aes(x = logFC, y = -log10(res$`p-value`)), size = 2) +
-    geom_text_repel(data = res[(length(index) + 1):10, ], aes(label = res$`Gene Symbol`))
   }
   g
   ggsave(paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/04_figures/", file), width = 8, height = 6, units = "in")
@@ -236,7 +211,7 @@ GenerateVerticalBarplotOfDiffExprHits <- function(design, fit, from, to, plot_na
 
 # function to recalculate the p-value and fdr for transcripts and exons based on gene level (Ensmebl Gene ID NOT Symbol!!): load the result table, get the smallest p-value for a gene (Ensembl Gene ID), calculate new fdr using the genes smallest p-values and gene number as background
 GetExprWithSmallestP <- function(input, summaries){
-  res <- fread(paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_results/", input), header = T, stringsAsFactors = F)
+  res <- fread(paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_DEA_results/", input), header = T, stringsAsFactors = F)
   # get the rows with the lowest p-value per gene ID
   min_pval <- res[ , .SD[which.min(`p-value`)], by = `Ensembl Gene ID`]
   # get all transcript IDs with lowest p-value per gene ID
@@ -254,15 +229,7 @@ GetExprWithSmallestP <- function(input, summaries){
 ## Microarray expression
 
 Now, we will load the normalized and batch corrected microarray data summarized to gene, transcript and exon level. 
-
 ```{r, echo = F}
-# Import RMA corrected and annotated Affymetrix microarray data on gene level (from core transcripts)
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_Files/7_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
-gene_summaries_core <- gene_summaries
-exprs(gene_summaries_core) <- as.matrix(exprs(gene_summaries_core))
-dim(gene_summaries_core)
-rm(gene_summaries)
-
 # Import RMA corrected and annotated Affymetrix microarray data on gene level (from probesets)
 load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
 exprs(gene_summaries) <- as.matrix(exprs(gene_summaries))
@@ -284,34 +251,70 @@ pData <- pData(gene_summaries)
 
 ## Polygenic risk scores
 
-Then, we load the four different polygenic risk scores generated on the latest schizophrenia (SCZ), bipolar disorder (BPD), major depression disorder (MDD) and cross-disorder (CD) GWAS summary statistic files. 
-
+Then, we load the polygenic risk scores generated with PRSice-2 on the attention deficite hyperactivity disorder (ADHD-2017), autism spectrum disorders (ASD-2019), bipolar disorder (BPD-2018), body mass index (BMI-2015), cross-disorder (CDG1-2013, CDG2-2018), educational attainment (EA-2018), body height (HE-2014), intelligence (IN-2018), major depression disorder (MDD1-2012, MDD2-2018, MDD3-2019) and schizophrenia (SCZ2-2014) GWAS summary statistic files. We will NOT use the best threshold, but a threshold of 0.01 on all GWAS summary statistic files.
 ```{r, echo = F}
-# load SCZ2 PRS
-prs_scz2 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/05_PRSice-2/SCZ2/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_scz2_filtered_PRSice-2_PRS.best", sep = " ", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
-
-# load MDD2 PRS
-prs_mdd2 <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/05_PRSice-2/MDD2/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_mdd2_filtered_PRSice-2_PRS.best", sep = " ", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
-
-# load BPD-2018 PRS
-prs_bpd <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/05_PRSice-2/BIP-2018/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_bip_filtered_PRSice-2_PRS.best", sep = " ", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
-
-# load Cross-disorder PRS (CDG1)
-prs_cross_disorder <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/05_PRSice-2/Cross_Disorder/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_cd_filtered_PRSice-2_PRS.best", sep = " ", header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+# ADHD-2017 PRS
+prs_adhd <- GetPRS("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/04_PRSice-2/ADHD-2017/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_ADHD-2017_PRSice-2_PRS.all.score")
+# ASD-2019 PRS
+prs_asd <- GetPRS("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/04_PRSice-2/ASD-2019/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_ASD-2019_PRSice-2_PRS.all.score")
+# BPD-2018 PRS
+prs_bpd <- GetPRS("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/04_PRSice-2/BPD-2018/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_BPD-2018_PRSice-2_PRS.all.score")
+# BMI-2015 PRS
+prs_bmi <- GetPRS("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/04_PRSice-2/BMI-2015/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_BMI-2015_PRSice-2_PRS.all.score")
+# CDG1-2013 PRS
+prs_cdg1 <- GetPRS("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/04_PRSice-2/CDG1-2013/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_CDG1-2013_PRSice-2_PRS.all.score")
+# CDG2-2018 PRS
+prs_cdg2 <- GetPRS("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/04_PRSice-2/CDG2-2018/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_CDG2-2018_PRSice-2_PRS.all.score")
+# EA-2018 PRS
+prs_ea <- GetPRS("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/04_PRSice-2/EA-2018/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_EA-2018_PRSice-2_PRS.all.score")
+prs_he <- GetPRS("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/04_PRSice-2/Height-2014/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_Height-2014_PRSice-2_PRS.all.score")
+# IN-2018 PRS
+prs_in <- GetPRS("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/04_PRSice-2/Intelligence-2018/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_Intelligence-2018_PRSice-2_PRS.all.score")
+# MDD1-2012 PRS
+prs_mdd1 <- GetPRS("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/04_PRSice-2/MDD1-2012/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_MDD1-2012_PRSice-2_PRS.all.score")
+# MDD2-2018 PRS
+prs_mdd2 <- GetPRS("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/04_PRSice-2/MDD2-2018/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_MDD2-2018_PRSice-2_PRS.all.score")
+# MDD3-2019 PRS
+prs_mdd3 <- GetPRS("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/04_PRSice-2/MDD3-2019/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_MDD3-2019_PRSice-2_PRS.all.score")
+# SCZ2-2014 PRS
+prs_scz2 <- GetPRS("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/04_PRSice-2/SCZ2-2014/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_SCZ2-2014_PRSice-2_PRS.all.score")
 ```
 
-All loaded PRS are added to the phenotype (pData) information.
-
+All loaded PRS are added to the phenotype (pData) information. We use join to preserve the order of rows and add the row_names at the end of all joining procedures back to the phenotype dataset.
 ```{r, echo = F}
-pData$PRS.SCZ <- unlist(prs_scz2[prs_scz2$IID %in% pData$IID, "PRS"])
-pData$PRS.MDD <- unlist(prs_mdd2[prs_mdd2$IID %in% pData$IID, "PRS"])
-pData$PRS.BPD <- unlist(prs_bpd[prs_bpd$IID %in% pData$IID, "PRS"])
-pData$PRS.CD <- unlist(prs_cross_disorder[prs_cross_disorder$IID %in% pData$IID, "PRS"])
-rm(prs_bpd, prs_mdd2, prs_scz2, prs_cross_disorder)
+pData <- join(pData, prs_adhd)
+colnames(pData)[length(pData[1,])] <- "PRS.ADHD"
+pData <- join(pData, prs_asd)
+colnames(pData)[length(pData[1,])] <- "PRS.ASD"
+pData <- join(pData, prs_bpd)
+colnames(pData)[length(pData[1,])] <- "PRS.BPD"
+pData <- join(pData, prs_bmi)
+colnames(pData)[length(pData[1,])] <- "PRS.BMI"
+pData <- join(pData, prs_cdg1)
+colnames(pData)[length(pData[1,])] <- "PRS.CDG1"
+pData <- join(pData, prs_cdg2)
+colnames(pData)[length(pData[1,])] <- "PRS.CDG2"
+pData <- join(pData, prs_ea)
+colnames(pData)[length(pData[1,])] <- "PRS.EA"
+pData <- join(pData, prs_he)
+colnames(pData)[length(pData[1,])] <- "PRS.HE"
+pData <- join(pData, prs_in)
+colnames(pData)[length(pData[1,])] <- "PRS.IN"
+pData <- join(pData, prs_mdd1)
+colnames(pData)[length(pData[1,])] <- "PRS.MDD1"
+pData <- join(pData, prs_mdd2)
+colnames(pData)[length(pData[1,])] <- "PRS.MDD2"
+pData <- join(pData, prs_mdd3)
+colnames(pData)[length(pData[1,])] <- "PRS.MDD3"
+pData <- join(pData, prs_scz2)
+colnames(pData)[length(pData[1,])] <- "PRS.SCZ2"
+row.names(pData) <- pData$ShortName
+# check if the order of the samples in pData is still the same as in the expression data
+identical(colnames(gene_summaries@assayData$exprs), row.names(pData))
+rm(prs_adhd, prs_asd, prs_bpd, prs_bmi, prs_cdg1, prs_cdg2, prs_ea, prs_he, prs_in, prs_mdd1, prs_mdd2, prs_mdd3, prs_scz2)
 ```
 
 And we will add the colors used for the gene, transcript and exon level based on the viridis package:
-
 ```{r}
 # "#482576FF" "#25848EFF" "#7AD151FF"
 col <- viridis(3, begin = 0.1, end = 0.8) 
@@ -327,14 +330,11 @@ Now, we calculate the differentially expressed genes, transcripts and exons usin
 ### Diagnosis with normal model
 
 First, we run the linear model with correction for all covariates and generate the result table. 
-
 ```{r, echo = F}
 # generate design matrix
 design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-
 # differential expression analysis (limma)
 fit <- RunLimma(design, gene_summaries)
-
 # result tables
 top_hits <- GenerateResultTableGene(fit, variable = "DxCASE", file =  "1.1_diff_expr_genes_for_diagnosis.csv")
 top_hits_age <- GenerateResultTableGene(fit, variable = "Age", file =  "1.1_diff_expr_genes_for_age.csv")
@@ -342,7 +342,6 @@ top_hits_ph <- GenerateResultTableGene(fit, variable = "pH", file =  "1.1_diff_e
 top_hits_pmi <- GenerateResultTableGene(fit, variable = "PMI", file =  "1.1_diff_expr_genes_for_pmi.csv")
 top_hits_c2 <- GenerateResultTableGene(fit, variable = "C2", file =  "1.1_diff_expr_genes_for_pc2.csv")
 top_hits_c1 <- GenerateResultTableGene(fit, variable = "C1", file =  "1.1_diff_expr_genes_for_pc1.csv")
-
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "DxCASE", file = "1.1_volcano_plot_diff_expr_genes_for_diagnosis.pdf")
 ```
@@ -350,7 +349,6 @@ GenerateVolcanoPlot(fit, variable = "DxCASE", file = "1.1_volcano_plot_diff_expr
 We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for diagnosis, `r length(top_hits_age[top_hits_age$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for age, `r length(top_hits_ph[top_hits_ph$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for pH, `r length(top_hits_pmi[top_hits_pmi$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for PMI and `r length(top_hits_c2[top_hits_c2$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the second ancestry principal component (PC2).  
 
 Now we generate a barplot including all significantly differentially expressed genes for each covariates of the model (corrected for all the other covariates in the model). 
-
 ```{r, echo = F}
 # generate vertical barplot
 limma_res_gene <- GenerateVerticalBarplotOfDiffExprHits(design, fit, from = 4, to = 3, plot_name = "1.1_barplot_significant_DEA_hits_genes.pdf")
@@ -360,23 +358,18 @@ rm(design, fit)
 ### Diagnosis with sex and diagnosis interaction model
 
 Adding (Dx*Sex) to the model.
-
 ```{r, echo = F}
 # generate design matrix
 design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1 + (Sex * Dx), pData)
-
 # differential expression analysis (limma)
 fit <- RunLimma(design, gene_summaries)
-
 # result table
 top_hits <- GenerateResultTableGene(fit, variable = "DxCASE", file =  "1.2_diff_expr_genes_for_diagnosis_with_sex_dx_interaction.csv")
-
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "DxCASE", file = "1.2_volcano_plot_diff_expr_genes_for_diagnosis_with_sex_dx_interaction.pdf")
 ```
 
 We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for diagnosis. The hit has the gene name: `r top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]`. For this hit gene, we will plot the residuals of sex vs. diagnosis as this gene infers a difference between these two covariates:
-
 ```{r, echo = F}
 # generate design matrix
 design_res <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
@@ -384,13 +377,11 @@ design_res <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + 
 fit_res <- lmFit(gene_summaries, design_res)
 # get residuals
 res <- residuals.MArrayLM(fit_res, exprs(gene_summaries))
-
 # generate boxplot with case vs control for male and female samples of the hit gene (TRIM10)
 trim10 <- res[rownames(res) == "ENSG00000204613.6", ]
 trim10 <- t(t(as.data.frame(trim10)))
 trim10 <- merge(trim10, pData[, c("ShortName", "Dx", "Sex")], by.x = "row.names", by.y = "ShortName", all.x = T)
 trim10$DxSex <- paste0(trim10$Dx, trim10$Sex)
-
 pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/04_figures/1.2_boxplot_TRIM10_diff_expr_genes_for_diagnosis_with_sex_dx_interaction.pdf", width = 7, height = 6)
 ggplot(trim10, aes(Sex, trim10, fill = Dx)) +
   scale_x_discrete(labels = c("Female", "Male")) +
@@ -414,90 +405,182 @@ males <- trim10[trim10$Sex == "M",]
 case <- males[males$Dx == "CASE",]
 control <- males[males$Dx == "CTL",]
 t.test(case$trim10, control$trim10) # p-value = 0.05302
-
 # remove unnecessary data
 rm(design, fit, design_res, fit_res, res, trim10, females, males, case, control)
 ```
 
 ### PRS with normal model
 
-Now, we use the polygenic risk scores based on the SCZ, BPD, MDD and Cross-disorder GWAS instead of the diagnosis as input. As the PRS is a continuous (numeric) covariate and diagnosis is a categorical (CASE/CTL) covariate the fold change/log2 fold change (logFC) can not be calculated correctly, therefore, generating volcano plots does not make sense for PRS based differentially expressed analyses (DEA).
+Now, we use the polygenic risk scores based on GWAS summary statistics instead of the diagnosis as input. As the PRS is a continuous (numeric) covariate and diagnosis is a categorical (CASE/CTL) covariate the fold change/log2 fold change (logFC) can not be calculated correctly, therefore, generating volcano plots does not make sense for PRS based differentially expressed analyses (DEA). We will use the PRSs based on the GWAS of following disorders: ADHD-2017, ASD-2019, BPD-2018, BMI-2015, CDG1-2013, CDG2-2018, EA-2018 HE-2014, IN-2018, MDD1-2012, MDD2-2018, MDD3-2019 and SCZ2-2014.
 
-**SCZ PRS**
-
+**ADHD-2017 PRS**
 ```{r, echo = F}
 # generate design matrix
-design <- model.matrix(~ PRS.SCZ + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-
+design <- model.matrix(~ PRS.ADHD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 # differential expression analysis (limma)
 fit <- RunLimma(design, gene_summaries)
-
-# result table
-top_hits <- GenerateResultTableGene(fit, variable = "PRS.SCZ", file =  "2.1.1_diff_expr_genes_for_SCZ_PRS.csv")
-
-# volcano plot
-GenerateVolcanoPlot(fit, variable = "PRS.SCZ", file = "2.1.1_volcano_plot_diff_expr_genes_for_SCZ_PRS.pdf")
+# generate result table
+top_hits <- GenerateResultTableGene(fit, variable = "PRS.ADHD", file =  "2.1.1_diff_expr_genes_for_ADHD-2017_PRS.csv")
+# remove data, to reduce errors based on wrong data outputs
 rm(design, fit)
 ```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the ADHD-2017 PRS.
 
-We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the SCZ PRS.
-
-**MDD PRS**
-
+**ASD-2019 PRS**
 ```{r, echo = F}
 # generate design matrix
-design <- model.matrix(~ PRS.MDD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-
+design <- model.matrix(~ PRS.ASD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 # differential expression analysis (limma)
 fit <- RunLimma(design, gene_summaries)
-
-# result table
-top_hits <- GenerateResultTableGene(fit, variable = "PRS.MDD", file =  "2.1.2_diff_expr_genes_for_MDD_PRS.csv")
-
-# volcano plot
-GenerateVolcanoPlot(fit, variable = "PRS.MDD", file = "2.1.2_volcano_plot_diff_expr_genes_for_MDD_PRS.pdf")
+# generate result table
+top_hits <- GenerateResultTableGene(fit, variable = "PRS.ASD", file =  "2.1.2_diff_expr_genes_for_ASD-2019_PRS.csv")
+# remove data, to reduce errors based on wrong data outputs
 rm(design, fit)
 ```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the ASD-2019 PRS.
 
-We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the MDD PRS.
-
-**BPD PRS**
-
+**BPD-2018 PRS**
 ```{r, echo = F}
 # generate design matrix
 design <- model.matrix(~ PRS.BPD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-
 # differential expression analysis (limma)
 fit <- RunLimma(design, gene_summaries)
-
-# result table
-top_hits <- GenerateResultTableGene(fit, variable = "PRS.BPD", file =  "2.1.3_diff_expr_genes_for_BPD_PRS.csv")
-
-# volcano plot
-GenerateVolcanoPlot(fit, variable = "PRS.BPD", file = "2.1.3_volcano_plot_diff_expr_genes_for_BPD_PRS.pdf")
+# generate result table
+top_hits <- GenerateResultTableGene(fit, variable = "PRS.BPD", file =  "2.1.3_diff_expr_genes_for_BPD-2018_PRS.csv")
+# remove data, to reduce errors based on wrong data outputs
 rm(design, fit)
 ```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the BPD-2018 PRS.
 
-We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the BPD PRS.
-
-**CDG PRS**
-
+**BMI-2015 PRS**
 ```{r, echo = F}
 # generate design matrix
-design <- model.matrix(~ PRS.CD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-
+design <- model.matrix(~ PRS.BMI + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 # differential expression analysis (limma)
 fit <- RunLimma(design, gene_summaries)
-
-# result table
-top_hits <- GenerateResultTableGene(fit, variable = "PRS.CD", file =  "2.1.4_diff_expr_genes_for_CD_PRS.csv")
-
-# volcano plot
-GenerateVolcanoPlot(fit, variable = "PRS.CD", file = "2.1.4_volcano_plot_diff_expr_genes_for_CD_PRS.pdf")
+# generate result table
+top_hits <- GenerateResultTableGene(fit, variable = "PRS.BMI", file =  "2.1.4_diff_expr_genes_for_BMI-2015_PRS.csv")
+# remove data, to reduce errors based on wrong data outputs
 rm(design, fit)
 ```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the BMI-2015 PRS.
 
-We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the CDG PRS.
+**CDG1-2013 PRS**
+```{r, echo = F}
+# generate design matrix
+design <- model.matrix(~ PRS.CDG1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, gene_summaries)
+# generate result table
+top_hits <- GenerateResultTableGene(fit, variable = "PRS.CDG1", file =  "2.1.5_diff_expr_genes_for_CDG1-2013_PRS.csv")
+# remove data, to reduce errors based on wrong data outputs
+rm(design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the CDG1-2013 PRS.
+
+**CDG2-2018 PRS**
+```{r, echo = F}
+# generate design matrix
+design <- model.matrix(~ PRS.CDG2 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, gene_summaries)
+# generate result table
+top_hits <- GenerateResultTableGene(fit, variable = "PRS.CDG2", file =  "2.1.6_diff_expr_genes_for_CDG2-2018_PRS.csv")
+# remove data, to reduce errors based on wrong data outputs
+rm(design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the CDG2-2018 PRS.
+
+**EA-2018 PRS**
+```{r, echo = F}
+# generate design matrix
+design <- model.matrix(~ PRS.EA + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, gene_summaries)
+# generate result table
+top_hits <- GenerateResultTableGene(fit, variable = "PRS.EA", file =  "2.1.7_diff_expr_genes_for_EA-2018_PRS.csv")
+# remove data, to reduce errors based on wrong data outputs
+rm(design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the EA-2018 PRS.
+
+**HE-2014 PRS**
+```{r, echo = F}
+# generate design matrix
+design <- model.matrix(~ PRS.HE + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, gene_summaries)
+# generate result table
+top_hits <- GenerateResultTableGene(fit, variable = "PRS.HE", file =  "2.1.8_diff_expr_genes_for_HE-2014_PRS.csv")
+# remove data, to reduce errors based on wrong data outputs
+rm(design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the HE-2014 PRS.
+
+**IN-2018 PRS**
+```{r, echo = F}
+# generate design matrix
+design <- model.matrix(~ PRS.IN + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, gene_summaries)
+# generate result table
+top_hits <- GenerateResultTableGene(fit, variable = "PRS.IN", file =  "2.1.9_diff_expr_genes_for_IN-2018_PRS.csv")
+# remove data, to reduce errors based on wrong data outputs
+rm(design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the IN-2018 PRS.
+
+**MDD1-2012 PRS**
+```{r, echo = F}
+# generate design matrix
+design <- model.matrix(~ PRS.MDD1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, gene_summaries)
+# generate result table
+top_hits <- GenerateResultTableGene(fit, variable = "PRS.MDD1", file =  "2.1.10_diff_expr_genes_for_MDD1-2012_PRS.csv")
+# remove data, to reduce errors based on wrong data outputs
+rm(design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the MDD1-2012 PRS.
+
+**MDD2-2018 PRS**
+```{r, echo = F}
+# generate design matrix
+design <- model.matrix(~ PRS.MDD2 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, gene_summaries)
+# generate result table
+top_hits <- GenerateResultTableGene(fit, variable = "PRS.MDD2", file =  "2.1.11_diff_expr_genes_for_MDD2-2018_PRS.csv")
+# remove data, to reduce errors based on wrong data outputs
+rm(design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the MDD2-2018 PRS.
+
+**MDD3-2019 PRS**
+```{r, echo = F}
+# generate design matrix
+design <- model.matrix(~ PRS.MDD3 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, gene_summaries)
+# generate result table
+top_hits <- GenerateResultTableGene(fit, variable = "PRS.MDD3", file =  "2.1.12_diff_expr_genes_for_MDD3-2019_PRS.csv")
+# remove data, to reduce errors based on wrong data outputs
+rm(design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the MDD3-2019 PRS.
+
+**SCZ2-2014 PRS**
+```{r, echo = F}
+# generate design matrix
+design <- model.matrix(~ PRS.SCZ2 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, gene_summaries)
+# generate result table
+top_hits <- GenerateResultTableGene(fit, variable = "PRS.SCZ2", file =  "2.1.13_diff_expr_genes_for_SCZ2-2014_PRS.csv")
+# remove data, to reduce errors based on wrong data outputs
+rm(design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the SCZ2-2014 PRS.
 
 
 ## Transcript level
@@ -505,25 +588,19 @@ We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]
 ### Diagnosis with normal model
 
 First, run the linear model with correction for all covariates and generate the result table. 
-
 ```{r, echo = F}
 # generate design matrix
 design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-
 # differential expression analysis (limma)
 fit <- RunLimma(design, transcript_summaries)
-
 # result table
 top_hits <- GenerateResultTableTranscript(fit, variable = "DxCASE", file =  "1.1_diff_expr_transcripts_for_diagnosis.csv")
-
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "DxCASE", file = "1.1_volcano_plot_diff_expr_transcripts_for_diagnosis.pdf")
 ```
-
 No (`r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])`) hits. Maybe a problem of the multiple testing correction as we have too many transcripts to correct for. We will test a new FDR correction model in the following section.
 
 Get significantly differentially expressed transcripts for all the different covariates (corrected for all the other covariates). 
-
 ```{r, echo = F}
 # generate vertical barplot
 limma_res_transcript <- GenerateVerticalBarplotOfDiffExprHits(design, fit, from = 5, to = 4, plot_name = "1.1_barplot_significant_DEA_hits_transcripts.pdf")
@@ -537,19 +614,15 @@ As the low adjusted p-values of the transcript expressions could come from the h
 1. Take the lowest p-value of all transcripts corresponding to a gene
 2. Get all transcript IDs and reduce the expression Set to these transcripts
 2. Calculate p-values and FDR using limma on the reduced transcript set
-
 ```{r, echo = F}
 # reduce expression set
 dim(transcript_summaries)
 transcript_summaries_new <- GetExprWithSmallestP(input = "1.1_diff_expr_transcripts_for_diagnosis.csv", transcript_summaries)
 dim(transcript_summaries_new)
-
 # generate design matrix
 design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-
 # differential expression analysis (limma)
 fit <- RunLimma(design, transcript_summaries_new)
-
 # result table
 top_hits <- GenerateResultTableTranscript(fit, variable = "DxCASE", file =  "1.3_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.csv")
 top_hits_age <- GenerateResultTableTranscript(fit, variable = "Age", file =  "1.3_diff_expr_transcripts_for_age_new_pvalue_and_fdr.csv")
@@ -557,23 +630,19 @@ top_hits_ph <- GenerateResultTableTranscript(fit, variable = "pH", file =  "1.3_
 top_hits_pmi <- GenerateResultTableTranscript(fit, variable = "PMI", file =  "1.3_diff_expr_transcripts_for_pmi_new_pvalue_and_fdr.csv")
 top_hits_c2 <- GenerateResultTableTranscript(fit, variable = "C2", file =  "1.3_diff_expr_transcripts_for_c2_new_pvalue_and_fdr.csv")
 top_hits_c1 <- GenerateResultTableTranscript(fit, variable = "C1", file =  "1.3_diff_expr_transcripts_for_c1_new_pvalue_and_fdr.csv")
-
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "DxCASE", file = "1.3_volcano_plot_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.pdf")
 ```
-
 Now, we have multiple hits on the transcript level. We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for diagnosis, `r length(top_hits_age[top_hits_age$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for age, `r length(top_hits_ph[top_hits_ph$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for pH, `r length(top_hits_pmi[top_hits_pmi$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for pmi, `r length(top_hits_c2[top_hits_c2$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the second ancestry principal component (PC2). All hits are based on a 10% FDR (FDR < 0.1). The six diagnosis gene hits are: `r top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]`
 
 Get significantly differentially expressed transcripts for all the different covariates (corrected for all the other covariates). 
-
 ```{r, echo = F}
 # generate vertical barplot
 limma_res_transcript.new <- GenerateVerticalBarplotOfDiffExprHits(design, fit, from = 5, to = 4, plot_name = "1.3_barplot_significant_DEA_hits_transcripts_new_pvalue_and_fdr.pdf")
 rm(design, fit)
 ```
 
-Now, we generate some plots for the six found tDEgenes for diagnosis. First, we will plot a heatmap of the six tDEGenes.
-
+Now, we generate some plots for the six found tDEGenes for diagnosis. First, we will plot a heatmap of the six tDEGenes.
 ```{r, echo = F}
 # get only top hits (6 tDEGenes)
 top_hits <- top_hits[top_hits$`FDR estimate` < 0.1, ]
@@ -587,7 +656,6 @@ rm(anno)
 ```
 
 Then, we plot the up and down regulated genes into one barplot with the two variables mirrored on the x-axis.
-
 ```{r, echo = F}
 logfc <- as.data.frame(table(top_hits$logFC))
 logfc$group <- "Upregulated"
@@ -596,7 +664,6 @@ logfc[as.numeric(as.character(logfc$Var1)) < 0, "Freq"] <- -1
 logfc$Var1 <- abs(round(as.numeric(as.character(logfc$Var1)), 2))
 logfc$logfc <- 2^logfc$Var1
 logfc$linearFC <- sapply(logfc$logfc, function(x) {if(as.double(as.character(x)) >= 1 || is.na(x)){x} else {-1/x}})
-
 # generate barplot
 ggplot(logfc, aes(x = linearFC, y = Freq, fill = group)) + 
   geom_bar(stat = "identity", position = "identity", show.legend = FALSE) + 
@@ -613,7 +680,6 @@ rm(logfc)
 ```
 
 Now, we generate violin plots for all gene hits.
-
 ```{r, echo = F}
 for (hit in top_hits$`Ensembl Transcript ID`) {
   name <- top_hits[hit, "Gene Symbol"]
@@ -634,11 +700,9 @@ for (hit in top_hits$`Ensembl Transcript ID`) {
 rm(name, data)
 ```
 
-
 ### Diagnosis with sex and diagnosis interaction model
 
 Adding (Dx*Sex) to the model.
-
 ```{r, echo = F}
 # generate design matrix
 design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1 + (Sex*Dx), pData)
@@ -653,183 +717,397 @@ top_hits <- GenerateResultTableTranscript(fit, variable = "DxCASE", file =  "1.2
 GenerateVolcanoPlot(fit, variable = "DxCASE", file = "1.2_volcano_plot_diff_expr_transcripts_for_diagnosis_with_sex_dx_interaction.pdf")
 rm(design, fit)
 ```
-
 No (`r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])`) hits. Maybe also a problem of the multiple testing correction as we have too many transcripts to correct for. 
 
 ### PRS with normal model
 
-**SCZ PRS**
+Here, we will generate the differential expression on all loaded PRS based on the normal model, including ADHD-2017, ASD-2019, BPD-2018, BMI-2015, CDG1-2013, CDG2-2018, EA-2018, HE-2014, IN-2018, MDD1-2012, MDD2-2018, MDD3-2019 and SCZ2-2014.
 
+**ADHD-2017 PRS**
 ```{r, echo = F}
 # generate design matrix
-design <- model.matrix(~ PRS.SCZ + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-
+design <- model.matrix(~ PRS.ADHD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 # differential expression analysis (limma)
 fit <- RunLimma(design, transcript_summaries)
-
-# result table
-top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.SCZ", file =  "2.1.1_diff_expr_transcripts_for_SCZ_PRS.csv")
-
-# volcano plot
-GenerateVolcanoPlot(fit, variable = "PRS.SCZ", file = "2.1.1_volcano_plot_diff_expr_transcripts_for_SCZ_PRS.pdf")
+# generate result table
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.ADHD", file =  "2.1.1_diff_expr_transcripts_for_ADHD-2017_PRS.csv")
+# remove unnecessary data
 rm(design, fit)
 ```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the ADHD-2017 PRS.
 
-We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the SCZ PRS.
-
-**MDD PRS**
-
+**ASD-2019 PRS**
 ```{r, echo = F}
 # generate design matrix
-design <- model.matrix(~ PRS.MDD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-
+design <- model.matrix(~ PRS.ASD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 # differential expression analysis (limma)
 fit <- RunLimma(design, transcript_summaries)
-
-# result table
-top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.MDD", file =  "2.1.2_diff_expr_transcripts_for_MDD_PRS.csv")
-
-# volcano plot
-GenerateVolcanoPlot(fit, variable = "PRS.MDD", file = "2.1.2_volcano_plot_diff_expr_transcripts_for_MDD_PRS.pdf")
+# generate result table
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.ASD", file =  "2.1.2_diff_expr_transcripts_for_ASD-2019_PRS.csv")
+# remove unnecessary data
 rm(design, fit)
 ```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the ASD-2019 PRS.
 
-We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the MDD PRS.
-
-**BPD PRS**
-
+**BPD-2018 PRS**
 ```{r, echo = F}
 # generate design matrix
 design <- model.matrix(~ PRS.BPD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-
 # differential expression analysis (limma)
 fit <- RunLimma(design, transcript_summaries)
-
-# result table
-top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.BPD", file =  "2.1.3_diff_expr_transcripts_for_BPD_PRS.csv")
-
-# volcano plot
-GenerateVolcanoPlot(fit, variable = "PRS.BPD", file = "2.1.3_volcano_plot_diff_expr_transcripts_for_BPD_PRS.pdf")
+# generate result table
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.BPD", file =  "2.1.3_diff_expr_transcripts_for_BPD-2018_PRS.csv")
+# remove unnecessary data
 rm(design, fit)
 ```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the BPD-2018 PRS.
 
-We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the BPD PRS.
-
-**CDG PRS**
-
+**BMI-2015 PRS**
 ```{r, echo = F}
 # generate design matrix
-design <- model.matrix(~ PRS.CD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-
+design <- model.matrix(~ PRS.BMI + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 # differential expression analysis (limma)
 fit <- RunLimma(design, transcript_summaries)
-
-# result table
-top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.CD", file =  "2.1.4_diff_expr_transcripts_for_CD_PRS.csv")
-
-# volcano plot
-GenerateVolcanoPlot(fit, variable = "PRS.CD", file = "2.1.4_volcano_plot_diff_expr_transcripts_for_CD_PRS.pdf")
+# generate result table
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.BMI", file =  "2.1.4_diff_expr_transcripts_for_BMI-2015_PRS.csv")
+# remove unnecessary data
 rm(design, fit)
 ```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the BMI-2015 PRS.
 
-We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the CDG PRS.
+**CDG1-2013 PRS**
+```{r, echo = F}
+# generate design matrix
+design <- model.matrix(~ PRS.CDG1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, transcript_summaries)
+# generate result table
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.CDG1", file =  "2.1.5_diff_expr_transcripts_for_CDG1-2013_PRS.csv")
+# remove unnecessary data
+rm(design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the CDG1-2013 PRS.
+
+**CDG2-2018 PRS**
+```{r, echo = F}
+# generate design matrix
+design <- model.matrix(~ PRS.CDG2 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, transcript_summaries)
+# generate result table
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.CDG2", file =  "2.1.6_diff_expr_transcripts_for_CDG2-2018_PRS.csv")
+# remove unnecessary data
+rm(design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the CDG2-2018 PRS.
+
+**EA-2018 PRS**
+```{r, echo = F}
+# generate design matrix
+design <- model.matrix(~ PRS.EA + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, transcript_summaries)
+# generate result table
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.EA", file =  "2.1.7_diff_expr_transcripts_for_EA-2018_PRS.csv")
+# remove unnecessary data
+rm(design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the EA-2018 PRS.
+
+**HE-2014 PRS**
+```{r, echo = F}
+# generate design matrix
+design <- model.matrix(~ PRS.HE + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, transcript_summaries)
+# generate result table
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.HE", file =  "2.1.8_diff_expr_transcripts_for_HE-2014_PRS.csv")
+# remove unnecessary data
+rm(design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the HE-2014 PRS.
+
+**IN-2018 PRS**
+```{r, echo = F}
+# generate design matrix
+design <- model.matrix(~ PRS.IN + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, transcript_summaries)
+# generate result table
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.IN", file =  "2.1.9_diff_expr_transcripts_for_IN-2018_PRS.csv")
+# remove unnecessary data
+rm(design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the IN-2018 PRS.
+
+**MDD1-2012 PRS**
+```{r, echo = F}
+# generate design matrix
+design <- model.matrix(~ PRS.MDD1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, transcript_summaries)
+# generate result table
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.MDD1", file =  "2.1.10_diff_expr_transcripts_for_MDD1-2012_PRS.csv")
+# remove unnecessary data
+rm(design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the MDD1-2012 PRS.
+
+**MDD2-2018 PRS**
+```{r, echo = F}
+# generate design matrix
+design <- model.matrix(~ PRS.MDD2 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, transcript_summaries)
+# generate result table
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.MDD2", file =  "2.1.11_diff_expr_transcripts_for_MDD2-2018_PRS.csv")
+# remove unnecessary data
+rm(design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the MDD2-2018 PRS.
+
+**MDD3-2019 PRS**
+```{r, echo = F}
+# generate design matrix
+design <- model.matrix(~ PRS.MDD3 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, transcript_summaries)
+# generate result table
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.MDD3", file =  "2.1.12_diff_expr_transcripts_for_MDD3-2019_PRS.csv")
+# remove unnecessary data
+rm(design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the MDD3-2019 PRS.
+
+**SCZ2-2014 PRS**
+```{r, echo = F}
+# generate design matrix
+design <- model.matrix(~ PRS.SCZ2 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, transcript_summaries)
+# generate result table
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.SCZ2", file =  "2.1.13_diff_expr_transcripts_for_SCZ2-2014_PRS.csv")
+# remove unnecessary data
+rm(design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the SCZ2-2014 PRS.
 
 
 ### PRS with recalculated p-value and FDR
 
-As the low adjusted p-values of the transcript expressions could come from the high number of transcripts to test for, we want to redo the adjusted p-value calculation as followed:
+As the low adjusted p-values of the transcript expressions could come from the high number of transcripts to test for, we want to redo the adjusted p-value calculation for all PRS from above as follows:
 
 1. Take the lowest p-value of all transcripts corresponding to a gene
 2. Get all transcript IDs and reduce the expression Set to these transcripts
 2. Calculate p-values and FDR using limma on the reduced transcript set
 
-**SCZ PRS**
-
+**ADHD-2017 PRS**
 ```{r, echo = F}
 # reduce expression set
-transcript_summaries_new <- GetExprWithSmallestP(input = "2.1.1_diff_expr_transcripts_for_SCZ_PRS.csv", transcript_summaries)
+transcript_summaries_new <- GetExprWithSmallestP(input = "2.1.1_diff_expr_transcripts_for_ADHD-2017_PRS.csv", transcript_summaries)
 dim(transcript_summaries_new)
-
 # generate design matrix
-design <- model.matrix(~ PRS.SCZ + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-
+design <- model.matrix(~ PRS.ADHD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 # differential expression analysis (limma)
 fit <- RunLimma(design, transcript_summaries_new)
-
-# result table
-top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.SCZ", file =  "2.2.1_diff_expr_transcripts_for_SCZ_PRS_new_pvalue_and_fdr.csv")
-
-# volcano plot
-GenerateVolcanoPlot(fit, variable = "PRS.SCZ", file = "2.2.1_volcano_plot_diff_expr_transcripts_for_SCZ_PRS_new_pvalue_and_fdr.pdf")
+# generate result table
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.ADHD", file =  "2.2.1_diff_expr_transcripts_for_ADHD-2017_PRS_new_pvalue_and_fdr.csv")
+# remove unnecessary data
+rm(transcript_summaries_new, design, fit)
 ```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the ADHD-2017 PRS.
 
-We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the SCZ PRS.
-
-**MDD PRS**
-
+**ASD-2019 PRS**
 ```{r, echo = F}
 # reduce expression set
-transcript_summaries_new <- GetExprWithSmallestP(input = "2.1.2_diff_expr_transcripts_for_MDD_PRS.csv", transcript_summaries)
+transcript_summaries_new <- GetExprWithSmallestP(input = "2.1.2_diff_expr_transcripts_for_ASD-2019_PRS.csv", transcript_summaries)
 dim(transcript_summaries_new)
-
 # generate design matrix
-design <- model.matrix(~ PRS.MDD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-
+design <- model.matrix(~ PRS.ASD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 # differential expression analysis (limma)
 fit <- RunLimma(design, transcript_summaries_new)
-
-# result table
-top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.MDD", file =  "2.2.2_diff_expr_transcripts_for_MDD_PRS_new_pvalue_and_fdr.csv")
-
-# volcano plot
-GenerateVolcanoPlot(fit, variable = "PRS.MDD", file = "2.2.2_volcano_plot_diff_expr_transcripts_for_MDD_PRS_new_pvalue_and_fdr.pdf")
+# generate result table
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.ASD", file =  "2.2.2_diff_expr_transcripts_for_ASD-2019_PRS_new_pvalue_and_fdr.csv")
+# remove unnecessary data
+rm(transcript_summaries_new, design, fit)
 ```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the ASD-2019 PRS.
 
-We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the MDD PRS.
-
-**BPD PRS**
-
+**BPD-2018 PRS**
 ```{r, echo = F}
 # reduce expression set
-transcript_summaries_new <- GetExprWithSmallestP(input = "2.1.3_diff_expr_transcripts_for_BPD_PRS.csv", transcript_summaries)
+transcript_summaries_new <- GetExprWithSmallestP(input = "2.1.3_diff_expr_transcripts_for_BPD-2018_PRS.csv", transcript_summaries)
 dim(transcript_summaries_new)
-
 # generate design matrix
 design <- model.matrix(~ PRS.BPD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-
 # differential expression analysis (limma)
 fit <- RunLimma(design, transcript_summaries_new)
-
-# result table
-top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.BPD", file =  "2.2.3_diff_expr_transcripts_for_BPD_PRS_new_pvalue_and_fdr.csv")
-
-# volcano plot
-GenerateVolcanoPlot(fit, variable = "PRS.BPD", file = "2.2.3_volcano_plot_diff_expr_transcripts_for_BPD_PRS_new_pvalue_and_fdr.pdf")
+# generate result table
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.BPD", file =  "2.2.3_diff_expr_transcripts_for_BPD-2018_PRS_new_pvalue_and_fdr.csv")
+# remove unnecessary data
+rm(transcript_summaries_new, design, fit)
 ```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the BPD-2018 PRS.
 
-We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the BPD PRS.
-
-**CDG PRS**
-
+**BMI-2015 PRS**
 ```{r, echo = F}
 # reduce expression set
-transcript_summaries_new <- GetExprWithSmallestP(input = "2.1.4_diff_expr_transcripts_for_CD_PRS.csv", transcript_summaries)
+transcript_summaries_new <- GetExprWithSmallestP(input = "2.1.4_diff_expr_transcripts_for_BMI-2015_PRS.csv", transcript_summaries)
 dim(transcript_summaries_new)
-
 # generate design matrix
-design <- model.matrix(~ PRS.CD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-
+design <- model.matrix(~ PRS.BMI + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 # differential expression analysis (limma)
 fit <- RunLimma(design, transcript_summaries_new)
-
-# result table
-top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.CD", file =  "2.2.4_diff_expr_transcripts_for_CD_PRS_new_pvalue_and_fdr.csv")
-
-# volcano plot
-GenerateVolcanoPlot(fit, variable = "PRS.CD", file = "2.2.4_volcano_plot_diff_expr_transcripts_for_CD_PRS_new_pvalue_and_fdr.pdf")
+# generate result table
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.BMI", file =  "2.2.4_diff_expr_transcripts_for_BMI-2015_PRS_new_pvalue_and_fdr.csv")
+# remove unnecessary data
+rm(transcript_summaries_new, design, fit)
 ```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the BMI-2015 PRS.
 
-We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the CDG PRS.
+**CDG1-2013 PRS**
+```{r, echo = F}
+# reduce expression set
+transcript_summaries_new <- GetExprWithSmallestP(input = "2.1.5_diff_expr_transcripts_for_CDG1-2013_PRS.csv", transcript_summaries)
+dim(transcript_summaries_new)
+# generate design matrix
+design <- model.matrix(~ PRS.CDG1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, transcript_summaries_new)
+# generate result table
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.CDG1", file =  "2.2.5_diff_expr_transcripts_for_CDG1-2013_PRS_new_pvalue_and_fdr.csv")
+# remove unnecessary data
+rm(transcript_summaries_new, design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the CDG1-2013 PRS.
+
+**CDG2-2018 PRS**
+```{r, echo = F}
+# reduce expression set
+transcript_summaries_new <- GetExprWithSmallestP(input = "2.1.6_diff_expr_transcripts_for_CDG2-2018_PRS.csv", transcript_summaries)
+dim(transcript_summaries_new)
+# generate design matrix
+design <- model.matrix(~ PRS.CDG2 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, transcript_summaries_new)
+# generate result table
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.CDG2", file =  "2.2.6_diff_expr_transcripts_for_CDG2-2018_PRS_new_pvalue_and_fdr.csv")
+# remove unnecessary data
+rm(transcript_summaries_new, design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the CDG2-2018 PRS.
+
+**EA-2018 PRS**
+```{r, echo = F}
+# reduce expression set
+transcript_summaries_new <- GetExprWithSmallestP(input = "2.1.7_diff_expr_transcripts_for_EA-2018_PRS.csv", transcript_summaries)
+dim(transcript_summaries_new)
+# generate design matrix
+design <- model.matrix(~ PRS.EA + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, transcript_summaries_new)
+# generate result table
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.EA", file =  "2.2.7_diff_expr_transcripts_for_EA-2018_PRS_new_pvalue_and_fdr.csv")
+# remove unnecessary data
+rm(transcript_summaries_new, design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the EA-2018 PRS.
+
+**HE-2014 PRS**
+```{r, echo = F}
+# reduce expression set
+transcript_summaries_new <- GetExprWithSmallestP(input = "2.1.8_diff_expr_transcripts_for_HE-2014_PRS.csv", transcript_summaries)
+dim(transcript_summaries_new)
+# generate design matrix
+design <- model.matrix(~ PRS.HE + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, transcript_summaries_new)
+# generate result table
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.HE", file =  "2.2.8_diff_expr_transcripts_for_HE-2014_PRS_new_pvalue_and_fdr.csv")
+# remove unnecessary data
+rm(transcript_summaries_new, design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the HE-2014 PRS.
+
+**IN-2018 PRS**
+```{r, echo = F}
+# reduce expression set
+transcript_summaries_new <- GetExprWithSmallestP(input = "2.1.9_diff_expr_transcripts_for_IN-2018_PRS.csv", transcript_summaries)
+dim(transcript_summaries_new)
+# generate design matrix
+design <- model.matrix(~ PRS.IN + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, transcript_summaries_new)
+# generate result table
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.IN", file =  "2.2.9_diff_expr_transcripts_for_IN-2018_PRS_new_pvalue_and_fdr.csv")
+# remove unnecessary data
+rm(transcript_summaries_new, design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the IN-2018 PRS.
+
+**MDD1-2012 PRS**
+```{r, echo = F}
+# reduce expression set
+transcript_summaries_new <- GetExprWithSmallestP(input = "2.1.10_diff_expr_transcripts_for_MDD1-2012_PRS.csv", transcript_summaries)
+dim(transcript_summaries_new)
+# generate design matrix
+design <- model.matrix(~ PRS.MDD1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, transcript_summaries_new)
+# generate result table
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.MDD1", file =  "2.2.10_diff_expr_transcripts_for_MDD1-2012_PRS_new_pvalue_and_fdr.csv")
+# remove unnecessary data
+rm(transcript_summaries_new, design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the MDD1-2012 PRS.
+
+**MDD2-2018 PRS**
+```{r, echo = F}
+# reduce expression set
+transcript_summaries_new <- GetExprWithSmallestP(input = "2.1.11_diff_expr_transcripts_for_MDD2-2018_PRS.csv", transcript_summaries)
+dim(transcript_summaries_new)
+# generate design matrix
+design <- model.matrix(~ PRS.MDD2 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, transcript_summaries_new)
+# generate result table
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.MDD2", file =  "2.2.11_diff_expr_transcripts_for_MDD2-2018_PRS_new_pvalue_and_fdr.csv")
+# remove unnecessary data
+rm(transcript_summaries_new, design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the MDD2-2018 PRS.
+
+**MDD3-2019 PRS**
+```{r, echo = F}
+# reduce expression set
+transcript_summaries_new <- GetExprWithSmallestP(input = "2.1.12_diff_expr_transcripts_for_MDD3-2019_PRS.csv", transcript_summaries)
+dim(transcript_summaries_new)
+# generate design matrix
+design <- model.matrix(~ PRS.MDD3 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, transcript_summaries_new)
+# generate result table
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.MDD3", file =  "2.2.12_diff_expr_transcripts_for_MDD3-2019_PRS_new_pvalue_and_fdr.csv")
+# remove unnecessary data
+rm(transcript_summaries_new, design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the MDD3-2019 PRS.
+
+**SCZ2-2014 PRS**
+```{r, echo = F}
+# reduce expression set
+transcript_summaries_new <- GetExprWithSmallestP(input = "2.1.13_diff_expr_transcripts_for_SCZ2-2014_PRS.csv", transcript_summaries)
+dim(transcript_summaries_new)
+# generate design matrix
+design <- model.matrix(~ PRS.SCZ2 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, transcript_summaries_new)
+# generate result table
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.SCZ2", file =  "2.2.13_diff_expr_transcripts_for_SCZ2-2014_PRS_new_pvalue_and_fdr.csv")
+# remove unnecessary data
+rm(transcript_summaries_new, design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the SCZ2-2014 PRS.
 
 
 ## Exon level 
@@ -837,32 +1115,25 @@ We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]
 ### Diagnosis with normal model
 
 First, run the linear model with correction for all covariates and generate the result table. 
-
 ```{r, echo = F}
 # generate design matrix
 design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-
 # differential expression analysis (limma)
 fit <- RunLimma(design, exon_summaries)
-
 # result table
 top_hits <- GenerateResultTableExon(fit, variable = "DxCASE", file =  "1.1_diff_expr_exons_for_diagnosis.csv")
-
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "DxCASE", file = "1.1_volcano_plot_diff_expr_exons_for_diagnosis.pdf")
 ```
-
 We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for diagnosis. Maybe it is a multiple testing correction problem as we have a lot of exons (around 200,000). 
 
 Get significantly differentially expressed genes for all the different covariates. 
-
 ```{r, echo = F}
 # generate vertical barplot
 limma_res_exon <- GenerateVerticalBarplotOfDiffExprHits(design, fit, from = 6, to = 5, plot_name = "1.1_barplot_significant_DEA_hits_exons.pdf")
 ```
 
 Now, we combine the barplot of the number of differentially expressed genes, transcripts and exons per covariate (corrected for all other covariates). 
-
 ```{r, echo = F}
 ### ALL COMBINED (gene + transcript + exon barplot) ###
 colnames(limma_res_gene) <- "counts"
@@ -877,7 +1148,6 @@ limma_res_exon$covariates <- row.names(limma_res_exon)
 limma.res.all <- rbind(limma_res_gene, limma_res_transcript, limma_res_exon)
 limma.res.all$covariates <- as.factor(limma.res.all$covariates)
 limma.res.all$covariates <- factor(limma.res.all$covariates, levels = c("C4", "C3", "C2", "C1", "Type_of_Death","Suicide", "Sex", "RIN2", "RIN", "Diagnosis", "PMI", "pH", "Age"))
-
 # save plot
 pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/04_figures/1.1_barplots_significant_DEA_hits_gene_transcript_exon_combined.pdf")
 p <- ggplot(limma.res.all, aes(y = counts, x = covariates)) +
@@ -897,24 +1167,18 @@ rm(design, fit, top_hits, limma_res_exon, limma_res_transcript, limma.res.all, p
 ### Diagnosis with sex and diagnosis interaction model
 
 Adding a Sex and diagnosis interaction term (Sex * Dx) to the model.
-
 ```{r, echo = F}
 # generate design matrix
 design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1 + (Sex*Dx), pData)
-
 # differential expression analysis (limma)
 fit <- RunLimma(design, exon_summaries)
-
 # result table
 top_hits <- GenerateResultTableExon(fit, variable = "DxCASE", file =  "1.2_diff_expr_exons_for_diagnosis_with_sex_dx_interaction.csv")
-
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "DxCASE", file = "1.2_volcano_plot_diff_expr_exons_for_diagnosis_with_sex_dx_interaction.pdf")
-
 # remove unnecessary data
 rm(design, fit)
 ```
-
 No `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits. Maybe also a problem of the multiple testing correction.
 
 ### Diagnosis with recalculated p-values and FDR
@@ -924,19 +1188,15 @@ As the low adjusted p-values of the transcript expressions could come from the h
 1. Take the lowest p-value of all transcripts corresponding to a gene
 2. Get all transcript IDs and reduce the expression Set to these transcripts
 2. Calculate p-values and FDR using limma on the reduced transcript set
-
 ```{r, echo = F}
 # reduce expression set
 dim(exon_summaries)
 exon_summaries_new <- GetExprWithSmallestP(input = "1.1_diff_expr_exons_for_diagnosis.csv", exon_summaries)
 dim(exon_summaries_new)
-
 # generate design matrix
 design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-
 # differential expression analysis (limma)
 fit <- RunLimma(design, exon_summaries_new)
-
 # result table
 top_hits <- GenerateResultTableExon(fit, variable = "DxCASE", file =  "1.3_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.csv")
 top_hits_age <- GenerateResultTableExon(fit, variable = "Age", file =  "1.3_diff_expr_exons_for_age_new_pvalue_and_fdr.csv")
@@ -944,22 +1204,18 @@ top_hits_ph <- GenerateResultTableExon(fit, variable = "pH", file =  "1.3_diff_e
 top_hits_pmi <- GenerateResultTableExon(fit, variable = "PMI", file =  "1.3_diff_expr_exons_for_pmi_new_pvalue_and_fdr.csv")
 top_hits_c2 <- GenerateResultTableExon(fit, variable = "C2", file =  "1.3_diff_expr_exons_for_c2_new_pvalue_and_fdr.csv")
 top_hits_c1 <- GenerateResultTableExon(fit, variable = "C1", file =  "1.3_diff_expr_exons_for_c1_new_pvalue_and_fdr.csv")
-
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "DxCASE", file = "1.3_volcano_plot_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.pdf")
 ```
-
 Now, we have multiple hits on the exon level. We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for diagnosis, `r length(top_hits_age[top_hits_age$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for age, `r length(top_hits_ph[top_hits_ph$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for pH, `r length(top_hits_pmi[top_hits_pmi$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for pmi, `r length(top_hits_c2[top_hits_c2$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the second ancestry principal component (PC2). All hits are based on a 10% FDR (FDR < 0.1). The first ten diagnosis gene hits are: `r top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"][1:10]`
 
 Get significantly differentially expressed genes for all the different covariates. 
-
 ```{r, echo = F}
 # generate vertical barplot
 limma_res_exon.new <- GenerateVerticalBarplotOfDiffExprHits(design, fit, from = 6, to = 5, plot_name = "1.3_barplot_significant_DEA_hits_exons_new_pvalue_and_fdr.pdf")
 ```
 
 Now, we combine the barplot of the number of differentially expressed genes, transcripts and exons per covariate (corrected for all other covariates). 
-
 ```{r, echo = F}
 ### ALL COMBINED (gene + transcript + exon barplot) ###
 colnames(limma_res_transcript.new) <- "counts"
@@ -971,7 +1227,6 @@ limma_res_exon.new$covariates <- row.names(limma_res_exon.new)
 limma.res.all <- rbind(limma_res_gene, limma_res_transcript.new, limma_res_exon.new)
 limma.res.all$covariates <- as.factor(limma.res.all$covariates)
 limma.res.all$covariates <- factor(limma.res.all$covariates, levels = c("C4", "C3", "C2", "C1", "Type_of_Death","Suicide", "Sex", "RIN2", "RIN", "Diagnosis", "PMI", "pH", "Age"))
-
 # save plot
 pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/04_figures/1.3_barplots_significant_DEA_hits_gene_transcript_exon_combined_new_pvalues_and_fdr.pdf")
 p <- ggplot(limma.res.all, aes(y = counts, x = covariates)) +
@@ -989,7 +1244,6 @@ rm(design, fit, limma_res_exon.new, limma_res_transcript.new, limma_res_gene, li
 ```
 
 Now we generate some plots for the found eDEgenes. First, we will plot a heatmap of the 2224 eDEGenes.
-
 ```{r, echo = F}
 # get only top hits (2224 eDEGenes)
 top_hits <- top_hits[top_hits$`FDR estimate` < 0.1, ]
@@ -1003,7 +1257,6 @@ rm(anno)
 ```
 
 Then, we plot the up and down regulated genes into one barplot with the two variables mirrored on the x-axis.
-
 ```{r, echo = F}
 logfc <- as.data.frame(table(top_hits$logFC))
 logfc$group <- "Upregulated"
@@ -1015,7 +1268,6 @@ logfc$linearFC <- sapply(logfc$logfc, function(x) {if(as.double(as.character(x))
 min(logfc$linearFC)
 max(logfc$linearFC)
 mean(logfc$linearFC)
-
 ggplot(logfc, aes(x = linearFC, y = Freq, fill = group)) + 
   geom_histogram(stat = "identity", show.legend = FALSE) + 
   xlab("Linear fold change") +
@@ -1031,7 +1283,6 @@ rm(logfc)
 ```
 
 Now, we generate violin plots for the top six hits.
-
 ```{r, echo = F}
 for (hit in top_hits$`Ensembl Exon ID`[1:6]) {
   name <- top_hits[hit, "Gene Symbol"]
@@ -1055,175 +1306,328 @@ rm(name, data)
 
 ### PRS with normal model
 
-**SCZ PRS**
+Here, we will generate the differential expression on all loaded PRS based on the normal model, including ADHD-2017, ASD-2019, BPD-2018, BMI-2015, CDG1-2013, CDG2-2018, EA-2018, IN-2018, MDD1-2012, MDD2-2018, MDD3-2019 and SCZ2-2014.
 
+**ADHD-2017 PRS**
 ```{r, echo = F}
-# generate design matrix for SCZ PRS
-design <- model.matrix(~ PRS.SCZ + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-
+# generate design matrix for ADHD-2017 PRS
+design <- model.matrix(~ PRS.ADHD + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 # differential expression analysis (limma)
 fit <- RunLimma(design, exon_summaries)
-
-# result table
-top_hits <- GenerateResultTableExon(fit, variable = "PRS.SCZ", file =  "2.1.1_diff_expr_exons_for_SCZ_PRS.csv")
-
-# volcano plot
-GenerateVolcanoPlot(fit, variable = "PRS.SCZ", file = "2.1.1_volcano_plot_diff_expr_exons_for_SCZ_PRS.pdf")
+# generate result table
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.ADHD", file =  "2.1.1_diff_expr_exons_for_ADHD-2017_PRS.csv")
+# remove unnecessary data
 rm(design, fit)
 ```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the ADHD-2017 PRS.
 
-We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the SCZ PRS.
-
-**MDD PRS**
-
+**ASD-2019 PRS**
 ```{r, echo = F}
-# generate design matrix for SCZ PRS
-design <- model.matrix(~ PRS.MDD + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-
+# generate design matrix for ASD-2019 PRS
+design <- model.matrix(~ PRS.ASD + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 # differential expression analysis (limma)
 fit <- RunLimma(design, exon_summaries)
-
-# result table
-top_hits <- GenerateResultTableExon(fit, variable = "PRS.MDD", file =  "2.1.2_diff_expr_exons_for_MDD_PRS.csv")
-
-# volcano plot
-GenerateVolcanoPlot(fit, variable = "PRS.MDD", file = "2.1.2_volcano_plot_diff_expr_exons_for_MDD_PRS.pdf")
+# generate result table
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.ASD", file =  "2.1.2_diff_expr_exons_for_ASD-2019_PRS.csv")
+# remove unnecessary data
 rm(design, fit)
 ```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the ASD-2019 PRS.
 
-We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the MDD PRS.
-
-**BPD PRS**
-
+**BPD-2018 PRS**
 ```{r, echo = F}
-# generate design matrix for BPD PRS
+# generate design matrix for BPD-2018 PRS
 design <- model.matrix(~ PRS.BPD + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-
 # differential expression analysis (limma)
 fit <- RunLimma(design, exon_summaries)
-
-# result table
-top_hits <- GenerateResultTableExon(fit, variable = "PRS.BPD", file =  "2.1.3_diff_expr_exons_for_BPD_PRS.csv")
-
-# volcano plot
-GenerateVolcanoPlot(fit, variable = "PRS.BPD", file = "2.1.3_volcano_plot_diff_expr_exons_for_BPD_PRS.pdf")
+# generate result table
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.BPD", file =  "2.1.3_diff_expr_exons_for_BPD-2018_PRS.csv")
+# remove unnecessary data
 rm(design, fit)
 ```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the BPD-2018 PRS.
 
-We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the BPD PRS.
-
-**CDG PRS**
-
+**BMI-2015 PRS**
 ```{r, echo = F}
-# generate design matrix for CDG PRS
-design <- model.matrix(~ PRS.CD + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-
+# generate design matrix for BMI-2015 PRS
+design <- model.matrix(~ PRS.BMI + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 # differential expression analysis (limma)
 fit <- RunLimma(design, exon_summaries)
-
-# result table
-top_hits <- GenerateResultTableExon(fit, variable = "PRS.CD", file =  "2.1.4_diff_expr_exons_for_CD_PRS.csv")
-
-# volcano plot
-GenerateVolcanoPlot(fit, variable = "PRS.CD", file = "2.1.4_volcano_plot_diff_expr_exons_for_CD_PRS.pdf")
+# generate result table
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.BMI", file =  "2.1.4_diff_expr_exons_for_BMI-2015_PRS.csv")
+# remove unnecessary data
 rm(design, fit)
 ```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the BMI-2015 PRS.
 
-We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the CDG PRS.
+**CDG1-2013 PRS**
+```{r, echo = F}
+# generate design matrix for CDG1-2013 PRS
+design <- model.matrix(~ PRS.CDG1 + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, exon_summaries)
+# generate result table
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.CDG1", file =  "2.1.5_diff_expr_exons_for_CDG1-2013_PRS.csv")
+# remove unnecessary data
+rm(design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the CDG1-2013 PRS.
+
+**CDG2-2018 PRS**
+```{r, echo = F}
+# generate design matrix for CDG2-2018 PRS
+design <- model.matrix(~ PRS.CDG2 + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, exon_summaries)
+# generate result table
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.CDG2", file =  "2.1.6_diff_expr_exons_for_CDG2-2018_PRS.csv")
+# remove unnecessary data
+rm(design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the CDG2-2018 PRS.
+
+**EA-2018 PRS**
+```{r, echo = F}
+# generate design matrix for EA-2018 PRS
+design <- model.matrix(~ PRS.EA + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, exon_summaries)
+# generate result table
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.EA", file =  "2.1.7_diff_expr_exons_for_EA-2018_PRS.csv")
+# remove unnecessary data
+rm(design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the EA-2018 PRS.
+
+**HE-2014 PRS**
+```{r, echo = F}
+# generate design matrix for HE-2014 PRS
+design <- model.matrix(~ PRS.HE + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, exon_summaries)
+# generate result table
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.HE", file =  "2.1.8_diff_expr_exons_for_HE-2014_PRS.csv")
+# remove unnecessary data
+rm(design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the HE-2014 PRS.
+
+**IN-2018 PRS**
+```{r, echo = F}
+# generate design matrix for IN-2018 PRS
+design <- model.matrix(~ PRS.IN + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, exon_summaries)
+# generate result table
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.IN", file =  "2.1.9_diff_expr_exons_for_IN-2018_PRS.csv")
+# remove unnecessary data
+rm(design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the IN-2018 PRS.
+
+**MDD1-2012 PRS**
+```{r, echo = F}
+# generate design matrix for MDD1-2012 PRS
+design <- model.matrix(~ PRS.MDD1 + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, exon_summaries)
+# generate result table
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.MDD1", file =  "2.1.10_diff_expr_exons_for_MDD1-2012_PRS.csv")
+# remove unnecessary data
+rm(design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the MDD1-2012 PRS.
+
+**MDD2-2018 PRS**
+```{r, echo = F}
+# generate design matrix for MDD2-2018 PRS
+design <- model.matrix(~ PRS.MDD2 + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, exon_summaries)
+# generate result table
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.MDD2", file =  "2.1.11_diff_expr_exons_for_MDD2-2018_PRS.csv")
+# remove unnecessary data
+rm(design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the MDD2-2018 PRS.
+
+**MDD3-2019 PRS**
+```{r, echo = F}
+# generate design matrix for MDD3-2019 PRS
+design <- model.matrix(~ PRS.MDD3 + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, exon_summaries)
+# generate result table
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.MDD3", file =  "2.1.12_diff_expr_exons_for_MDD3-2019_PRS.csv")
+# remove unnecessary data
+rm(design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the MDD3-2019 PRS.
+
+**SCZ2-2014 PRS**
+```{r, echo = F}
+# generate design matrix for SCZ2-2014 PRS
+design <- model.matrix(~ PRS.SCZ2 + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, exon_summaries)
+# generate result table
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.SCZ2", file =  "2.1.13_diff_expr_exons_for_SCZ2-2014_PRS.csv")
+# remove unnecessary data
+rm(design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the SCZ2-2014 PRS.
 
 ### PRS with recalculated p-value and FDR
 
-**SCZ PRS**
-
+**ADHD-2017 PRS**
 ```{r, echo = F}
 # reduce expression set
-exon_summaries.new <- GetExprWithSmallestP(input = "2.1.1_diff_expr_exons_for_SCZ_PRS.csv", exon_summaries)
-dim(exon_summaries.new)
-
+exon_summaries_new <- GetExprWithSmallestP(input = "2.1.1_diff_expr_exons_for_ADHD-2017_PRS.csv", exon_summaries)
+dim(exon_summaries_new)
 # generate design matrix
-design <- model.matrix(~ PRS.SCZ + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-
+design <- model.matrix(~ PRS.ADHD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 # differential expression analysis (limma)
-fit <- RunLimma(design, exon_summaries.new)
-
-# result table
-top_hits <- GenerateResultTableExon(fit, variable = "PRS.SCZ", file =  "2.2.1_diff_expr_exons_for_SCZ_PRS_new_pvalue_and_fdr.csv")
-
-# volcano plot
-GenerateVolcanoPlot(fit, variable = "PRS.SCZ", file = "2.2.1_volcano_plot_diff_expr_exons_for_SCZ_PRS_new_pvalue_and_fdr.pdf")
+fit <- RunLimma(design, exon_summaries_new)
+# generate result table
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.ADHD", file =  "2.2.1_diff_expr_exons_for_ADHD-2017_PRS_new_pvalue_and_fdr.csv")
+# remove unnecessary data
+rm(exon_summaries_new, design, fit)
 ```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the ADHD-2017 PRS. Here are the 10 first top gene symbols: `r top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"]`
 
-We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the SCZ PRS. Here are the 10 first top gene symbols: `r top_hits[top_hits$"FDR estimate" < 0.05, "Gene Symbol"][1:10]`
-
-**MDD PRS**
-
+**ASD-2019 PRS**
 ```{r, echo = F}
-# reduce expression set
-exon_summaries.new <- GetExprWithSmallestP(input = "2.1.2_diff_expr_exons_for_MDD_PRS.csv", exon_summaries)
-dim(exon_summaries.new)
-
-# generate design matrix
-design <- model.matrix(~ PRS.MDD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-
-# differential expression analysis (limma)
-fit <- RunLimma(design, exon_summaries.new)
-
-# result table
-top_hits <- GenerateResultTableExon(fit, variable = "PRS.MDD", file =  "2.2.2_diff_expr_exons_for_MDD_PRS_new_pvalue_and_fdr.csv")
-
-# volcano plot
-GenerateVolcanoPlot(fit, variable = "PRS.MDD", file = "2.2.2_volcano_plot_diff_expr_exons_for_MDD_PRS_new_pvalue_and_fdr.pdf")
+exon_summaries_new <- GetExprWithSmallestP(input = "2.1.2_diff_expr_exons_for_ASD-2019_PRS.csv", exon_summaries)
+dim(exon_summaries_new)
+design <- model.matrix(~ PRS.ASD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+fit <- RunLimma(design, exon_summaries_new)
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.ASD", file =  "2.2.2_diff_expr_exons_for_ASD-2019_PRS_new_pvalue_and_fdr.csv")
+rm(exon_summaries_new, design, fit)
 ```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the ASD-2019 PRS. Here are the 10 first top gene symbols: `r top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"][1:10]`
 
-We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the MDD PRS. Here are the 10 first top gene symbols: `r top_hits[top_hits$"FDR estimate" < 0.05, "Gene Symbol"][1:10]`
-
-**BPD PRS**
-
+**BPD-2018 PRS**
 ```{r, echo = F}
-# reduce expression set
-exon_summaries.new <- GetExprWithSmallestP(input = "2.1.3_diff_expr_exons_for_BPD_PRS.csv", exon_summaries)
-dim(exon_summaries.new)
-
-# generate design matrix
+exon_summaries_new <- GetExprWithSmallestP(input = "2.1.3_diff_expr_exons_for_BPD-2018_PRS.csv", exon_summaries)
+dim(exon_summaries_new)
 design <- model.matrix(~ PRS.BPD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-
-# differential expression analysis (limma)
-fit <- RunLimma(design, exon_summaries.new)
-
-# result table
-top_hits <- GenerateResultTableExon(fit, variable = "PRS.BPD", file =  "2.2.3_diff_expr_exons_for_BPD_PRS_new_pvalue_and_fdr.csv")
-
-# volcano plot
-GenerateVolcanoPlot(fit, variable = "PRS.BPD", file = "2.2.3_volcano_plot_diff_expr_exons_for_BPD_PRS_new_pvalue_and_fdr.pdf")
+fit <- RunLimma(design, exon_summaries_new)
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.BPD", file =  "2.2.3_diff_expr_exons_for_BPD-2018_PRS_new_pvalue_and_fdr.csv")
+rm(exon_summaries_new, design, fit)
 ```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the BPD-2018 PRS. Here are the 10 first top gene symbols: `r top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"]`
 
-We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the SCZ PRS. Here are the 10 first top gene symbols: `r top_hits[top_hits$"FDR estimate" < 0.05, "Gene Symbol"][1:10]`
-
-**CDG PRS**
-
+**BMI-2015 PRS**
 ```{r, echo = F}
-# reduce expression set
-exon_summaries.new <- GetExprWithSmallestP(input = "2.1.4_diff_expr_exons_for_CD_PRS.csv", exon_summaries)
-dim(exon_summaries.new)
-
-# generate design matrix
-design <- model.matrix(~ PRS.CD + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
-
-# differential expression analysis (limma)
-fit <- RunLimma(design, exon_summaries.new)
-
-# result table
-top_hits <- GenerateResultTableExon(fit, variable = "PRS.CD", file =  "2.2.4_diff_expr_exons_for_CD_PRS_new_pvalue_and_fdr.csv")
-
-# volcano plot
-GenerateVolcanoPlot(fit, variable = "PRS.CD", file = "2.2.4_volcano_plot_diff_expr_exons_for_CD_PRS_new_pvalue_and_fdr.pdf")
+exon_summaries_new <- GetExprWithSmallestP(input = "2.1.4_diff_expr_exons_for_BMI-2015_PRS.csv", exon_summaries)
+dim(exon_summaries_new)
+design <- model.matrix(~ PRS.BMI + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+fit <- RunLimma(design, exon_summaries_new)
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.BMI", file =  "2.2.4_diff_expr_exons_for_BMI-2015_PRS_new_pvalue_and_fdr.csv")
+rm(exon_summaries_new, design, fit)
 ```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the BMI-2015 PRS. 
 
-We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the SCZ PRS. Here are the 10 first top gene symbols: `r top_hits[top_hits$"FDR estimate" < 0.05, "Gene Symbol"][1:10]`
+**CDG1-2013 PRS**
+```{r, echo = F}
+exon_summaries_new <- GetExprWithSmallestP(input = "2.1.5_diff_expr_exons_for_CDG1-2013_PRS.csv", exon_summaries)
+dim(exon_summaries_new)
+design <- model.matrix(~ PRS.CDG1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+fit <- RunLimma(design, exon_summaries_new)
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.CDG1", file =  "2.2.5_diff_expr_exons_for_CDG1-2013_PRS_new_pvalue_and_fdr.csv")
+rm(exon_summaries_new, design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the CDG1-2013 PRS. Here are the 10 first top gene symbols: `r top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"][1:10]`
 
+**CDG2-2018 PRS**
+```{r, echo = F}
+exon_summaries_new <- GetExprWithSmallestP(input = "2.1.6_diff_expr_exons_for_CDG2-2018_PRS.csv", exon_summaries)
+dim(exon_summaries_new)
+design <- model.matrix(~ PRS.CDG2 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+fit <- RunLimma(design, exon_summaries_new)
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.CDG2", file =  "2.2.6_diff_expr_exons_for_CDG2-2018_PRS_new_pvalue_and_fdr.csv")
+rm(exon_summaries_new, design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the CDG2-2018 PRS. Here are the 10 first top gene symbols: `r top_hits[top_hits$"FDR estimate" < 0.05, "Gene Symbol"][1:10]`
+
+**EA-2018 PRS**
+```{r, echo = F}
+exon_summaries_new <- GetExprWithSmallestP(input = "2.1.7_diff_expr_exons_for_EA-2018_PRS.csv", exon_summaries)
+dim(exon_summaries_new)
+design <- model.matrix(~ PRS.EA + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+fit <- RunLimma(design, exon_summaries_new)
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.EA", file =  "2.2.7_diff_expr_exons_for_EA-2018_PRS_new_pvalue_and_fdr.csv")
+rm(exon_summaries_new, design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the EA-2018 PRS. 
+
+**HE-2014 PRS**
+```{r, echo = F}
+exon_summaries_new <- GetExprWithSmallestP(input = "2.1.8_diff_expr_exons_for_HE-2014_PRS.csv", exon_summaries)
+dim(exon_summaries_new)
+design <- model.matrix(~ PRS.HE + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+fit <- RunLimma(design, exon_summaries_new)
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.HE", file =  "2.2.8_diff_expr_exons_for_HE-2014_PRS_new_pvalue_and_fdr.csv")
+rm(exon_summaries_new, design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the HE-2014 PRS. Here are the 10 first top gene symbols: `r top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"][1:10]`
+
+**IN-2018 PRS**
+```{r, echo = F}
+exon_summaries_new <- GetExprWithSmallestP(input = "2.1.9_diff_expr_exons_for_IN-2018_PRS.csv", exon_summaries)
+dim(exon_summaries_new)
+design <- model.matrix(~ PRS.IN + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+fit <- RunLimma(design, exon_summaries_new)
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.IN", file =  "2.2.9_diff_expr_exons_for_IN-2018_PRS_new_pvalue_and_fdr.csv")
+rm(exon_summaries_new, design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the IN-2018 PRS. 
+
+**MDD1-2012 PRS**
+```{r, echo = F}
+exon_summaries_new <- GetExprWithSmallestP(input = "2.1.10_diff_expr_exons_for_MDD1-2012_PRS.csv", exon_summaries)
+dim(exon_summaries_new)
+design <- model.matrix(~ PRS.MDD1 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+fit <- RunLimma(design, exon_summaries_new)
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.MDD1", file =  "2.2.10_diff_expr_exons_for_MDD1-2012_PRS_new_pvalue_and_fdr.csv")
+rm(exon_summaries_new, design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the MDD1-2012 PRS. Here are the 10 first top gene symbols: `r top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"][1:10]`
+
+**MDD2-2018 PRS**
+```{r, echo = F}
+exon_summaries_new <- GetExprWithSmallestP(input = "2.1.11_diff_expr_exons_for_MDD2-2018_PRS.csv", exon_summaries)
+dim(exon_summaries_new)
+design <- model.matrix(~ PRS.MDD2 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+fit <- RunLimma(design, exon_summaries_new)
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.MDD2", file =  "2.2.11_diff_expr_exons_for_MDD2-2018_PRS_new_pvalue_and_fdr.csv")
+rm(exon_summaries_new, design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the MDD2-2018 PRS. Here are the 10 first top gene symbols: `r top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"][1:10]`
+
+**MDD3-2019 PRS**
+```{r, echo = F}
+exon_summaries_new <- GetExprWithSmallestP(input = "2.1.12_diff_expr_exons_for_MDD3-2019_PRS.csv", exon_summaries)
+dim(exon_summaries_new)
+design <- model.matrix(~ PRS.MDD3 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+fit <- RunLimma(design, exon_summaries_new)
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.MDD3", file =  "2.2.12_diff_expr_exons_for_MDD3-2019_PRS_new_pvalue_and_fdr.csv")
+rm(exon_summaries_new, design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the MDD3-2019 PRS. Here are the 10 first top gene symbols: `r top_hits[top_hits$"FDR estimate" < 0.05, "Gene Symbol"][1:10]`
+
+**SCZ2-2014 PRS**
+```{r, echo = F}
+exon_summaries_new <- GetExprWithSmallestP(input = "2.1.13_diff_expr_exons_for_SCZ2-2014_PRS.csv", exon_summaries)
+dim(exon_summaries_new)
+design <- model.matrix(~ PRS.SCZ2 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
+fit <- RunLimma(design, exon_summaries_new)
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.SCZ2", file =  "2.2.13_diff_expr_exons_for_SCZ2-2014_PRS_new_pvalue_and_fdr.csv")
+rm(exon_summaries_new, design, fit)
+```
+We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for FDR < 10% (hits for FDR < 5%: `r length(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"])`) for the SCZ2-2014 PRS. Here are the 10 first top gene symbols: `r top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"][1:10]`
 
 # Session Info
-
 ```{r, eval = F}
 sessionInfo()
 ```
