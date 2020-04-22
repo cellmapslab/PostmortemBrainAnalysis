@@ -10,8 +10,8 @@ out_path="/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/LDpr
 bash ${script_path}/05_LDpred.sh -c ${out_path}/ADHD-2017/00_input/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_adhd_filtered -g ${out_path}/ADHD-2017/00_input/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_adhd_filtered -s ${out_path}/ADHD-2017/00_input/ADHD_2017_filtered.sumstats -n 55374 -f PGC_OLD -o ${out_path}/ADHD-2017 -t $tools_path
 
 ### ASD-2019 ###
-# 5,305 cases and 5305 pseudocontrols: N = 10,610 samples
-bash ${script_path}/05_LDpred.sh -c ${out_path}/ASD/00_input/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_asd_filtered -g ${out_path}/ASD/00_input/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_asd_filtered -s ${out_path}/ASD/00_input/ASD_filtered.sumstats -n 10610 -f PGC -o ${out_path}/ASD -t $tools_path
+# 18,382 cases and 27,969 controls: N = 46,351
+bash ${script_path}/05_LDpred.sh -c ${out_path}/ASD/00_input/03_updateMap_all_chr_maf0.01_hwe_IDs_changed_noDup_asd_filtered -g ${out_path}/ASD/00_input/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_asd_filtered -s ${out_path}/ASD/00_input/ASD_filtered.sumstats -n 46351 -f PGC -o ${out_path}/ASD -t $tools_path
 #wait 
 
 ### BMI-2015 ###
