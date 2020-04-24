@@ -115,50 +115,53 @@ bp <- opt$bp
 stat <- opt$stat
 
 # load GWAS summary statistics file
-sumstats <- fread(opt$base)
+sumstats <- fread(opt$base, data.table = FALSE)
+# remove rows with p-value = 0 as it causes problems in the transformation
+sumstats <- sumstats[!sumstats[, pvalue] == 0, ]
 
 ### Run lassosum (parallelized) ###
 # Get LD region file (Other alternatives available: type ?lassosum.pipeline for more details)
 LDblocks <- "EUR.hg19" # This will use LD regions as defined in Berisa and Pickrell (2015) for the European population and the hg19 genome
 # check if statistic is beta or odds ratio (or)
 if (opt$beta == "yes") {
-  # Calculate SNP-wise correlations from p-values (n = sample size)
-  cor <- p2cor(p = sumstats[, get(pvalue)], n = opt$size, sign = sumstats[, get(stat)])
+  # Calculate SNP-wise correlations from p-values (n = sample size) without specifying sign
+  cor <- p2cor(p = sumstats[, pvalue], n = opt$size)
   # Run lassosum (parallelized with number of threads, default = 2)
   cl <- makeCluster(opt$thread, type = "FORK")
-  out <- lassosum.pipeline(cor = cor, chr = sumstats[, get(chr)], pos = sumstats[, get(bp)], 
-                           A1 = sumstats[, get(ref_allele)], A2 = sumstats[, get(alt_allele)], # A2 is not required but advised
+  out <- lassosum.pipeline(cor = cor, chr = sumstats[, chr], pos = sumstats[, bp], 
+                           A1 = sumstats[, ref_allele], A2 = sumstats[, alt_allele], # A2 is not required but advised
                            ref.bfile = opt$ld, test.bfile = opt$target, 
                            LDblocks = LDblocks, cluster = cl)
 } else {
-  # Calculate SNP-wise correlations from p-values (n = sample size)
-  cor <- p2cor(p = sumstats[, get(pvalue)], n = opt$size, sign = log(sumstats[, get(stat)]))
+  # Calculate SNP-wise correlations from p-values (n = sample size) using odds ratio (OR)
+  cor <- p2cor(p = sumstats[, pvalue], n = opt$size, sign = log(sumstats[, stat]))
   # Run lassosum (parallelized with number of threads, default = 2)
   cl <- makeCluster(opt$thread, type = "FORK")
-  out <- lassosum.pipeline(cor = cor, chr = sumstats[, get(chr)], pos = sumstats[, get(bp)], 
-                           A1 = sumstats[, get(ref_allele)], A2 = sumstats[, get(alt_allele)], # A2 is not required but advised
+  out <- lassosum.pipeline(cor = cor, chr = sumstats[, chr], pos = sumstats[, bp], 
+                           A1 = sumstats[, ref_allele], A2 = sumstats[, alt_allele], # A2 is not required but advised
                            ref.bfile = opt$ld, test.bfile = opt$target, 
                            LDblocks = LDblocks, cluster = cl)
 }
+save(out, file = paste0(opt$out, "/lassosum_pipeline_result_", opt$gwas, ".RData"))
 
 ### Generate PRS ###
 # generate PRS with covariates 
-scz_v <- validate(out, pheno = opt$pheno, cov = opt$cov)
+val <- validate(out, pheno = opt$pheno, cov = opt$cov)
 # save output as .RData file
-save(scz_v, file = paste0(opt$out, "/lassosum_PRS_with_covars_", opt$gwas, ".RData"))
+#save(val, file = paste0(opt$out, "/lassosum_PRS_with_covars_", opt$gwas, ".RData"))
 # save PRS per sample in a .best file
-write.table(scz_v$results.table, file = paste0(opt$out, "/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_", opt$gwas, "_lassosum_PRS_with_cov.best"), sep = "\t", quote = FALSE)
+write.table(val$results.table, file = paste0(opt$out, "/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_", opt$gwas, "_lassosum_PRS_with_cov.best"), sep = "\t", quote = FALSE)
 # save plot comparing all four s
 pdf(file = paste0(opt$out, "/plot_lassosum_PRS_with_covars_SCZ2-2014.pdf"))
-plot(scz_v)
+plot(val)
 dev.off()
 # generate PRS without covariates
-scz_v2 <- validate(out, pheno = opt$pheno)
+val2 <- validate(out, pheno = opt$pheno)
 # save output as .RData file
-save(scz_v2, file = paste0(opt$out, "/lassosum_PRS_without_covars_", opt$gwas, ".RData"))
+#save(val2, file = paste0(opt$out, "/lassosum_PRS_without_covars_", opt$gwas, ".RData"))
 # save PRS per sample in a .best file
-write.table(scz_v2$results.table, file = paste0(opt$out, "/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_", opt$gwas, "_lassosum_PRS_without_cov.best"), sep = "\t", quote = FALSE)
+write.table(val2$results.table, file = paste0(opt$out, "/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_", opt$gwas, "_lassosum_PRS_without_cov.best"), sep = "\t", quote = FALSE)
 # save plot comparing all four s values
 pdf(file = paste0(opt$out, "/plot_lassosum_PRS_without_covars_", opt$gwas, ".pdf"))
-plot(scz_v2)
+plot(val2)
 dev.off()
