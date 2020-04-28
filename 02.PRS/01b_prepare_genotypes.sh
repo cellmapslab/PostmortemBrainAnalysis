@@ -81,7 +81,7 @@ if [ $genotypes ] && [ $exclude ] && [ $include ] && [ $out_path ] && [ $tools_p
 
     chromosome=($(seq 1 1 22))
 
-    # Generate the output directory (if not existing)
+    # Generate the output directories (if not existing)
     maf_hwe_out_path="${out_path}/1.1_MAF_HWE_filtered"  # output path for maf and hwe filtered data
     recoded_out_path="${out_path}/1.2_changed_IDs"  # output path for recoded and multiallelic filtered SNP IDs
     merged_out_path="${out_path}/1.3_merged_chr"  # output path for merged files

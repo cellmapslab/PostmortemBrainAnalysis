@@ -71,6 +71,17 @@ library(grid)
 library(ggrepel)  # for volcanoplot
 ```
 
+
+# Generate output folders
+
+Before we can start, we need to make sure that the output folder for the .RData files exists. If it does not exist yet, we will generate it using the systems (Red Hat Enterprise Linux operating system: Fedora 25) "mkdir" command. 
+
+```{r}
+outpath = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_DEA_results"
+system(paste0("mkdir -p ", outpath))
+```
+
+
 # Functions
 
 As we have to do several analysis multiple times, we will put these into functions to reduce the lines of code. 
@@ -109,7 +120,7 @@ GenerateResultTableGene <- function(fit, variable, file){
   colnames(top_hits) <- c("Ensembl Gene ID", "Location", "Gene Symbol", "logFC", "Average Expression", "t-statistic", "p-value", "FDR estimate", "B coefficient")
   top_hits <- unique(separate_rows(top_hits, `Ensembl Gene ID`, sep = "\\|"))
   top_hits <- unique(separate_rows(top_hits, `Gene Symbol`, sep = "\\|"))
-  write.table(top_hits, file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_DEA_results/", file), sep = "\t", row.names = F)
+  write.table(top_hits, file = paste0(outpath, "/", file), sep = "\t", row.names = F)
   return(top_hits)
 }
 GenerateResultTableTranscript <- function(fit, variable, file){
@@ -119,7 +130,7 @@ GenerateResultTableTranscript <- function(fit, variable, file){
   colnames(top_hits) <- c("Ensembl Transcript ID", "Location", "Ensembl Gene ID", "Gene Symbol", "logFC", "Average Expression", "t-statistic", "p-value", "FDR estimate", "B coefficient")
   top_hits <- unique(separate_rows(top_hits, `Ensembl Gene ID`, sep = "\\|"))
   top_hits <- unique(separate_rows(top_hits, `Gene Symbol`, sep = "\\|"))
-  write.table(top_hits, file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_DEA_results/", file), sep = "\t", row.names = F)
+  write.table(top_hits, file = paste0(outpath, "/", file), sep = "\t", row.names = F)
   return(top_hits)
 }
 GenerateResultTableExon <- function(fit, variable, file){
@@ -129,7 +140,7 @@ GenerateResultTableExon <- function(fit, variable, file){
   colnames(top_hits) <- c("Ensembl Exon ID", "Location", "Ensembl Transcript ID", "Ensembl Gene ID", "Gene Symbol", "logFC", "Average Expression", "t-statistic", "p-value", "FDR estimate", "B coefficient")
   top_hits <- unique(separate_rows(top_hits, `Ensembl Gene ID`, sep = "\\|"))
   top_hits <- unique(separate_rows(top_hits, `Gene Symbol`, sep = "\\|"))
-  write.table(top_hits, file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_DEA_results/", file), sep = "\t", row.names = F)
+  write.table(top_hits, file = paste0(outpath, "/", file), sep = "\t", row.names = F)
   return(top_hits)
 }
 
@@ -211,7 +222,7 @@ GenerateVerticalBarplotOfDiffExprHits <- function(design, fit, from, to, plot_na
 
 # function to recalculate the p-value and fdr for transcripts and exons based on gene level (Ensmebl Gene ID NOT Symbol!!): load the result table, get the smallest p-value for a gene (Ensembl Gene ID), calculate new fdr using the genes smallest p-values and gene number as background
 GetExprWithSmallestP <- function(input, summaries){
-  res <- fread(paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_DEA_results/", input), header = T, stringsAsFactors = F)
+  res <- fread(paste0(outpath, "/", input), header = T, stringsAsFactors = F)
   # get the rows with the lowest p-value per gene ID
   min_pval <- res[ , .SD[which.min(`p-value`)], by = `Ensembl Gene ID`]
   # get all transcript IDs with lowest p-value per gene ID

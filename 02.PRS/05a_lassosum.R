@@ -152,7 +152,7 @@ val <- validate(out, pheno = opt$pheno, cov = opt$cov)
 # save PRS per sample in a .best file
 write.table(val$results.table, file = paste0(opt$out, "/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_", opt$gwas, "_lassosum_PRS_with_cov.best"), sep = "\t", quote = FALSE)
 # save plot comparing all four s
-pdf(file = paste0(opt$out, "/plot_lassosum_PRS_with_covars_SCZ2-2014.pdf"))
+pdf(file = paste0(opt$out, "/plot_lassosum_PRS_with_covars_", opt$gwas, ".pdf"))
 plot(val)
 dev.off()
 # generate PRS without covariates

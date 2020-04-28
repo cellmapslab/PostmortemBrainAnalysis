@@ -17,8 +17,8 @@ tools_path="/storage/groups/ccm01/tools"
 Rscript ${script_path}/01a_generate_necessary_files.R input1=\"${sample_file}\" input2=\"${sample_sheet}\" output1=\"${output1}\" output2=\"${output2}\" output3=\"${output3}\" output4=\"${output4}\"
 
 # 2. Preprocess the genotypes: filter for MAF, HWE, merge chromosome files and remove duplicates
-#bash ${script_path}/01b_prepare_genotypes.sh -g ${genotypes} -e ${output1} -i ${output2} -o ${outpath_geno} -t ${tools_path} -s ${script_path}
+bash ${script_path}/01b_prepare_genotypes.sh -g ${genotypes} -e ${output1} -i ${output2} -o ${outpath_geno} -t ${tools_path} -s ${script_path}
 
 # 3. Change diagnosis column in the .fam phenotype file from -9 to 1 for controls and 2 for cases (necessary for PRSice-2)
-#Rscript 01d_change_phenotype.R
+Rscript 01d_change_phenotype.R
 

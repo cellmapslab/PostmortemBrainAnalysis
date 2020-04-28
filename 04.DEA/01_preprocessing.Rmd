@@ -78,6 +78,16 @@ library(tidyr)
 ```
 
 
+# Generate output folders
+
+Before we can start, we need to make sure that the output folder for the .RData files exists. If it does not exist yet, we will generate it using the systems (Red Hat Enterprise Linux operating system: Fedora 25) "mkdir" command. 
+
+```{r}
+outpath = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_files"
+system(paste0("mkdir -p ", outpath))
+```
+
+
 # Import Affymetrix data
 
 Now, we will load the raw data *CEL* files produced by the Affymetrix array scanner software. These files contain the measured probe intensities. We also need to save the phenotype information for each sample. 
@@ -164,7 +174,7 @@ dim(raw_data)
 After every long and time consuming step we will save the generated data into an RData file. This step is necessary, so that we do not need to run all above steps again. 
 
 ```{r}
-save(raw_data, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_Files/1_affymetrix_exon_microarray_raw_data.RData")
+save(raw_data, file = paste0(outpath, "/1_affymetrix_exon_microarray_raw_data.RData"))
 
 # remove unneccessary data
 rm(cel_files, pheno_data, replicates)
@@ -188,7 +198,7 @@ As we want to use "safely" annotated genes we will set target to **core**. The R
 ```{r}
 core_summaries <- rma(raw_data, target = "core") 
 dim(core_summaries)
-save(core_summaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_Files/2_affymetrix_exon_microarray_data_after_rma_core_summaries.RData")
+save(core_summaries, file = paste0(outpath, "/2_affymetrix_exon_microarray_data_after_rma_core_summaries.RData"))
 ```
 
 We only summarized to transcripts to compare the resulting gene level to the probeset generated gene level. 
@@ -200,7 +210,7 @@ For summarization to all three transcriptional levels (gene, transcript and exon
 ```{r}
 probeset_summaries <- rma(raw_data, target = "probeset") 
 dim(probeset_summaries)
-save(probeset_summaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_Files/2_affymetrix_exon_microarray_data_after_rma_probeset_summaries.RData")
+save(probeset_summaries, file = paste0(outpath, "/2_affymetrix_exon_microarray_data_after_rma_probeset_summaries.RData"))
 rm(raw_data)
 ```
 
@@ -295,9 +305,9 @@ rm(transcript_ids, probeset_ids, index)
 Then, we save the datasets into RData files and remove unnecessary variables:
 
 ```{r}
-save(core_summaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_Files/3_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered.RData")
+save(core_summaries, file = paste0(outpath, "/3_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered.RData"))
 
-save(probeset_summaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_Files/3_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered.RData")
+save(probeset_summaries, file = paste0(outpath, "/3_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered.RData"))
 ```
 
 
@@ -316,7 +326,7 @@ exprs_combat <- ComBat(dat = exprs_raw, batch = batch, mod = mod_combat, par.pri
 identical(rownames(exprs(core_summaries)), rownames(exprs_combat)) 
 exprs(core_summaries) <- exprs_combat
 dim(core_summaries)
-save(core_summaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_Files/4_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_batch_corrected.RData")
+save(core_summaries, file = paste0(outpath, "/4_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_batch_corrected.RData"))
 rm(exprs_raw, batch, mod_combat, exprs_combat)
 ```
 
@@ -330,7 +340,7 @@ exprs_combat <- ComBat(dat = exprs_raw, batch = batch, mod = mod_combat, par.pri
 identical(rownames(exprs(probeset_summaries)), rownames(exprs_combat)) # check if the two matrices are in the same order
 exprs(probeset_summaries) <- exprs_combat
 dim(probeset_summaries)
-save(probeset_summaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_Files/4_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected.RData")
+save(probeset_summaries, file = paste0(outpath, "/4_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected.RData"))
 rm(exprs_raw, batch, mod_combat, exprs_combat)
 ```
 
@@ -378,7 +388,7 @@ svobj <- sva(edata, mod, mod0, n.sv = nsv)  # => NO surrogate variables found
 rm(pheno, edata, mod, mod0, svobj)  # remove unnecessary data
 
 # save dataset
-save(core_summaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_Files/5_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_batch_corrected_SVA.RData")
+save(core_summaries, file = paste0(outpath, "/5_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_batch_corrected_SVA.RData"))
 ```
 
 Here, num.sv estimated `r nsv` surrogate variables. As we did not find any  surrogate variables, we do not need to include anything in the pData of the core_summaries.
@@ -400,7 +410,7 @@ svobj <- sva(edata, mod, mod0, n.sv = nsv)
 pData(probeset_summaries)$SV1 <- svobj$sv  # 1 surrogate variable found => add to pData
 
 # save dataset
-save(probeset_summaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_Files/5_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA.RData")
+save(probeset_summaries, file = paste0(outpath, "/5_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA.RData"))
 ```
 
 Here, num.sv estimated `r nsv` surrogate variable. As we found one surrogate variable, we will include it for further analyses in the pData of the probeset_summaries.
@@ -410,7 +420,7 @@ To check if the first surrogate variable is enough, we will also calculate the f
 ```{r}
 # save 1-20 surrogate variables (for sv selection plot)
 svobj <- sva(edata, mod, mod0, n.sv = 20) 
-save(svobj, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_Files/5_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_surrogate_variables_1-20.RData")
+save(svobj, file = paste0(outpath, "/5_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_surrogate_variables_1-20.RData"))
 rm(svobj, nsv, edata, pheno, mod, mod0) # remove unnecessary data
 ```
 
@@ -543,7 +553,7 @@ Save the gene summarized data into an RData file and remove unnecessary data.
 
 ```{r}
 # save data
-save(gene_summaries, anno_genes_core, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_Files/6_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_batch_corrected_SVA_gene_summaries.RData")
+save(gene_summaries, anno_genes_core, file = paste0(outpath, "/6_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_batch_corrected_SVA_gene_summaries.RData"))
 
 # remove unnecessary data
 rm(core_genes, index, mapping, expressions, expr_dt, exprs_summarized, df, data,  core_summaries)
@@ -617,7 +627,7 @@ dim(gene_summaries)
 We do not have any NA's in the gene IDs and/or gene symbols, so we do not need to exclude them. Therefore, we can just save the annotated dataset into an RData file:
 
 ```{r}
-save(gene_summaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_Files/7_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
+save(gene_summaries, file = paste0(outpath, "/7_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData"))
 rm(anno_genes_core, anno_new, expressions, rows, ids, ids_anno, gene_summaries)
 ```
 
@@ -681,7 +691,7 @@ Save the gene summarized data into an RData file and remove unnecessary data.
 
 ```{r}
 # save data
-save(gene_summaries, anno_genes, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries.RData")
+save(gene_summaries, anno_genes, file = paste0(outpath, "/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries.RData"))
 
 # remove unnecessary data
 rm(genes, mapping, expressions, expr_dt, exprs_summarized, df, data,  probeset_summaries)
@@ -766,7 +776,7 @@ dim(gene_summaries)
 We do not have any NA's in the gene IDs and/or gene symbols, so we do not need to exclude them. Therefore, we can just save the annotated dataset into an RData file:
 
 ```{r}
-save(gene_summaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
+save(gene_summaries, file = paste0(outpath, "/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData"))
 rm(anno_genes, anno_summarized, expressions, anno_new, rows, ids, ids_anno, gene_summaries)
 ```
 
@@ -792,7 +802,7 @@ To summarize the dataset based on transcript IDs, we will first rename the rows 
 
 ```{r}
 # Load the probeset data (after filtering, batch correction and SVA)
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_Files/5_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA.RData")
+load(paste0(outpath, "/5_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA.RData"))
 dim(probeset_summaries)
 
 # remove probesets that do not have a transcript id mapping
@@ -836,7 +846,7 @@ Save the transcript summarized data into an RData file and remove unnecessary da
 
 ```{r}
 # save data
-save(transcript_summaries, anno_transcripts, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_transcript_summaries.RData")
+save(transcript_summaries, anno_transcripts, file = paste0(outpath, "/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_transcript_summaries.RData"))
 
 # remove unnecessary data
 rm(transcripts, probeset_summaries, mapping, expressions, expr_dt, exprs_summarized, df, data)
@@ -915,7 +925,7 @@ dim(transcript_summaries)
 We do not have any NA's in the gene IDs and/or gene symbols, so we do not need to exclude them. Therefore, we can just save the annotated dataset into an RData file:
 
 ```{r}
-save(transcript_summaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_transcript_summaries_annotated.RData")
+save(transcript_summaries, file = paste0(outpath, "/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_transcript_summaries_annotated.RData"))
 rm(anno_transcripts, anno_summarized, anno_filtered, ids_to_exclude, expressions, anno_new, rows, ids, ids_anno, transcript_summaries)
 ```
 
@@ -941,7 +951,7 @@ To summarize the dataset based on exon IDs, we will first rename the rows of the
 
 ```{r}
 # Load the probeset data (after filtering, batch correction and SVA)
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_Files/5_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA.RData") 
+load(paste0(outpath, "/5_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA.RData"))
 
 # remove probesets that do not have an exon id mapping
 probeset_summaries <- probeset_summaries[featureNames(probeset_summaries) %in% as.character(anno_exons$id_internal_huex), ]
@@ -978,7 +988,7 @@ We save the data again into an RData file.
 
 ```{r}
 # save data
-save(exon_summaries, anno_exons, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_Files/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_exon_summaries.RData")
+save(exon_summaries, anno_exons, file = paste0(outpath, "/6_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_exon_summaries.RData"))
 
 # remove unnecessary data
 rm(probesets, probeset_summaries, mapping, expressions, expr_dt, exprs_summarized, df, data)
@@ -1060,7 +1070,7 @@ We do not have any NA's in the gene IDs and/or gene symbols, so we do not need t
 
 ```{r}
 dim(exon_summaries)
-save(exon_summaries, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_exon_summaries_annotated.RData")
+save(exon_summaries, file = paste0(outpath, "/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_exon_summaries_annotated.RData"))
 rm(anno_filtered, anno_summarized, anno_exons, ids_to_exclude, expressions, anno_new, ids, ids_anno)
 ```
 
