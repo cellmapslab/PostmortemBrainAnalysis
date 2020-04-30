@@ -171,28 +171,28 @@ if [ $genotypes ] && [ $phenotypes ] && [ $covariates ] && [ $cohort ] && [ $sum
     echo "coord done"  # --ssf-format $format
 
     # 2. Run LDpred: test for 1 0.9 0.8 0.7 0.6 0.5 0.4 0.3 0.2 0.1 0.03 0.01 0.003 0.001 (takes forever...)
-    ldpred gibbs --cf ${coord_path}/${out_file_name}.coord_file --ldr ${radius} --f 1 0.5 0.3 0.1 0.03 0.01 0.003 0.001 --ldf ${gibbs_path}/${out_file_name} --h2 --N ${nums} --out ${gibbs_path}/${out_file_name} &> ${gibbs_path}/LDpred.log
+    ldpred gibbs --cf ${coord_path}/${out_file_name}.coord_file --ldr ${radius} --f 1 0.5 0.3 0.1 0.03 0.01 0.003 0.001 --ldf ${gibbs_path}/${out_file_name} --N ${nums} --out ${gibbs_path}/${out_file_name} &> ${gibbs_path}/LDpred.log
     echo "gibbs done"
 
     # 3. Run scoring (get score for each patient)
     # 3.1 Once without covariates
-    ldpred score --gf ${genotypes} --rf ${gibbs_path}/${out_file_name} --f 1 0.5 0.3 0.1 0.03 0.01 0.003 0.001 --pf ${phenotypes} --pf-format LSTANDARD --out ${out_path}/03_validate/${out_file_name}_PRS_without_cov &> ${out_path}/03_validate/validate.log
-    echo "score without covariates done"
+#    ldpred score --gf ${genotypes} --rf ${gibbs_path}/${out_file_name} --f 1 0.5 0.3 0.1 0.03 0.01 0.003 0.001 --pf ${phenotypes} --pf-format LSTANDARD --out ${out_path}/03_validate/${out_file_name}_PRS_without_cov &> ${out_path}/03_validate/validate.log
+#    echo "score without covariates done"
     # 3.2 Once with covariates
-    ldpred score --gf ${genotypes} --rf ${gibbs_path}/${out_file_name} --f 1 0.5 0.3 0.1 0.03 0.01 0.003 0.001 --pf ${phenotypes} --pf-format LSTANDARD --cov-file ${covariates} --out ${out_path}/03_validate/${out_file_name}_PRS_with_cov &> ${out_path}/03_validate/validate.log
-    echo "score with covariates done"
+#    ldpred score --gf ${genotypes} --rf ${gibbs_path}/${out_file_name} --f 1 0.5 0.3 0.1 0.03 0.01 0.003 0.001 --pf ${phenotypes} --pf-format LSTANDARD --cov-file ${covariates} --out ${out_path}/03_validate/${out_file_name}_PRS_with_cov &> ${out_path}/03_validate/validate.log
+#    echo "score with covariates done"
 
     # 4. run LDpred for pruning and thresholding (P+T)
-    ldpred p+t --cf ${coord_path}/${out_file_name}.coord_file --ldr ${radius} --p 1 0.05 0.01 0.00000005 --out ${pt_path}/${out_file_name} &> ${pt_path}/LDpred_p+t.log
-    echo "gibbs for P+T done"
+#    ldpred p+t --cf ${coord_path}/${out_file_name}.coord_file --ldr ${radius} --p 1 0.05 0.01 0.00000005 --out ${pt_path}/${out_file_name} &> ${pt_path}/LDpred_p+t.log
+#    echo "gibbs for P+T done"
 
     # 5. run scoring (get score for each patient) for the P+T
     # 5.1 once without cov
-    ldpred score --gf ${genotypes} --rf ${pt_path}/${out_file_name} --p 1 0.05 0.01 0.00000005 --pf ${phenotypes} --pf-format LSTANDARD --out ${pt_path}/${out_file_name}_PRS_without_cov &> ${pt_path}/validate_p+t.log
-    echo "score for P+T without covariates done"
+#    ldpred score --gf ${genotypes} --rf ${pt_path}/${out_file_name} --p 1 0.05 0.01 0.00000005 --pf ${phenotypes} --pf-format LSTANDARD --out ${pt_path}/${out_file_name}_PRS_without_cov &> ${pt_path}/validate_p+t.log
+#    echo "score for P+T without covariates done"
     # 5.2 Once with cov
-    ldpred score --gf ${genotypes} --rf ${pt_path}/${out_file_name} --p 1 0.05 0.01 0.00000005 --pf ${phenotypes} --pf-format LSTANDARD --cov-file ${covariates} --out ${pt_path}/${out_file_name}_PRS_with_cov &> ${pt_path}/validate_p+t.log
-    echo "score for P+T with covariates done"
+#    ldpred score --gf ${genotypes} --rf ${pt_path}/${out_file_name} --p 1 0.05 0.01 0.00000005 --pf ${phenotypes} --pf-format LSTANDARD --cov-file ${covariates} --out ${pt_path}/${out_file_name}_PRS_with_cov &> ${pt_path}/validate_p+t.log
+#    echo "score for P+T with covariates done"
 
     # Print that the job is done
     echo "!!!Done with LDpred of ${out_file_name}!!!"

@@ -47,15 +47,43 @@ library(qvalue)
 library(data.table)
 library(tidyr)
 library(rtracklayer)
+library(limma)
 
 # Packages for pathway enrichment
 library(GSEABase)   # to load or generate gene set data
 library(mgsa)  # load MGSA: a pathway enrichment analysis tool
 
+# Color palettes
+library(RColorBrewer)
+library(viridis)
+
 # Packages for plotting
 library(ggplot2)
 library(VennDiagram)
 library(viridis)  # color blind color palette
+library(ggrepel)  # for volcanoplot
+library(pheatmap)
+library(grid)
+```
+
+
+# Generate output folder
+
+Before we can start, we need to make sure that the output folder for the figures exists. If it does not exist yet, we will generate it using the systems (Red Hat Enterprise Linux operating system: Fedora 25) "mkdir" command. 
+
+```{r}
+outpath = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/04_figures"
+system(paste0("mkdir -p ", outpath))
+```
+
+
+# Paths
+
+Before we can start, we need to make sure that all necessary paths and folder names are saved. If the output folder does not exist yet, we will generate it using the systems (Red Hat Enterprise Linux operating system: Fedora 25) "mkdir" command.
+```{r}
+inpath = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_DEA_results"
+outpath = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/05_figures"
+system(paste0("mkdir -p ", outpath))
 ```
 
 
@@ -64,6 +92,82 @@ library(viridis)  # color blind color palette
 To reduce code, we will generate some functions here. 
 
 ```{r definition, echo=F}
+# function to generate a vulcano plot for differentially expressed genes
+GenerateVolcanoPlot <- function(fit, variable, file) {
+  # get all hits
+  hits <- topTable(fit, coef = variable, number = Inf, adjust.method = "BH")
+  total <- nrow(hits)
+  # get first hit after FDR 10% for drawing a p-value threshold line
+  index <- if(length(which(hits$adj.P.Val < 0.1)) == 0) 0 else which(hits$adj.P.Val < 0.1)
+  threshold <- hits[index[length(index)] + 1, "P.Value"]
+  ### volcano plot ###
+  # label only significant hits (if more than 10)
+  g <- ggplot(hits, aes(x = logFC, y = -log10(P.Value))) + 
+    theme_bw(base_size = 22) + 
+    geom_point() + 
+    xlim(-2, 2) + 
+    ylim(0, 6) +
+    xlab(bquote(~Log[2]~ "fold change")) +
+    ylab(bquote(~-Log[10]~ italic(P))) +
+    theme(axis.line = element_line(),
+      panel.border = element_blank(),
+      panel.background = element_blank()) +
+    labs(caption = paste0("Total variables: ", total)) +
+    geom_hline(yintercept = -log10(threshold), linetype = "dashed")
+ if(length(index) >= 10){
+    g + geom_point(data = hits[index, ], aes(x = logFC, y = -log10(P.Value)), colour = "red2", size = 2) +
+    geom_text_repel(data = hits[index[1:10], ], aes(label = gene_name), colour = "red2")
+  # else: label hit genes (if some are found) purple and following genes green until a maximum of 10 genes is labeled
+  } else if(length(index) == 0) {
+    g + geom_text_repel(data = hits[1:10, ], aes(label = gene_name))
+  } else {
+    g + geom_point(data = hits[index, ], aes(x = logFC, y = -log10(P.Value)), colour = "red2", size = 2) +
+    geom_text_repel(data = hits[index, ], aes(label = gene_name), colour = "red2") +
+    geom_point(data = hits[(length(index) + 1):10, ], aes(x = logFC, y = -log10(P.Value)), size = 2) +
+    geom_text_repel(data = hits[(length(index) + 1):10, ], aes(label = gene_name))
+  }
+  g
+  ggsave(paste0(outpath, "/", file), width = 8, height = 6, units = "in")
+}
+
+# function to plot all differentially expressed hits for the different covariates corrected for all other covariates as a vertical barplot
+GenerateVerticalBarplotOfDiffExprHits <- function(design, fit, from, to, plot_name){
+  # Get padj values for all different covariates
+  nc <- ncol(design) - 1
+  limma_res_fc <- topTable(fit, adjust = "BH", sort.by = "none", number = Inf)
+  limma_res_padj <- limma_res_fc[, from:(to + nc)]
+  for (i in 1:nc){
+    limma_res_padj[, i] = topTable(fit, adjust = "BH", sort.by = "none", number = Inf, coef = i + 1)[, "adj.P.Val"]
+    if(i == nc){
+      limma_res_padj$`Ensembl Gene ID` = topTable(fit, adjust = "BH", sort.by = "none", number = Inf, coef = i + 1)[, "gene_id"]
+    }
+  }
+  limma_res_padj <- limma_res_padj[, -c(length(limma_res_padj) - 1)] # remove SV1
+  colnames(limma_res_padj) <- c("Diagnosis", "Age", "Sex", "pH", "PMI", "RIN", "RIN2", "Suicide", "Type_of_Death1", "Type_of_Death2", "C1", "C2", "C3", "C4", "Ensembl Gene ID") # "Gene Symbol", "Ensembl Gene ID")
+  limma_res_padj$Type_of_Death <- (limma_res_padj$Type_of_Death1 + limma_res_padj$Type_of_Death2) / 2
+  limma_res_padj <- limma_res_padj[, c("Diagnosis", "Age", "Sex", "pH", "PMI", "RIN", "RIN2", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4", "Ensembl Gene ID")]# "Gene Symbol", "Ensembl Gene ID")]
+  # unmerge Gene Ensembl IDs at their vertical dash "|"
+  limma_res_padj <- unique(separate_rows(limma_res_padj, `Ensembl Gene ID`, sep = "\\|")) 
+  # change data.frame into data.table to get the minimal adjusted p-value for each unique Ensembl Gene IDs (some can be found multipe times!!)
+  limma_res_padj <- as.data.table(limma_res_padj)
+  limma_res_padj <- limma_res_padj[, lapply(.SD, min), by = 'Ensembl Gene ID']
+  # check, how many padj values are < 0.10
+  limma_res_padj_0.1 <- apply(limma_res_padj[, -1], 2, function(x) sum(x < 0.1))
+  limma_res_plot <- data.frame(sort(limma_res_padj_0.1, decreasing = T))
+  # vertical barplot with ggplot2
+  ggplot(limma_res_plot, aes(y = limma_res_plot$sort.limma_res_padj_0.1..decreasing...T., x = reorder(row.names(limma_res_plot), sort.limma_res_padj_0.1..decreasing...T.))) +
+    geom_bar(stat = "identity") +
+    coord_flip() +
+    theme_minimal() +
+    theme(text = element_text(size = 22)) +
+    ylab("# significant hits") +
+    xlab("") +
+    geom_text(size = 7, aes(label = limma_res_plot$sort.limma_res_padj_0.1..decreasing...T.), nudge_y = 120, colour = "dimgray") +
+    scale_y_continuous(expand = c(0.02, 0.01))
+  ggsave(paste0(outpath, "/", plot_name))
+  return(limma_res_plot)
+}
+
 # function, which first generates the contingency table for two datasets and then calculates the p-value using fisher exact test
 # return: the p-value calculated using fisher exact test
 FishersExactTest <- function(data1, data2, background){
@@ -78,6 +182,377 @@ FishersExactTest <- function(data1, data2, background){
   result <- fisher.test(contingency_matrix, alternative = "greater")
   return(result$p.value)
 }
+```
+
+
+# Colors
+
+And we will add the colors used for the gene, transcript and exon level based on the viridis package:
+```{r}
+# "#482576FF" "#25848EFF" "#7AD151FF"
+col <- viridis(3, begin = 0.1, end = 0.8) 
+```
+
+
+# DEA Genes
+
+## Diagnosis model
+
+### Load Data
+
+```{r}
+# load RData file
+load(paste0(inpath, "/1.1_diff_expr_genes_for_diagnosis.RData"))
+```
+
+### Volcano Plot
+
+```{r}
+# generate volcano plot
+GenerateVolcanoPlot(fit, variable = "DxCASE", file = "1.1_volcano_plot_diff_expr_genes_for_diagnosis.pdf")
+```
+
+### Barplot
+
+Now we generate a barplot including all significantly differentially expressed genes for each covariates of the model (corrected for all the other covariates in the model). 
+```{r, echo = F}
+# generate vertical barplot
+limma_res_gene <- GenerateVerticalBarplotOfDiffExprHits(design, fit, from = 4, to = 3, plot_name = "1.1_barplot_significant_DEA_hits_genes.pdf")
+```
+
+## Diagnosis with sex and diagnosis interaction model
+
+### Load Data
+
+```{r}
+# load RData file
+load(paste0(inpath, "/1.2_diff_expr_genes_for_diagnosis_with_sex_dx_interaction.RData"))
+```
+
+### Volcano Plot
+
+```{r}
+# volcano plot
+GenerateVolcanoPlot(fit, variable = "DxCASE", file = "1.2_volcano_plot_diff_expr_genes_for_diagnosis_with_sex_dx_interaction.pdf")
+rm(design, fit)
+```
+
+### Boxplot
+
+For the TRIM10 hit, we will plot the residuals of sex vs. diagnosis as this gene infers a difference between these two covariates:
+```{r, echo = F}
+# load data
+load(paste0(inpath, "/1.1_diff_expr_genes_for_diagnosis.RData"))
+# generate boxplot with case vs control for male and female samples of the hit gene (TRIM10)
+trim10 <- res[rownames(res) == "ENSG00000204613.6", ]
+trim10 <- t(t(as.data.frame(trim10)))
+trim10 <- merge(trim10, pData[, c("ShortName", "Dx", "Sex")], by.x = "row.names", by.y = "ShortName", all.x = T)
+trim10$DxSex <- paste0(trim10$Dx, trim10$Sex)
+pdf(paste0(outpath, "/1.2_boxplot_TRIM10_diff_expr_genes_for_diagnosis_with_sex_dx_interaction.pdf"), width = 7, height = 6)
+ggplot(trim10, aes(Sex, trim10, fill = Dx)) +
+  scale_x_discrete(labels = c("Female", "Male")) +
+  theme_classic() + 
+  theme(text = element_text(size = 22), axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_fill_manual(values = viridis(3), labels = c("Controls", "Cases")) + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  geom_boxplot(alpha = 0.7) + 
+  ggtitle("TRIM10") +
+  ylab("Gene expression") + 
+  xlab("Sex") + 
+  labs(fill = "Diagnosis")
+dev.off()
+# p-value females
+females <- trim10[trim10$Sex == "F",]
+case <- females[females$Dx == "CASE",]
+control <- females[females$Dx == "CTL",]
+t.test(case$trim10, control$trim10) # p-value = 0.01022
+# p-value males
+males <- trim10[trim10$Sex == "M",]
+case <- males[males$Dx == "CASE",]
+control <- males[males$Dx == "CTL",]
+t.test(case$trim10, control$trim10) # p-value = 0.05302
+# remove unnecessary data
+rm(design, fit, res, trim10, females, males, case, control)
+```
+
+# DEA Transcripts
+
+## Normal model
+
+## Volcano plots
+
+normal model for diagnosis:
+```{r}
+# load RData file
+load(paste0(inpath, "/2.1_diff_expr_transcripts_for_diagnosis.RData"))
+# volcano plot
+GenerateVolcanoPlot(fit, variable = "DxCASE", file = "2.1_volcano_plot_diff_expr_transcripts_for_diagnosis.pdf")
+```
+
+Sex*Diagnosis interaction model:
+```{r}
+# load RData file
+load(paste0(inpath, "2.2_diff_expr_transcripts_for_diagnosis_with_sex_dx_interaction.RData"))
+# volcano plot
+GenerateVolcanoPlot(fit, variable = "DxCASE", file = "2.2_volcano_plot_diff_expr_transcripts_for_diagnosis_with_sex_dx_interaction.pdf")
+```
+
+new FDR for diagnosis:
+```{r}
+# load RData file
+load(paste0(inpath, "/2.4_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.RData"))
+# volcano plot
+GenerateVolcanoPlot(fit, variable = "DxCASE", file = "2.4_volcano_plot_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.pdf")
+```
+
+## Barplots
+
+Normal model:
+Get significantly differentially expressed transcripts for all the different covariates (corrected for all the other covariates). 
+```{r, echo = F}
+# load RData file
+load(paste0(inpath, "/2.1_diff_expr_transcripts_for_diagnosis.RData"))
+# generate vertical barplot
+limma_res_transcript <- GenerateVerticalBarplotOfDiffExprHits(design, fit, from = 5, to = 4, plot_name = "2.1_barplot_significant_DEA_hits_transcripts.pdf")
+rm(design, fit, top_hits)
+```
+
+New FDR:
+Get significantly differentially expressed transcripts for all the different covariates (corrected for all the other covariates). 
+```{r, echo = F}
+# load RData file
+load(paste0(inpath, "/2.4_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.RData"))
+# generate vertical barplot
+limma_res_transcript.new <- GenerateVerticalBarplotOfDiffExprHits(design, fit, from = 5, to = 4, plot_name = "2.4_barplot_significant_DEA_hits_transcripts_new_pvalue_and_fdr.pdf")
+rm(design, fit)
+```
+
+## Figures for the tDEGenes
+
+Now, we generate some plots for the six found tDEGenes for diagnosis. First, we will plot a heatmap of the six tDEGenes.
+```{r, echo = F}
+# load RData file
+load(paste0(inpath, "/2.4_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.RData"))
+# get only top hits (6 tDEGenes)
+top_hits <- top_hits[top_hits$`FDR estimate` < 0.1, ]
+# ǵenerate heatmap of hits
+anno <- pData(transcript_summaries)[, c("Age", "PMI", "RIN", "Sex", "Suicide", "Dx", "ShortName")]
+rownames(anno) <- anno$ShortName
+anno$ShortName <- NULL
+pheatmap(exprs(transcript_summaries)[top_hits$`Ensembl Transcript ID`, ], scale = "row", annotation_col = anno, show_colnames = F)
+pheatmap(exprs(transcript_summaries)[top_hits$`Ensembl Transcript ID`, ], scale = "row", annotation_col = anno, show_colnames = F, filename = paste0(outpath, "/2.4_heatmap_significant_DEA_hits_transcripts_new_pvalue_and_fdr.pdf"))
+rm(anno)
+```
+
+Then, we plot the up and down regulated genes into one barplot with the two variables mirrored on the x-axis.
+```{r, echo = F}
+logfc <- as.data.frame(table(top_hits$logFC))
+logfc$group <- "Upregulated"
+logfc[as.numeric(as.character(logfc$Var1)) < 0, "group"] <- "Downregulated"
+logfc[as.numeric(as.character(logfc$Var1)) < 0, "Freq"] <- -1
+logfc$Var1 <- abs(round(as.numeric(as.character(logfc$Var1)), 2))
+logfc$logfc <- 2^logfc$Var1
+logfc$linearFC <- sapply(logfc$logfc, function(x) {if(as.double(as.character(x)) >= 1 || is.na(x)){x} else {-1/x}})
+# generate barplot
+ggplot(logfc, aes(x = linearFC, y = Freq, fill = group)) + 
+  geom_bar(stat = "identity", position = "identity", show.legend = FALSE) + 
+  xlab("linear fold change") +
+  ylab("# tDEGenes (FDR < 10%)") +
+  xlim(1, 1.5) +
+  theme_minimal(base_size = 13) +
+  theme(axis.line.x.bottom = element_line(colour = "black"), axis.line.y.left = element_line(colour = "black"), axis.ticks.length = unit(.15, "cm"), axis.ticks = element_line(colour = "black")) + 
+  annotate("text", x = 1.4, y = 1.3, label = paste0("No. of genes upregulated: ", length(logfc[logfc$group == "Upregulated", "group"])), size = 4) +
+  annotate("text", x = 1.4, y = -1.3, label = paste0("No. of genes downregulated: ", length(logfc[logfc$group == "Downregulated", "group"])), size = 4) + 
+  scale_fill_viridis(discrete = T, end = 0.8)
+ggsave(paste0(outpath, "/2.4_barplot_up_down_regulated_significant_DEA_hits_transcripts_new_pvalue_and_fdr.pdf"), width = 5.43, height = 3.45, units = "in")
+rm(logfc)
+```
+
+Now, we generate violin plots for all gene hits.
+```{r, echo = F}
+for (hit in top_hits$`Ensembl Transcript ID`) {
+  name <- top_hits[hit, "Gene Symbol"]
+  # get exprs of top hit
+  data <- as.data.frame(exprs(transcript_summaries)[top_hits[hit, "Ensembl Transcript ID"], ])
+  colnames(data) <- "expression"
+  data <- merge(data, pData(transcript_summaries)[, c("ShortName", "Dx")], by.x = "row.names", by.y = "ShortName")
+  ggplot(data, aes(x = Dx, y = expression, fill = Dx)) + 
+    geom_violin() + 
+    geom_boxplot(width = 0.2) +
+    theme_classic() +
+    theme(text = element_text(size = 20), plot.title = element_text(hjust = 0.5)) +
+    labs(title = paste0(top_hits[hit, "Ensembl Gene ID"], ": ", top_hits[hit, "Gene Symbol"]), x = element_blank(), y = "Expression values") +
+    scale_x_discrete(labels = c("Controls", "Cases")) +
+    scale_fill_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D"), guide = FALSE, name = "", labels = c("Controls", "Cases"))
+  ggsave(paste0(outpath, "/2.4_violinplot_significant_DEA_hits_transcripts_new_pvalue_and_fdr_", top_hits[hit, "Gene Symbol"],".pdf"), width = 8, height = 6, units = "in")
+}
+rm(name, data)
+```
+
+
+# DEA Exons
+
+## Volcano plots
+
+normal model for diagnosis:
+```{r}
+# load RData file
+load(paste0(inpath, "1.1_diff_expr_exons_for_diagnosis.RData"))
+# volcano plot
+GenerateVolcanoPlot(fit, variable = "DxCASE", file = "1.1_volcano_plot_diff_expr_exons_for_diagnosis.pdf")
+```
+
+new FDR for diagnosis:
+```{r}
+# load RData file
+load(paste0(inpath, ""))
+# volcano plot
+GenerateVolcanoPlot(fit, variable = "DxCASE", file = "1.3_volcano_plot_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.pdf")
+```
+
+Sex*Diagnosis interaction model:
+```{r}
+# load RData file
+load(paste0(inpath, ""))
+# volcano plot
+GenerateVolcanoPlot(fit, variable = "DxCASE", file = "1.2_volcano_plot_diff_expr_exons_for_diagnosis_with_sex_dx_interaction.pdf")
+```
+
+## Barplots
+
+Normal model:
+Get significantly differentially expressed genes for all the different covariates. 
+```{r, echo = F}
+# generate vertical barplot
+limma_res_exon <- GenerateVerticalBarplotOfDiffExprHits(design, fit, from = 6, to = 5, plot_name = "1.1_barplot_significant_DEA_hits_exons.pdf")
+```
+
+Now, we combine the barplot of the number of differentially expressed genes, transcripts and exons per covariate (corrected for all other covariates). 
+```{r, echo = F}
+### ALL COMBINED (gene + transcript + exon barplot) ###
+colnames(limma_res_gene) <- "counts"
+limma_res_gene$type <- "gene"
+limma_res_gene$covariates <- row.names(limma_res_gene)
+colnames(limma_res_transcript) <- "counts"
+limma_res_transcript$type <- "transcript"
+limma_res_transcript$covariates <- row.names(limma_res_transcript)
+colnames(limma_res_exon) <- "counts"
+limma_res_exon$type <- "exon"
+limma_res_exon$covariates <- row.names(limma_res_exon)
+limma_res_all <- rbind(limma_res_gene, limma_res_transcript, limma_res_exon)
+limma_res_all$covariates <- as.factor(limma_res_all$covariates)
+limma_res_all$covariates <- factor(limma_res_all$covariates, levels = c("C4", "C3", "C2", "C1", "Type_of_Death","Suicide", "Sex", "RIN2", "RIN", "Diagnosis", "PMI", "pH", "Age"))
+# save plot
+pdf(paste0(outpath, "/1.1_barplots_significant_DEA_hits_gene_transcript_exon_combined.pdf"))
+p <- ggplot(limma_res_all, aes(y = counts, x = covariates)) +
+  geom_bar(stat = "identity") +
+  coord_flip() + 
+  theme(axis.ticks = element_line(colour = NA), text = element_text(size = 22), panel.background = element_rect(fill = NA), panel.grid.major.x = element_line(colour = "grey"), panel.grid.minor.x = element_line(colour = "grey"), strip.background =element_rect(fill = NA)) +
+  ylab("# significant hits") +
+  xlab("") +
+  geom_text(size = 7, aes(label = limma_res_all$counts), nudge_y = 120, colour = "dimgray") +
+  scale_y_continuous(expand = c(0.02, 0.01))
+p + facet_wrap(~ type, scale = "free_x") + theme(panel.spacing = unit(2, "lines"))
+dev.off()
+# remove unnecessary data
+rm(design, fit, top_hits, limma_res_exon, limma_res_transcript, limma_res_all, p)
+```
+
+New FDR:
+Get significantly differentially expressed genes for all the different covariates. 
+```{r, echo = F}
+# generate vertical barplot
+limma_res_exon.new <- GenerateVerticalBarplotOfDiffExprHits(design, fit, from = 6, to = 5, plot_name = "1.3_barplot_significant_DEA_hits_exons_new_pvalue_and_fdr.pdf")
+```
+
+Now, we combine the barplot of the number of differentially expressed genes, transcripts and exons per covariate (corrected for all other covariates). 
+```{r, echo = F}
+### ALL COMBINED (gene + transcript + exon barplot) ###
+colnames(limma_res_transcript.new) <- "counts"
+limma_res_transcript.new$type <- "transcript"
+limma_res_transcript.new$covariates <- row.names(limma_res_transcript.new)
+colnames(limma_res_exon.new) <- "counts"
+limma_res_exon.new$type <- "exon"
+limma_res_exon.new$covariates <- row.names(limma_res_exon.new)
+limma.res.all <- rbind(limma_res_gene, limma_res_transcript.new, limma_res_exon.new)
+limma.res.all$covariates <- as.factor(limma.res.all$covariates)
+limma.res.all$covariates <- factor(limma.res.all$covariates, levels = c("C4", "C3", "C2", "C1", "Type_of_Death","Suicide", "Sex", "RIN2", "RIN", "Diagnosis", "PMI", "pH", "Age"))
+# save plot
+pdf(paste0(outpath, "/1.3_barplots_significant_DEA_hits_gene_transcript_exon_combined_new_pvalues_and_fdr.pdf"))
+p <- ggplot(limma.res.all, aes(y = counts, x = covariates)) +
+  geom_bar(stat = "identity") +
+  coord_flip() + 
+  theme(axis.ticks = element_line(colour = NA), text = element_text(size = 22), panel.background = element_rect(fill = NA), panel.grid.major.x = element_line(colour = "grey"), panel.grid.minor.x = element_line(colour = "grey"), strip.background =element_rect(fill = NA)) +
+  ylab("# significant hits") +
+  xlab("") +
+  geom_text(size = 7, aes(label = limma.res.all$counts), nudge_y = 120, colour = "dimgray") +
+  scale_y_continuous(expand = c(0.02, 0.01))
+p + facet_wrap(~ type, scale = "free_x") + theme(panel.spacing = unit(2, "lines"))
+dev.off()
+# remove unnecessary data
+rm(design, fit, limma_res_exon.new, limma_res_transcript.new, limma_res_gene, limma.res.all, p)
+```
+
+## Figures for the tDEGenes
+
+Now we generate some plots for the found eDEgenes. First, we will plot a heatmap of the 2224 eDEGenes.
+```{r, echo = F}
+# get only top hits (2224 eDEGenes)
+top_hits <- top_hits[top_hits$`FDR estimate` < 0.1, ]
+# ǵenerate heatmap of hits
+anno <- pData(exon_summaries)[, c("Age", "PMI", "RIN", "Sex", "Suicide", "Dx", "ShortName")]
+rownames(anno) <- anno$ShortName
+anno$ShortName <- NULL
+pheatmap(exprs(exon_summaries)[top_hits$`Ensembl Exon ID`, ], scale = "row", annotation_col = anno, show_colnames = F, show_rownames = F)
+pheatmap(exprs(exon_summaries)[top_hits$`Ensembl Exon ID`, ], scale = "row", annotation_col = anno, show_colnames = F, show_rownames = F, filename = paste0(outpath, "/1.3_heatmap_significant_DEA_hits_exons_new_pvalue_and_fdr.pdf"))
+rm(anno)
+```
+
+Then, we plot the up and down regulated genes into one barplot with the two variables mirrored on the x-axis.
+```{r, echo = F}
+logfc <- as.data.frame(table(top_hits$logFC))
+logfc$group <- "Upregulated"
+logfc[as.numeric(as.character(logfc$Var1)) < 0, "group"] <- "Downregulated"
+logfc[as.numeric(as.character(logfc$Var1)) < 0, "Freq"] <- -1
+logfc$Var1 <- abs(round(as.numeric(as.character(logfc$Var1)), 2))
+logfc$logfc <- 2^logfc$Var1
+logfc$linearFC <- sapply(logfc$logfc, function(x) {if(as.double(as.character(x)) >= 1 || is.na(x)){x} else {-1/x}})
+min(logfc$linearFC)
+max(logfc$linearFC)
+mean(logfc$linearFC)
+ggplot(logfc, aes(x = linearFC, y = Freq, fill = group)) + 
+  geom_histogram(stat = "identity", show.legend = FALSE) + 
+  xlab("Linear fold change") +
+  ylab("# tDEGenes (FDR < 10%)") +
+  xlim(1, 1.8) +
+  theme_minimal(base_size = 13) +
+  theme(axis.line.x.bottom = element_line(colour = "black"), axis.line.y.left = element_line(colour = "black"), axis.ticks.length = unit(.15, "cm"), axis.ticks = element_line(colour = "black")) + 
+  annotate("text", x = 1.5, y = 30, label = paste0("No. of genes upregulated: ", length(logfc[logfc$group == "Upregulated", "group"])), size = 4) +
+  annotate("text", x = 1.5, y = -30, label = paste0("No. of genes downregulated: ", length(logfc[logfc$group == "Downregulated", "group"])), size = 4) + 
+  scale_fill_viridis(discrete = T, end = 0.8)
+ggsave(paste0(outpath, "/1.3_barplot_up_down_regulated_significant_DEA_hits_exons_new_pvalue_and_fdr.pdf"), width = 5.43, height = 3.45, units = "in")
+rm(logfc)
+```
+
+Now, we generate violin plots for the top six hits.
+```{r, echo = F}
+for (hit in top_hits$`Ensembl Exon ID`[1:6]) {
+  name <- top_hits[hit, "Gene Symbol"]
+  # get exprs of top hit
+  data <- as.data.frame(exprs(exon_summaries)[top_hits[hit, "Ensembl Exon ID"], ])
+  colnames(data) <- "expression"
+  data <- merge(data, pData(exon_summaries)[, c("ShortName", "Dx")], by.x = "row.names", by.y = "ShortName")
+  ggplot(data, aes(x = Dx, y = expression, fill = Dx)) + 
+    geom_violin() + 
+    geom_boxplot(width = 0.2) +
+    theme_classic() +
+    theme(text = element_text(size = 20), plot.title = element_text(hjust = 0.5)) +
+    labs(title = top_hits[hit, "Gene Symbol"], x = element_blank(), y = "Expression values") +
+    scale_x_discrete(labels = c("Controls", "Cases")) +
+    scale_fill_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D"), guide = FALSE, name = "", labels = c("Controls", "Cases"))
+  ggsave(paste0(outpath, "/1.3_violinplot_significant_DEA_hits_exons_new_pvalue_and_fdr_", top_hits[hit, "Gene Symbol"],".pdf"), width = 8, height = 6, units = "in")
+}
+rm(name, data)
 ```
 
 

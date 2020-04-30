@@ -10,7 +10,7 @@ header-includes:
   - \usepackage{float}
   - \usepackage{graphicx, multicol}
 date: "`r doc_date()`"
-abstract: In this R markdown file, we will provide the quality control and plot generation of the raw, normalized, and batch corrected data generated in the Microarray Preprocessing Pipeline. We will also check, which of the covariates are significantly correlated to the data and should be included in our design for the differential expression analysis (DEA). 
+abstract: In this R markdown file, we will provide the quality control (QC - with PCA plots and arrayQualityMetrics package) of the raw, normalized, and batch corrected data generated in the Microarray Preprocessing Pipeline. We will also check, which of the covariates are significantly correlated to the data and should be included in our design for the differential expression analysis (DEA). 
 output: 
     BiocStyle::pdf_document:
       toc: true
@@ -44,18 +44,16 @@ opts_chunk$set(echo = TRUE,
 
 # Introduction
 
-In this script, we want to check, which of the covariates are significantly correlated to the data and should be included in our design for the DE Analysis. Our code is based on the methods and provided scripts used in the Fromer et al. (Nature Neuroscience 2016) Paper.
-
 This document includes the quality control of the different microarray pre-processing steps, generated in the first R markdown script (*01_preprocessing.Rmd*), and a covariate evaluation analysis. The covariate evaluation is based on the methods and scripts provided/used in the Fromer et al. (Nature Neuroscience 2016) Paper. The covariate evaluation is necessary for the selection of covariates for the linear model used in the differential expression analysis. We will use the different generated RData files of the first script as input for all the neccessary quality control and plot generation procedures. For the calibrated data we will only use the probeset summarized data as we continue all following analyses with this dataset. The last step is done for all three annotation stages (gene, transcript, exon). Following steps will be performed: 
 
-1. Evaluate phenotype (covariate) data
-2. Quality control of raw data (chip scan date, boxplot, PCA plots, arrayQualityMetrics)
-3. Quality control of calibrated data (boxplot, PCA plots, arrayQualityMetrics)
-4. Quality control of calibrated and batch corrected data (boxplot, PCA plots, arrayQualityMetrics)
+1. Visual inspection of the phenotypes
+2. Quality control of raw data (chip scan date, boxplot, PCA plot, arrayQualityMetrics)
+3. Quality control of calibrated data (boxplot, PCA plot, arrayQualityMetrics)
+4. Quality control of calibrated and batch corrected data (boxplot, PCA plot, arrayQualityMetrics)
 5. Quality control of calibrated, batch corrected and annotated data (boxplot, PCA plots, arrayQualityMetrics)
-6. Covariate evaluation 
+6. Covariate evaluation
 
-We will also generate several RData files for the different steps, as some of them include long processing times.  
+We will also generate several .RData files for the different steps, as some of them include long processing times. All generated files and figures will be stored into an output folder (02_QC_and_cov_eval). 
 
 # Packages 
 
@@ -88,6 +86,16 @@ library(cowplot)
 library(viridis) # for colorblind color palette
 library(RColorBrewer) # for more color palettes (for corrplot)
 library(pheatmap)
+```
+
+
+# Generate output folder
+
+Before we can start, we need to make sure that the output folder for the quality control (QC) .RData files and figures exists. If it does not exist yet, we will generate it using the systems (Red Hat Enterprise Linux operating system: Fedora 25) "mkdir" command. 
+
+```{r}
+outpath = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/02_QC_and_cov_eval"
+system(paste0("mkdir -p ", outpath))
 ```
 
 

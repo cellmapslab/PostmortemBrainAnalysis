@@ -165,3 +165,4 @@ write.table(val2$results.table, file = paste0(opt$out, "/pmb_info06_all_chr_maf0
 pdf(file = paste0(opt$out, "/plot_lassosum_PRS_without_covars_", opt$gwas, ".pdf"))
 plot(val2)
 dev.off()
+

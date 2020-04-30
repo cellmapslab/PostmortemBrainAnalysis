@@ -1,3 +1,6 @@
+################################
+### Script to run MatrixEQTL ###
+################################
 .libPaths("/home/icb/karolina.worf/R/x86_64-pc-linux-gnu-library/3.6/")
 
 library(MatrixEQTL)
@@ -8,7 +11,7 @@ args=(commandArgs(trailingOnly=TRUE))
 
 # go through the list of arguments
 if(length(args)==0){
-    cat("\nScript to run MatrixEQTL for exon chunk files (cis-eQTLs with cut-off = 1 and trans-eQTLs with cut-off = 5e-05.\n\nYou can invoke the script as follows:\nR CMD BATCH --slave --no-save --no-restore '--args chunk=\"/home/.../exon_expr_chunk.file\" cis=\"/home/.../cis_eqtl_output.file\" trans=\"/home/.../trans_eqtl_output.file\"' 01b_matrix_eqtl_exon_summaries.R\n\nCommandline parameters:\n\nchunk\t\tpath and file name of an exon input chunk file\ncis\t\tpath and name of the output file for the cis-eQTLs\ntrans\t\tpath and name of the output file for the trans-eQTLs\n\n")
+    cat("\nScript to run MatrixEQTL\n\nYou can invoke the script as follows:\nRscript 03b_matrix_eqtl.R snps=\"/home/.../SNP.file\" spos=\"/home/.../SNP-positions.file\" exp=\"/home/.../expression.file\" expos=\"/home/.../expression-position.file\" cov=\"/home/.../covariates.file\" ciso=\"/home/.../cis_eqtl_output.file\" transo=\"/home/.../trans_eqtl_output.file\"\n\nCommandline parameters:\n\nsnps\t\tpath and file name of the SNP genotype data\nspos\t\tpath and file name of the positions for the SNP genotype data\nexp\t\tpath and file name of the expression data\nexpos\t\tpath and file name of the positions for the expression data\ncov\t\tpath and file name of the covariates\nciso\t\tpath and output file name for the cis-eQTLs\ntranso\t\tpath and output file name for the trans-eQTLs\n\n")
 } else {
     for(i in 1:length(args)){
         eval(parse(text=args[[i]]))
@@ -80,13 +83,13 @@ if(length(args)==0){
 
     # Load SNP and gene positions
     # MatrixEQTL does not work without giving the tool the SNP and gene position. 
-    snpspos <- read.table("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/02_matrixeqtl_input/SNP_locations.txt", header = T, stringsAsFactors = FALSE, sep = "\t") # snp chr pos
+    snpspos <- read.table(spos, header = T, stringsAsFactors = FALSE, sep = "\t") # snp chr pos
     head(snpspos)
     # load exon location file
-    genepos <- read.table(pos, header = T, stringsAsFactors = FALSE, sep = "\t") # geneid chr start end
+    genepos <- read.table(expos, header = T, stringsAsFactors = FALSE, sep = "\t") # geneid chr start end
     genepos <- genepos[!is.na(genepos$start), ]  # remove NA's
     head(genepos)
 
     # Run matrixEQTL For cis-eQTLs
-    me.all <- run_matrix_eqtl(SNP_file = snps, expression_file = expr, cov_file = cov, outfile_cis = ciso, outfile_trans = transo, cis = 1, trans = 0)
+    me.all <- run_matrix_eqtl(SNP_file = snps, expression_file = exp, cov_file = cov, outfile_cis = ciso, outfile_trans = transo, cis = 1, trans = 0)
 }
