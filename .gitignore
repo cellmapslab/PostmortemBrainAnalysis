@@ -1,6 +1,7 @@
 00.Carlos/
 04.DEA/**/
-06.FunctionalAnnotation/
+06.FunctionalAnnotation/*
+06.FunctionalAnnotation/**/
 *.txt
 *.tex
 *.nopred
