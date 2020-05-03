@@ -10,11 +10,12 @@ output1="${outpath_geno}/exclude_samples.txt"
 output2="${outpath_geno}/samples_with_expression.txt"
 output3="${outpath}/covariates.txt"
 output4="${outpath}/phenotypes.txt"
+output5="${outpath}/covariates_ldpred.txt"
 script_path="/storage/groups/ccm01/code/PostmortemBrainAnalysis/02.PRS"
 tools_path="/storage/groups/ccm01/tools"
 
 # 1. Generate all input files necessary for the preprocessing of the genotypes
-Rscript ${script_path}/01a_generate_necessary_files.R input1=\"${sample_file}\" input2=\"${sample_sheet}\" output1=\"${output1}\" output2=\"${output2}\" output3=\"${output3}\" output4=\"${output4}\"
+Rscript ${script_path}/01a_generate_necessary_files.R input1=\"${sample_file}\" input2=\"${sample_sheet}\" output1=\"${output1}\" output2=\"${output2}\" output3=\"${output3}\" output4=\"${output4}\" output5=\"${output5}\"
 
 # 2. Preprocess the genotypes: filter for MAF, HWE, merge chromosome files and remove duplicates
 bash ${script_path}/01b_prepare_genotypes.sh -g ${genotypes} -e ${output1} -i ${output2} -o ${outpath_geno} -t ${tools_path} -s ${script_path}

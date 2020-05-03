@@ -46,7 +46,7 @@ opts_chunk$set(echo = TRUE,
 
 This document includes the quality control of the different microarray pre-processing steps, generated in the first R markdown script (*01_preprocessing.Rmd*), and a covariate evaluation analysis. The covariate evaluation is based on the methods and scripts provided/used in the Fromer et al. (Nature Neuroscience 2016) Paper. The covariate evaluation is necessary for the selection of covariates for the linear model used in the differential expression analysis. We will use the different generated RData files of the first script as input for all the neccessary quality control and plot generation procedures. For the calibrated data we will only use the probeset summarized data as we continue all following analyses with this dataset. The last step is done for all three annotation stages (gene, transcript, exon). Following steps will be performed: 
 
-1. Visual inspection of the phenotypes
+1. Visual inspection of the phenotypes (barplots, violin/boxplots, correlation plots)
 2. Quality control of raw data (chip scan date, boxplot, PCA plot, arrayQualityMetrics)
 3. Quality control of calibrated data (boxplot, PCA plot, arrayQualityMetrics)
 4. Quality control of calibrated and batch corrected data (boxplot, PCA plot, arrayQualityMetrics)
@@ -64,7 +64,8 @@ Below you can find the list of packages that are required by the workflow.
 .libPaths("/home/icb/karolina.worf/R/x86_64-pc-linux-gnu-library/3.6/")
 
 # Quality control packages 
-library(arrayQualityMetrics) # for quality control
+### TODO: install arrayQualityMetrics! Problem: dependency "jpeg" R-package can not be installed, gcc error: can not install/reinstall gcc without sudo rights... tried everything, without sudo no chance to install gcc as it always depends on libraries that are also not installable :(
+#library(arrayQualityMetrics) # for quality control
 library(psych)
 library(pvca)
 

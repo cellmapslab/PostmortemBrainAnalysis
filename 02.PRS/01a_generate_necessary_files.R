@@ -12,7 +12,7 @@ args = (commandArgs(trailingOnly = TRUE))
 
 # go through the list of arguments
 if(length(args) == 0){
-  cat("\nScript to generate files necessary for the genotype preprocesing.\n\nYou can invoke the script as follows:\nRscript --slave 01a_generate_necessary_files.R input1=\"/home/.../input-file1.txt\" input2=\"/home/.../input2.txt\" output1=\"/home/.../out-file1.txt\" output2=\"/home/.../out-file2.txt\" output3=\"/home/.../out-file3.txt\" output4=\"/home/.../out-file4.txt\"\nCommandline parameters:\n\ninput1\t\tpath and filename of the merged genotype probabilites (ending in gen.gz)\ninput2\t\tpath and filename of the sample file corresponding to the genotype file\noutput1\t\tpath and filename of the output file including all sample IDs to exclude from further analysis as they are coming from other (unknown) cohorts\noutput2\t\tpath and filename of the output file including the 169 samples we want to include in all analysis (samples including genotype AND expression data)\noutput3\t\tpath and filename of the output file including all covariates\noutput4\t\tpath and filename of the output file including the phenotypes\n\n")
+  cat("\nScript to generate files necessary for the genotype preprocesing.\n\nYou can invoke the script as follows:\nRscript --slave 01a_generate_necessary_files.R input1=\"/home/.../input-file1.txt\" input2=\"/home/.../input2.txt\" output1=\"/home/.../out-file1.txt\" output2=\"/home/.../out-file2.txt\" output3=\"/home/.../out-file3.txt\" output4=\"/home/.../out-file4.txt\" output5=\"/home/.../out-file5.txt\"\nCommandline parameters:\n\ninput1\t\tpath and filename of the merged genotype probabilites (ending in gen.gz)\ninput2\t\tpath and filename of the sample file corresponding to the genotype file\noutput1\t\tpath and filename of the output file including all sample IDs to exclude from further analysis as they are coming from other (unknown) cohorts\noutput2\t\tpath and filename of the output file including the 169 samples we want to include in all analysis (samples including genotype AND expression data)\noutput3\t\tpath and filename of the output file including all covariates\noutput4\t\tpath and filename of the output file including the phenotypes\noutput5\t\tpath and filename of the output file including the covariates for LDpred (No FID, all covariates as continuous/numerical data, columns separated by whitespace instead of tab)\n\n")
 } else {
   for(i in 1:length(args)){
     eval(parse(text = args[[i]]))
@@ -59,7 +59,7 @@ if(length(args) == 0){
   write.table(out, file = output2, sep = "\t", quote = FALSE, row.names = FALSE)
 
   
-  ### 3. Generate a file including all covariates for the GWAS
+  ### 3. Generate a file including all covariates for PRSice-2 and lassosum
   # get all important columns for the covariate file
   covars <- pData[, c("FID", "IID", "Age", "Sex", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4")]
   covars[, ] <- lapply(covars[, ], as.character) # change all factors to character
@@ -76,4 +76,28 @@ if(length(args) == 0){
 
   # write phenotypes into file
   write.table(pheno, file = output4, sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
+
+
+  ### 5. Generate a file including all covariates for LDpred 
+  # categorical covariates need to be changed to continuous/numerical ones, do not include FID column and whitespace between columns instead of tabs
+  # get all important columns for the covariate file
+  covars <- pData[, c("IID", "Age", "Sex", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4")]
+  covars[, ] <- lapply(covars[, ], as.character) # change all factors to character
+  
+  # change sex from characters to numbers (M/Male = 1, F/Female = 2)
+  covars[covars$Sex == "M", "Sex"] <- "1"
+  covars[covars$Sex == "F", "Sex"] <- "2"
+  
+  # change suicide from characters to numbers (N/No = 1, Y/Yes = 2)
+  covars[covars$Suicide == "N", "Suicide"] <- "1"
+  covars[covars$Suicide == "Y", "Suicide"] <- "2"
+  
+  # change Type of Death from characters to numbers (Natural = 1, Non-violent = 2, Violent = 3) 
+  covars[covars$Type_of_Death == "Natural", "Type_of_Death"] <- "1"
+  covars[covars$Type_of_Death == "Non-violent", "Type_of_Death"] <- "2"
+  covars[covars$Type_of_Death == "Violent", "Type_of_Death"] <- "3"
+   
+  # save all important sample IIDs for filtering of the genotype data
+  write.table(covars, file = output5, sep = " ", quote = FALSE, row.names = FALSE)
+
 }
