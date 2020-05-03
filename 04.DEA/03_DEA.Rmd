@@ -111,30 +111,30 @@ RunLimma <- function(design, summary){
 # on transcript/exon level: two or more transcripts/exons have the exact same expression values and were merged together as also done for their gene symbols and IDs. Usually these gene symbols and IDs are just duplicates and we need to remove these for further analysis (e.g. new FDR correction). The merged transcript/exon IDs we will leave merged.
 # 4. save the resulting table into an output file
 GenerateResultTableGene <- function(fit, variable, file){
-  top_hits <- topTable(fit, coef = variable, adjust = "BH", number = Inf)
+  top_hits <- topTable(fit, confint = 0.95, coef = variable, adjust = "BH", number = Inf)
   print(top_hits[1:2, ])
   print(paste0("log2FC range: ", round(min(top_hits$logFC), 2), " until ", round(max(top_hits$logFC), 2)))
-  colnames(top_hits) <- c("Ensembl Gene ID", "Location", "Gene Symbol", "logFC", "Average Expression", "t-statistic", "p-value", "FDR estimate", "B coefficient")
+  colnames(top_hits) <- c("Ensembl Gene ID", "Location", "Gene Symbol", "LogFC", "95% Confidence Interval, lower bound", "95% Confidence Interval, upper bound", "Average Expression", "T-statistic", "P-value", "FDR estimate", "B coefficient")
   top_hits <- unique(separate_rows(top_hits, `Ensembl Gene ID`, sep = "\\|"))
   top_hits <- unique(separate_rows(top_hits, `Gene Symbol`, sep = "\\|"))
   write.table(top_hits, file = paste0(outpath, "/", file), sep = "\t", row.names = F)
   return(top_hits)
 }
 GenerateResultTableTranscript <- function(fit, variable, file){
-  top_hits <- topTable(fit, coef = variable, adjust = "BH", number = Inf)
+  top_hits <- topTable(fit, confint = 0.95, coef = variable, adjust = "BH", number = Inf)
   print(top_hits[1:2, ])
   print(paste0("log2FC range: ", round(min(top_hits$logFC), 2), " until ", round(max(top_hits$logFC), 2)))
-  colnames(top_hits) <- c("Ensembl Transcript ID", "Location", "Ensembl Gene ID", "Gene Symbol", "logFC", "Average Expression", "t-statistic", "p-value", "FDR estimate", "B coefficient")
+  colnames(top_hits) <- c("Ensembl Transcript ID", "Location", "Ensembl Gene ID", "Gene Symbol", "logFC", "95% Confidence Interval, lower bound", "95% Confidence Interval, upper bound", "Average Expression", "t-statistic", "p-value", "FDR estimate", "B coefficient")
   top_hits <- unique(separate_rows(top_hits, `Ensembl Gene ID`, sep = "\\|"))
   top_hits <- unique(separate_rows(top_hits, `Gene Symbol`, sep = "\\|"))
   write.table(top_hits, file = paste0(outpath, "/", file), sep = "\t", row.names = F)
   return(top_hits)
 }
 GenerateResultTableExon <- function(fit, variable, file){
-  top_hits <- topTable(fit, coef = variable, adjust = "BH", number = Inf)
+  top_hits <- topTable(fit, confint = 0.95, coef = variable, adjust = "BH", number = Inf)
   print(top_hits[1:2, ])
   print(paste0("log2FC range: ", round(min(top_hits$logFC), 2), " until ", round(max(top_hits$logFC), 2)))
-  colnames(top_hits) <- c("Ensembl Exon ID", "Location", "Ensembl Transcript ID", "Ensembl Gene ID", "Gene Symbol", "logFC", "Average Expression", "t-statistic", "p-value", "FDR estimate", "B coefficient")
+  colnames(top_hits) <- c("Ensembl Exon ID", "Location", "Ensembl Transcript ID", "Ensembl Gene ID", "Gene Symbol", "logFC", "95% Confidence Interval, lower bound", "95% Confidence Interval, upper bound", "Average Expression", "t-statistic", "p-value", "FDR estimate", "B coefficient")
   top_hits <- unique(separate_rows(top_hits, `Ensembl Gene ID`, sep = "\\|"))
   top_hits <- unique(separate_rows(top_hits, `Gene Symbol`, sep = "\\|"))
   write.table(top_hits, file = paste0(outpath, "/", file), sep = "\t", row.names = F)
@@ -268,7 +268,7 @@ top_hits_pmi <- GenerateResultTableGene(fit, variable = "PMI", file =  "1.1_diff
 top_hits_c2 <- GenerateResultTableGene(fit, variable = "C2", file =  "1.1_diff_expr_genes_for_pc2.csv")
 top_hits_c1 <- GenerateResultTableGene(fit, variable = "C1", file =  "1.1_diff_expr_genes_for_pc1.csv")
 # save data into an RData file (for figure generation)
-save(fit, design, res, file = paste0(outpath, "/1.1_diff_expr_genes_for_diagnosis.RData"))
+save(design, fit, top_hits, res, file = paste0(outpath, "/1.1_diff_expr_genes_for_diagnosis.RData"))
 # remove unnecessary data
 rm(fit, design, res)
 ```
@@ -285,7 +285,7 @@ fit <- RunLimma(design, gene_summaries)
 # result table
 top_hits <- GenerateResultTableGene(fit, variable = "DxCASE", file =  "1.2_diff_expr_genes_for_diagnosis_with_sex_dx_interaction.csv")
 # save data into an RData file (for figure generation)
-save(fit, design, file = paste0(outpath, "/1.2_diff_expr_genes_for_diagnosis_with_sex_dx_interaction.RData"))
+save(design, fit, top_hits, file = paste0(outpath, "/1.2_diff_expr_genes_for_diagnosis_with_sex_dx_interaction.RData"))
 # remove unnecessary data
 rm(fit, design)
 ```
@@ -478,7 +478,7 @@ fit <- RunLimma(design, transcript_summaries)
 # result table
 top_hits <- GenerateResultTableTranscript(fit, variable = "DxCASE", file =  "2.1_diff_expr_transcripts_for_diagnosis.csv")
 # save data into an RData file (for figure generation)
-save(fit, design, file = paste0(outpath, "/2.1_diff_expr_transcripts_for_diagnosis.RData"))
+save(design, fit, top_hits, file = paste0(outpath, "/2.1_diff_expr_transcripts_for_diagnosis.RData"))
 # remove unnecessary data
 rm(fit, design)
 ```
@@ -495,7 +495,7 @@ fit <- RunLimma(design, transcript_summaries)
 # result table
 top_hits <- GenerateResultTableTranscript(fit, variable = "DxCASE", file =  "2.2_diff_expr_transcripts_for_diagnosis_with_sex_dx_interaction.csv")
 # save data into an RData file (for figure generation)
-save(fit, design, file = paste0(outpath, "/2.2_diff_expr_transcripts_for_diagnosis_with_sex_dx_interaction.RData"))
+save(design, fit, top_hits, file = paste0(outpath, "/2.2_diff_expr_transcripts_for_diagnosis_with_sex_dx_interaction.RData"))
 # remove unnecessary data
 rm(fit, design)
 ```
@@ -699,7 +699,7 @@ top_hits_pmi <- GenerateResultTableTranscript(fit, variable = "PMI", file =  "2.
 top_hits_c2 <- GenerateResultTableTranscript(fit, variable = "C2", file =  "2.4_diff_expr_transcripts_for_c2_new_pvalue_and_fdr.csv")
 top_hits_c1 <- GenerateResultTableTranscript(fit, variable = "C1", file =  "2.4_diff_expr_transcripts_for_c1_new_pvalue_and_fdr.csv")
 # save data into an RData file (for figure generation)
-save(fit, design, top_hits, file = paste0(outpath, "/2.4_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.RData"))
+save(design, fit, top_hits, file = paste0(outpath, "/2.4_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.RData"))
 # remove unnecessary data
 rm(fit, design)
 ```
@@ -935,7 +935,7 @@ fit <- RunLimma(design, exon_summaries)
 # result table
 top_hits <- GenerateResultTableExon(fit, variable = "DxCASE", file =  "3.1_diff_expr_exons_for_diagnosis.csv")
 # save data into an RData file (for figure generation)
-save(fit, design, file = paste0(outpath, "/3.1_diff_expr_exons_for_diagnosis.RData"))
+save(design, fit, top_hits, file = paste0(outpath, "/3.1_diff_expr_exons_for_diagnosis.RData"))
 # remove unnecessary data
 rm(fit, design)
 ```
@@ -952,7 +952,7 @@ fit <- RunLimma(design, exon_summaries)
 # result table
 top_hits <- GenerateResultTableExon(fit, variable = "DxCASE", file =  "3.2_diff_expr_exons_for_diagnosis_with_sex_dx_interaction.csv")
 # save data into an RData file (for figure generation)
-save(fit, design, file = paste0(outpath, "/3.2_diff_expr_exons_for_diagnosis_with_sex_dx_interaction.RData"))
+save(design, fit, top_hits, file = paste0(outpath, "/3.2_diff_expr_exons_for_diagnosis_with_sex_dx_interaction.RData"))
 # remove unnecessary data
 rm(fit, design)
 ```
@@ -1155,7 +1155,7 @@ top_hits_pmi <- GenerateResultTableExon(fit, variable = "PMI", file =  "3.4_diff
 top_hits_c2 <- GenerateResultTableExon(fit, variable = "C2", file =  "3.4_diff_expr_exons_for_c2_new_pvalue_and_fdr.csv")
 top_hits_c1 <- GenerateResultTableExon(fit, variable = "C1", file =  "3.4_diff_expr_exons_for_c1_new_pvalue_and_fdr.csv")
 # save data into an RData file (for figure generation)
-save(fit, design, top_hits, file = paste0(outpath, "/3.4_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.RData"))
+save(design, fit, top_hits, file = paste0(outpath, "/3.4_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.RData"))
 # remove unnecessary data
 rm(fit, design)
 ```

@@ -181,7 +181,10 @@ FishersExactTest <- function(data1, data2, background){
 }
 ```
 
-### Load Expression Data
+
+# Load Data
+
+## Expression Data
 
 First, we will load the expression data (for gene, transcript and exon level), which we need for some figures.
 ```{r}
@@ -196,6 +199,16 @@ exprs(transcript_summaries) <- as.matrix(exprs(transcript_summaries))
 # load exon expression file
 load(paste0(rdata_path, "/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_exon_summaries_annotated.RData"))
 exprs(exon_summaries) <- as.matrix(exprs(exon_summaries))
+```
+
+## GENCODE
+
+And GENCODE to get the original number of genes, transcripts and exons. We will filter it exactly as in the preprocessing step (only protein-coding genes from the HAVANA source).
+```{r}
+gencode <- import.gff("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/annotation_files/gencode.v19.annotation.gtf", format = "gtf")
+gencode <- gencode[gencode$gene_type == "protein_coding"]  
+gencode <- gencode[gencode$source == "HAVANA"]
+gencode <- gencode[gencode$type %in% c("gene", "transcript", "exon"), ]
 ```
 
 
@@ -729,10 +742,45 @@ ggsave(plot = g, file = paste0(outpath, "/4_barplot_ALL_PRS_diff_expr_transcript
 g
 ```
 
-### Enrichment plots
+# Enrichment plots
 
-Now, we will plot enrichment plots showing the log2FC (x-axis) for four picked genes, their transcript and exon expression
+Now, we will plot enrichment plots showing the mean log2FC (x-axis) for following picked genes, their transcripts and exons:
+1. Two genes only significant at exon level:
+- FNDC3A
+- CADPS
+2. Two genes, significant at transcript and exon level:
+- CNGB1
+- CSTB
 
+## FNDC3A
+
+Get data:
+```{r}
+load(paste0(results_path, "/1.1_diff_expr_genes_for_diagnosis.RData"))
+colnames(topTable(fit, confint=0.95, coef = "DxCASE", adjust = "BH", number = Inf))
+colnames(topTable(fit, coef = "DxCASE", adjust = "BH", number = Inf))
+
+gene_id <- fData(gene_summaries)[fData(gene_summaries)$gene_name == "FNDC3A", "gene_id"]
+transcript_ids <- fData(transcript_summaries)[grep("FNDC3A", fData(transcript_summaries)$gene_name), "transcript_id"]
+exon_ids <- fData(exon_summaries)[grep("FNDC3A", fData(exon_summaries)$gene_name), "exon_id"]
+original_transcript_ids <- unique(gencode[gencode$gene_name == "FNDC3A" & gencode$type == "transcript", ]$transcript_id)
+original_exon_ids <- unique(gencode[gencode$gene_name == "FNDC3A" & gencode$type == "exon", ]$exon_id)
+```
+
+## CADPS
+```{r}
+
+```
+
+## CNGB1
+```{r}
+
+```
+
+## CSTB
+```{r}
+
+```
 
 
 # Age DEGenes
@@ -1130,12 +1178,8 @@ features <- features[!duplicated(features), ]
 freqs <- as.data.frame(table(as.data.frame(table(features$gene_id))$Freq))
 
 # get transcript per gene info for Gencode (filter exactly as in the preprocessing)
-genes <- import.gff("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/annotation_files/gencode.v19.annotation.gtf", format = "gtf")
-genes <- genes[genes$gene_type == "protein_coding"]  
-genes <- genes[genes$type == "transcript"]
-genes <- genes[genes$source == "HAVANA"]
+genes <- gencode[gencode$type == "transcript"]
 genes <- as.data.frame(genes)[, c("gene_id", "transcript_id")]
-#genes <- genes[genes$gene_id %in% features$gene_id, ] 
 genes <- genes[!duplicated(genes), ]
 freqs2 <- as.data.frame(table(as.data.frame(table(genes$gene_id))$Freq))
 
@@ -1183,7 +1227,6 @@ rm(features, genes, freqs, freqs2, freqs3, tfreq)
 # Exons per Gene
 
 Now, we will plot the distribution of Ensembl Exon IDs per Ensembl Gene ID. We will plot the distribution in our filtered expression dataset as well as the original exons per gene found in GENCODE (for hg19). 
-
 ```{r, echo = F}
 features <- fData(exon_summaries)[, c("exon_id", "gene_id")]
 features <- separate_rows(features, exon_id, gene_id, sep = "\\|")
@@ -1191,10 +1234,7 @@ features <- features[!duplicated(features), ]
 freqs <- as.data.frame(table(as.data.frame(table(features$gene_id))$Freq))
 
 # load gene to transcript info from Gencode and filter exactly like in the preprocessing step
-genes <- import.gff("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/annotation_files/gencode.v19.annotation.gtf", format = "gtf")
-genes <- genes[genes$gene_type == "protein_coding"]  
-genes <- genes[genes$type == "exon"]
-genes <- genes[genes$source == "HAVANA"]
+genes <- gencode[gencode$type == "exon"]
 genes <- as.data.frame(genes)[, c("gene_id", "exon_id")]
 
 # get only Ensembl gene IDs for which we have exons (see above)
