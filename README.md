@@ -24,16 +24,18 @@ Following analyses will be performed:
   - Pre-processing of Affymetrix microarray data
   - QC and covariate evaluation/selection
   - Differential expression analysis (DEA)
-  - Gene set enrichment analysis usind MGSA and MSigDB and figure generation
+  - Gene set enrichment analysis using MGSA + MSigDB and figure generation
 5. **eQTL analysis**
   - Pre-processing of genotype data
   - Generate input files (genotype, expression and covariate files)
   - Run MatrixEQTL
-  - Clump eSNPs using PLINK (LD clumping)
+  - Clump eSNPs using PLINK (LD clumping) and generate result tables
   - Generate GRanges objects (and save as .Rds files)
   - eSNP based annotation and resampling 
   - Evaluate and plot results
-6. **Smoothing**
-  - Generate trans-eQTLs
-  - Filter, reweight and filter & reweight PRS using eQTLs or public data
-7. **Co-expression analysis**
+6. **Functional annotation**
+  - ChromHMM, VEP, GTEx, CMC and meQTLs
+7. **LD Score Regression**
+  - Estimate heritability
+  - Calculate genetic correlation to different GWAS summary statistics
+8. **Co-expression analysis**
