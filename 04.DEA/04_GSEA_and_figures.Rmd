@@ -26,7 +26,7 @@ vignette: >
 ```{r global_options, include = FALSE}
 library(BiocStyle)
 require(knitr)
-knitr::opts_chunk$set(warning = F, echo = F, message = F, cache = T, cache.lazy = F)
+knitr::opts_chunk$set(warning = F, echo = T, message = F, cache = T, cache.lazy = F)
 options(stringsAsFactors = T)
 ```
 
@@ -88,7 +88,7 @@ system(paste0("mkdir -p ", outpath))
 
 To reduce code, we will generate some functions here. 
 
-```{r definition, echo=F}
+```{r definition, echo = F}
 # function to generate a vulcano plot for differentially expressed genes
 GenerateVolcanoPlot <- function(fit, variable, file) {
   # get all hits
@@ -112,15 +112,15 @@ GenerateVolcanoPlot <- function(fit, variable, file) {
     labs(caption = paste0("Total variables: ", total)) +
     geom_hline(yintercept = -log10(threshold), linetype = "dashed")
  if(length(index) >= 10){
-    g + geom_point(data = hits[index, ], aes(x = logFC, y = -log10(P.Value)), colour = "red2", size = 2) +
+    g + geom_point(data = hits[index, ], aes(x = LogFC, y = -log10(P.Value)), colour = "red2", size = 2) +
     geom_text_repel(data = hits[index[1:10], ], aes(label = gene_name), colour = "red2")
   # else: label hit genes (if some are found) purple and following genes green until a maximum of 10 genes is labeled
   } else if(length(index) == 0) {
     g + geom_text_repel(data = hits[1:10, ], aes(label = gene_name))
   } else {
-    g + geom_point(data = hits[index, ], aes(x = logFC, y = -log10(P.Value)), colour = "red2", size = 2) +
+    g + geom_point(data = hits[index, ], aes(x = LogFC, y = -log10(P.Value)), colour = "red2", size = 2) +
     geom_text_repel(data = hits[index, ], aes(label = gene_name), colour = "red2") +
-    geom_point(data = hits[(length(index) + 1):10, ], aes(x = logFC, y = -log10(P.Value)), size = 2) +
+    geom_point(data = hits[(length(index) + 1):10, ], aes(x = LogFC, y = -log10(P.Value)), size = 2) +
     geom_text_repel(data = hits[(length(index) + 1):10, ], aes(label = gene_name))
   }
   ggsave(plot = g, file = paste0(outpath, "/", file), width = 8, height = 6, units = "in")
@@ -161,7 +161,6 @@ GenerateVerticalBarplotOfDiffExprHits <- function(design, fit, from, to, plot_na
     geom_text(size = 7, aes(label = sort.limma_res_padj_0.1..decreasing...T.), nudge_y = 120, colour = "dimgray") + 
     scale_y_continuous(expand = c(0.02, 0.01))
   ggsave(plot = g, file = paste0(outpath, "/", plot_name))
-  g
   return(limma_res_plot)
 }
 
@@ -178,6 +177,67 @@ FishersExactTest <- function(data1, data2, background){
   #print(contingency_matrix)
   result <- fisher.test(contingency_matrix, alternative = "greater")
   return(result$p.value)
+}
+
+# function to generate a forest plot for a given gene: showing a horizontal line from lower to upper 95% confidence interval and a dot in the middle representing the mean log2FC for the gene, its transcripts and exons. The FDR will only be plotted for the gene for the normal model and one transcript and one exon based on the new FDR model.
+GenerateForestPlot <- function(gene) {
+  # we will save following order of IDs for the plot: 1. Gene ID, 2. Transcript ID and 3. Exon ID with increasing character length, so that merged IDs are coming last
+  id_order <- vector() 
+  # 1. load DEA gene results, save only necessary information for the gene of interest, change column names and save order of IDs
+  load(paste0(results_path, "/1.1_diff_expr_genes_for_diagnosis.RData"))
+  gene_expr <- top_hits[top_hits$`Gene Symbol` == gene, ][, c("Ensembl Gene ID", "LogFC", "95% Confidence Interval, lower bound", "95% Confidence Interval, upper bound", "FDR estimate")]
+  colnames(gene_expr) <- c("ID", "LogFC", "CI_lower", "CI_upper", "FDR")
+  id_order <- c(id_order, gene_expr[order(nchar(gene_expr$ID)), ]$ID)
+  # 2. load DEA transcript results (for normal model, including all transcripts) and perform same steps as above
+  load(paste0(results_path, "/2.1_diff_expr_transcripts_for_diagnosis.RData"))
+  transcript_expr <- top_hits[top_hits$`Gene Symbol` == gene, ][, c("Ensembl Transcript ID", "LogFC", "95% Confidence Interval, lower bound", "95% Confidence Interval, upper bound", "FDR estimate")]
+  # change all FDRs to 1 (as we only want to keep the ones with the new FDRs)
+  transcript_expr$`FDR estimate` <- 1
+  colnames(transcript_expr) <- c("ID", "LogFC", "CI_lower", "CI_upper", "FDR")
+  id_order <- c(id_order, transcript_expr[order(nchar(transcript_expr$ID)), ]$ID)
+  # 3. load DEA exon results (same steps as for transcripts above)
+  load(paste0(results_path, "/3.1_diff_expr_exons_for_diagnosis.RData"))
+  exon_expr <- top_hits[top_hits$`Gene Symbol` == gene, ][, c("Ensembl Exon ID", "LogFC", "95% Confidence Interval, lower bound", "95% Confidence Interval, upper bound", "FDR estimate")]
+  exon_expr$`FDR estimate` <- 1
+  colnames(exon_expr) <- c("ID", "LogFC", "CI_lower", "CI_upper", "FDR")
+  id_order <- c(id_order, exon_expr[order(nchar(exon_expr$ID)), ]$ID)
+  # merge all three datasets using rbind
+  all <- rbind(gene_expr, transcript_expr, exon_expr)
+  # change ID column to factor and refactor using the saved order
+  all$ID <- as.factor(all$ID)
+  all$ID <- factor(all$ID, levels = rev(id_order))
+  
+  # get number of filtered/total transcripts and exons
+  filtered_transcripts <- length(unique(separate_rows(transcript_expr, "ID", sep = "\\|")$ID))
+  total_transcripts <- length(unique(gencode[gencode$gene_name == gene & gencode$type == "transcript", ]$transcript_id))
+  filtered_exons <- length(unique(separate_rows(exon_expr, "ID", sep = "\\|")$ID))
+  total_exons <- length(unique(gencode[gencode$gene_name == gene & gencode$type == "exon", ]$exon_id))
+  
+  # update the "two" FDRs (one transcript, one exon):
+  # load DEA transcript results for new p-value/FDR correction
+  load(paste0(results_path, "/2.4_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.RData"))
+  transcript_expr <- top_hits[top_hits$`Gene Symbol` == gene, ][, c("Ensembl Transcript ID", "FDR estimate")]
+  # change FDR for the given transcript ID in the merged dataset
+  all[all$ID == transcript_expr$`Ensembl Transcript ID`, "FDR"] <- transcript_expr$`FDR estimate`
+  # load DEA exon results for new p-value/FDR correction
+  load(paste0(results_path, "/3.4_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.RData"))
+  exon_expr <- top_hits[top_hits$`Gene Symbol` == gene, ][, c("Ensembl Exon ID", "FDR estimate")]
+  # change FDR for the given exon ID in the merged dataset
+  all[all$ID == exon_expr$`Ensembl Exon ID`, "FDR"] <- exon_expr$`FDR estimate`
+
+  # generate Plot
+  g <- ggplot(all, aes(x = ID, y = LogFC, ymin = CI_lower, ymax = CI_upper))+
+  geom_pointrange() +
+  geom_hline(yintercept = 0, linetype = 2) +
+  geom_text(label = ifelse(all$FDR < 1, paste0("FDR = ", round(all$FDR, 2)), ""), aes(hjust = -0.5, vjust = -0.2)) +
+  coord_flip() +
+  ggtitle(paste0(gene_expr$ID, " (", gene, ")\n# filtered transcripts: ", (total_transcripts - filtered_transcripts), "; # total transcripts: ", total_transcripts, "\n# filtered exons: ", (total_exons - filtered_exons), "; # total exons: ", total_exons)) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  xlab("") +
+  ylab(bquote("Log"["2"]*"(Fold Change)"))
+  # save plot
+  ggsave(plot = g, file = paste0(outpath, "/4_forest_plot_for_gene_", gene, ".pdf"), width = 12.5, height = 5.75)
+  g
 }
 ```
 
@@ -238,6 +298,15 @@ And we generate a barplot including all significantly differentially expressed g
 ```{r, echo = F}
 # generate vertical barplot
 limma_res_gene <- GenerateVerticalBarplotOfDiffExprHits(design, fit, from = 4, to = 3, plot_name = "1.1_barplot_significant_DEA_hits_genes.pdf")
+ggplot(limma_res_gene, aes(y = sort.limma_res_padj_0.1..decreasing...T., x = reorder(row.names(limma_res_gene), sort.limma_res_padj_0.1..decreasing...T.))) +
+    geom_bar(stat = "identity") +
+    coord_flip() +
+    theme_minimal() +
+    theme(text = element_text(size = 22)) +
+    ylab("# significant hits") +
+    xlab("") +
+    geom_text(size = 7, aes(label = sort.limma_res_padj_0.1..decreasing...T.), nudge_y = 120, colour = "dimgray") + 
+    scale_y_continuous(expand = c(0.02, 0.01))
 rm(design, fit)
 ```
 
@@ -295,7 +364,7 @@ case <- males[males$Dx == "CASE",]
 control <- males[males$Dx == "CTL",]
 t.test(case$trim10, control$trim10) # p-value = 0.05302
 # remove unnecessary data
-rm(probeset_summaries, design, fit, res, trim10, females, males, case, control, g)
+rm(design, fit, res, trim10, females, males, case, control, g)
 ```
 
 ## PRS with normal model
@@ -329,6 +398,15 @@ And a barplot of all significantly differentially expressed transcripts for each
 ```{r, echo = F}
 # generate vertical barplot
 limma_res_transcript <- GenerateVerticalBarplotOfDiffExprHits(design, fit, from = 5, to = 4, plot_name = "2.1_barplot_significant_DEA_hits_transcripts.pdf")
+ggplot(limma_res_transcript, aes(y = sort.limma_res_padj_0.1..decreasing...T., x = reorder(row.names(limma_res_transcript), sort.limma_res_padj_0.1..decreasing...T.))) +
+    geom_bar(stat = "identity") +
+    coord_flip() +
+    theme_minimal() +
+    theme(text = element_text(size = 22)) +
+    ylab("# significant hits") +
+    xlab("") +
+    geom_text(size = 7, aes(label = sort.limma_res_padj_0.1..decreasing...T.), nudge_y = 120, colour = "dimgray") + 
+    scale_y_continuous(expand = c(0.02, 0.01))
 rm(design, fit)
 ```
 
@@ -376,6 +454,15 @@ Get tDEGenes for each covariate (corrected for all the other covariates).
 ```{r, echo = F}
 # generate vertical barplot
 limma_res_transcript.new <- GenerateVerticalBarplotOfDiffExprHits(design, fit, from = 5, to = 4, plot_name = "2.4_barplot_significant_DEA_hits_transcripts_new_pvalue_and_fdr.pdf")
+ggplot(limma_res_transcript.new, aes(y = sort.limma_res_padj_0.1..decreasing...T., x = reorder(row.names(limma_res_transcript.new), sort.limma_res_padj_0.1..decreasing...T.))) +
+    geom_bar(stat = "identity") +
+    coord_flip() +
+    theme_minimal() +
+    theme(text = element_text(size = 22)) +
+    ylab("# significant hits") +
+    xlab("") +
+    geom_text(size = 7, aes(label = sort.limma_res_padj_0.1..decreasing...T.), nudge_y = 120, colour = "dimgray") + 
+    scale_y_continuous(expand = c(0.02, 0.01))
 ```
 
 ### Heatmap of tDEGenes (diagnosis)
@@ -388,16 +475,16 @@ top_hits <- top_hits[top_hits$`FDR estimate` < 0.1, ]
 anno <- pData(transcript_summaries)[, c("Age", "PMI", "RIN", "Sex", "Suicide", "Dx", "ShortName")]
 rownames(anno) <- anno$ShortName
 anno$ShortName <- NULL
-pheatmap(exprs(transcript_summaries)[top_hits$`Ensembl Transcript ID`, ], scale = "row", annotation_col = anno, show_colnames = F, filename = paste0(outpath, "/2.4_heatmap_significant_DEA_hits_transcripts_new_pvalue_and_fdr.pdf"))
 pheatmap(exprs(transcript_summaries)[top_hits$`Ensembl Transcript ID`, ], scale = "row", annotation_col = anno, show_colnames = F)
-rm(anno)
+pheatmap(exprs(transcript_summaries)[top_hits$`Ensembl Transcript ID`, ], scale = "row", annotation_col = anno, show_colnames = F, filename = paste0(outpath, "/2.4_heatmap_significant_DEA_hits_transcripts_new_pvalue_and_fdr.pdf"))
+dev.off()
 ```
 
 ### Barplot of up/down-regulated tDEGenes (diagnosis)
 
 Then, we plot the up and down regulated genes into one barplot with the two variables mirrored on the x-axis.
 ```{r, echo = F}
-logfc <- as.data.frame(table(top_hits$logFC))
+logfc <- as.data.frame(table(top_hits$LogFC))
 logfc$group <- "Upregulated"
 logfc[as.numeric(as.character(logfc$Var1)) < 0, "group"] <- "Downregulated"
 logfc[as.numeric(as.character(logfc$Var1)) < 0, "Freq"] <- -1
@@ -406,7 +493,7 @@ logfc$logfc <- 2^logfc$Var1
 logfc$linearFC <- sapply(logfc$logfc, function(x) {if(as.double(as.character(x)) >= 1 || is.na(x)){x} else {-1/x}})
 # generate barplot
 g <- ggplot(logfc, aes(x = linearFC, y = Freq, fill = group)) + 
-  geom_bar(stat = "identity", position = "identity", show.legend = FALSE) + 
+  geom_bar(stat = "identity", position = "identity", show.legend = F, orientation = logfc$Freq) + 
   xlab("linear fold change") +
   ylab("# tDEGenes (FDR < 10%)") +
   xlim(1, 1.5) +
@@ -468,7 +555,7 @@ for (p in prs_all) {
 ### Barplot
 
 Now, we can generate a barplot for all the PRS based DEA hits on transcript level, also called transcript expression quantitative trait score (teQTS). 
-```{r}
+```{r, echo = F}
 # first we need to get the data into the right format
 plot_prs <- reshape2::melt(prs_transcripts, id.vars = "PRS")
 g <- ggplot(data = plot_prs, aes(x = PRS, y = value, fill = variable)) +
@@ -490,6 +577,7 @@ g
 
 ### Load data
 
+Load the dataset generated in the DEA for exons differentially expressed for diagnosis.
 ```{r}
 # load RData file
 load(paste0(results_path, "/3.1_diff_expr_exons_for_diagnosis.RData"))
@@ -497,6 +585,7 @@ load(paste0(results_path, "/3.1_diff_expr_exons_for_diagnosis.RData"))
 
 ### Volcano plot
 
+Generate a volcano plot (y-axis: -log10 of p-values, x-axis: log2FC) for all hits.
 ```{r}
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "DxCASE", file = "3.1_volcano_plot_diff_expr_exons_for_diagnosis.pdf")
@@ -504,11 +593,19 @@ GenerateVolcanoPlot(fit, variable = "DxCASE", file = "3.1_volcano_plot_diff_expr
 
 ### Barplots
 
-Normal model:
-Get significantly differentially expressed genes for all the different covariates. 
+Get significantly differentially expressed genes based on exons for all the different covariates. 
 ```{r, echo = F}
 # generate vertical barplot
 limma_res_exon <- GenerateVerticalBarplotOfDiffExprHits(design, fit, from = 6, to = 5, plot_name = "3.1_barplot_significant_DEA_hits_exons.pdf")
+ggplot(limma_res_exon, aes(y = sort.limma_res_padj_0.1..decreasing...T., x = reorder(row.names(limma_res_exon), sort.limma_res_padj_0.1..decreasing...T.))) +
+    geom_bar(stat = "identity") +
+    coord_flip() +
+    theme_minimal() +
+    theme(text = element_text(size = 22)) +
+    ylab("# significant hits") +
+    xlab("") +
+    geom_text(size = 7, aes(label = sort.limma_res_padj_0.1..decreasing...T.), nudge_y = 120, colour = "dimgray") + 
+    scale_y_continuous(expand = c(0.02, 0.01))
 ```
 
 Now, we combine the barplot of the number of differentially expressed genes, transcripts and exons per covariate (corrected for all other covariates). 
@@ -534,9 +631,11 @@ g <- ggplot(limma_res_all, aes(y = counts, x = covariates)) +
   ylab("# significant hits") +
   xlab("") +
   geom_text(size = 7, aes(label = limma_res_all$counts), nudge_y = 120, colour = "dimgray") +
-  scale_y_continuous(expand = c(0.02, 0.01))
-g + facet_wrap(~ type, scale = "free_x") + theme(panel.spacing = unit(2, "lines"))
+  scale_y_continuous(expand = c(0.02, 0.01)) + 
+  facet_wrap(~ type, scale = "free_x") + 
+  theme(panel.spacing = unit(2, "lines"))
 ggsave(plot = g, file = paste0(outpath, "/4_barplots_significant_DEA_hits_gene_transcript_exon_combined.pdf"))
+g
 # remove unnecessary data
 rm(design, fit, top_hits, limma_res_exon, limma_res_transcript, limma_res_all, g)
 ```
@@ -546,6 +645,7 @@ rm(design, fit, top_hits, limma_res_exon, limma_res_transcript, limma_res_all, g
 
 ### Load data
 
+Load the dataset generated in the DEA for exons differentially expressed for diagnosis with sex*diagnosis interaction.
 ```{r}
 # load RData file
 load(paste0(results_path, "/3.2_diff_expr_exons_for_diagnosis_with_sex_dx_interaction.RData"))
@@ -553,6 +653,7 @@ load(paste0(results_path, "/3.2_diff_expr_exons_for_diagnosis_with_sex_dx_intera
 
 ### Volcano plot 
 
+Generate a volcano plot (y-axis: -log10 of p-values, x-axis: log2FC) for all hits.
 ```{r}
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "DxCASE", file = "3.2_volcano_plot_diff_expr_exons_for_diagnosis_with_sex_dx_interaction.pdf")
@@ -569,6 +670,7 @@ load(paste0(results_path, "/3.4_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr
 
 ### Volcano plot
 
+Generate a volcano plot (y-axis: -log10 of p-values, x-axis: log2FC) for all hits.
 ```{r}
 # volcano plot
 GenerateVolcanoPlot(fit, variable = "DxCASE", file = "3.4_volcano_plot_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.pdf")
@@ -581,6 +683,15 @@ Get significantly differentially expressed genes for all the different covariate
 ```{r, echo = F}
 # generate vertical barplot
 limma_res_exon.new <- GenerateVerticalBarplotOfDiffExprHits(design, fit, from = 6, to = 5, plot_name = "3.4_barplot_significant_DEA_hits_exons_new_pvalue_and_fdr.pdf")
+ggplot(limma_res_exon.new, aes(y = sort.limma_res_padj_0.1..decreasing...T., x = reorder(row.names(limma_res_exon.new), sort.limma_res_padj_0.1..decreasing...T.))) +
+    geom_bar(stat = "identity") +
+    coord_flip() +
+    theme_minimal() +
+    theme(text = element_text(size = 22)) +
+    ylab("# significant hits") +
+    xlab("") +
+    geom_text(size = 7, aes(label = sort.limma_res_padj_0.1..decreasing...T.), nudge_y = 120, colour = "dimgray") + 
+    scale_y_continuous(expand = c(0.02, 0.01))
 ```
 
 Now, we combine the barplot of the number of differentially expressed genes, transcripts and exons per covariate (corrected for all other covariates). 
@@ -603,25 +714,28 @@ g <- ggplot(limma.res.all, aes(y = counts, x = covariates)) +
   ylab("# significant hits") +
   xlab("") +
   geom_text(size = 7, aes(label = limma.res.all$counts), nudge_y = 120, colour = "dimgray") +
-  scale_y_continuous(expand = c(0.02, 0.01))
-g + facet_wrap(~ type, scale = "free_x") + theme(panel.spacing = unit(2, "lines"))
+  scale_y_continuous(expand = c(0.02, 0.01)) + 
+  facet_wrap(~ type, scale = "free_x") + 
+  theme(panel.spacing = unit(2, "lines"))
 ggsave(plot = g, file = paste0(outpath, "/4_barplots_significant_DEA_hits_gene_transcript_exon_combined_new_pvalues_and_fdr.pdf"))
+g
 # remove unnecessary data
 rm(design, fit, limma_res_exon.new, limma_res_transcript.new, limma_res_gene, limma.res.all, g)
 ```
 
 ### Heatmap of eDEGenes (diagnosis)
 
-First, we will plot a heatmap of the 2224 eDEGenes.
+First, we will plot a heatmap of the 2223 eDEGenes.
 ```{r, echo = F}
-# get only top hits (2224 eDEGenes)
+# get only top hits (2223 eDEGenes)
 top_hits <- top_hits[top_hits$`FDR estimate` < 0.1, ]
 # ǵenerate heatmap of hits
 anno <- pData(exon_summaries)[, c("Age", "PMI", "RIN", "Sex", "Suicide", "Dx", "ShortName")]
 rownames(anno) <- anno$ShortName
 anno$ShortName <- NULL
-pheatmap(exprs(exon_summaries)[top_hits$`Ensembl Exon ID`, ], scale = "row", annotation_col = anno, show_colnames = F, show_rownames = F)
 pheatmap(exprs(exon_summaries)[top_hits$`Ensembl Exon ID`, ], scale = "row", annotation_col = anno, show_colnames = F, show_rownames = F, filename = paste0(outpath, "/3.4_heatmap_significant_DEA_hits_exons_new_pvalue_and_fdr.pdf"))
+dev.off()
+pheatmap(exprs(exon_summaries)[top_hits$`Ensembl Exon ID`, ], scale = "row", annotation_col = anno, show_colnames = F, show_rownames = F)
 rm(anno)
 ```
 
@@ -629,7 +743,7 @@ rm(anno)
 
 Then, we plot the up and down regulated genes into one barplot with the two variables mirrored on the x-axis.
 ```{r, echo = F}
-logfc <- as.data.frame(table(top_hits$logFC))
+logfc <- as.data.frame(table(top_hits$LogFC))
 logfc$group <- "Upregulated"
 logfc[as.numeric(as.character(logfc$Var1)) < 0, "group"] <- "Downregulated"
 logfc[as.numeric(as.character(logfc$Var1)) < 0, "Freq"] <- -1
@@ -640,15 +754,16 @@ min(logfc$linearFC)
 max(logfc$linearFC)
 mean(logfc$linearFC)
 g <- ggplot(logfc, aes(x = linearFC, y = Freq, fill = group)) + 
-  geom_histogram(stat = "identity", show.legend = FALSE) + 
+  geom_histogram(stat = "identity", show.legend = FALSE, orientation = logfc$Freq) + 
   xlab("Linear fold change") +
   ylab("# tDEGenes (FDR < 10%)") +
   xlim(1, 1.8) +
   theme_minimal(base_size = 13) +
   theme(axis.line.x.bottom = element_line(colour = "black"), axis.line.y.left = element_line(colour = "black"), axis.ticks.length = unit(.15, "cm"), axis.ticks = element_line(colour = "black")) + 
   annotate("text", x = 1.5, y = 30, label = paste0("No. of genes upregulated: ", length(logfc[logfc$group == "Upregulated", "group"])), size = 4) +
-  annotate("text", x = 1.5, y = -30, label = paste0("No. of genes downregulated: ", length(logfc[logfc$group == "Downregulated", "group"])), size = 4)
-g + scale_fill_viridis(discrete = T, end = 0.8)
+  annotate("text", x = 1.5, y = -30, label = paste0("No. of genes downregulated: ", length(logfc[logfc$group == "Downregulated", "group"])), size = 4) + 
+  scale_fill_viridis(discrete = T, end = 0.8)
+g
 ggsave(plot = g, file = paste0(outpath, "/3.4_barplot_up_down_regulated_significant_DEA_hits_exons_new_pvalue_and_fdr.pdf"), width = 5.43, height = 3.45, units = "in")
 rm(logfc, g)
 ```
@@ -669,9 +784,10 @@ for (hit in top_hits$`Ensembl Exon ID`[1:6]) {
     theme_classic() +
     theme(text = element_text(size = 20), plot.title = element_text(hjust = 0.5)) +
     labs(title = top_hits[hit, "Gene Symbol"], x = element_blank(), y = "Expression values") +
-    scale_x_discrete(labels = c("Controls", "Cases"))
-  g + scale_fill_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D"), guide = FALSE, name = "", labels = c("Controls", "Cases"))
+    scale_x_discrete(labels = c("Controls", "Cases")) + 
+    scale_fill_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D"), guide = FALSE, name = "", labels = c("Controls", "Cases"))
   ggsave(plot = g, file = paste0(outpath, "/3.4_violinplot_significant_DEA_hits_exons_new_pvalue_and_fdr_", top_hits[hit, "Gene Symbol"],".pdf"), width = 8, height = 6, units = "in")
+  g
 }
 rm(name, data)
 ```
@@ -700,7 +816,7 @@ for (p in prs_all) {
 ### Barplot
 
 Now, we can generate a barplot for all the PRS based DEA hits on transcript level, also called transcript expression quantitative trait score (teQTS). 
-```{r}
+```{r, echo = F}
 # first we need to get the data into the right format
 plot_prs <- reshape2::melt(prs_exons, id.vars = "PRS")
 g <- ggplot(data = plot_prs, aes(x = PRS, y = value, fill = variable)) +
@@ -716,7 +832,7 @@ g
 ```
 
 Now, we combine Transcript and Exon hits for FDR < 10% in one plot:
-```{r}
+```{r, echo = F}
 # first we need to get the data into the right format
 prs_transcripts <- reshape2::melt(prs_transcripts, id.vars = "PRS")
 prs_transcripts$Type <- "Transcript"
@@ -728,7 +844,7 @@ prs_both$Type <- factor(prs_both$Type)
 prs_both$Type <- factor(prs_both$Type, levels = rev(levels(prs_both$Type)))
 
 # Graph
-ggplot(prs_both, aes(x = PRS, y = value, fill = variable)) + 
+g <- ggplot(prs_both, aes(x = PRS, y = value, fill = variable)) + 
   geom_bar(position = "identity", stat = "identity") +
   scale_fill_viridis(discrete = T, begin = 0.3, end = 0.9, option = "D") +
   facet_wrap(~Type, scales = "free_y", nrow = 2) +
@@ -742,44 +858,39 @@ ggsave(plot = g, file = paste0(outpath, "/4_barplot_ALL_PRS_diff_expr_transcript
 g
 ```
 
-# Enrichment plots
+# Forest plots
 
-Now, we will plot enrichment plots showing the mean log2FC (x-axis) for following picked genes, their transcripts and exons:
+Now, we will plot forest plots, generating a horizontal line from lower to upper 95% confidence interval with mean logFC represented as a dot as well as the FDR for the normal model plotted next to the line. We will mark the transcript and exon with the corrected significant FDR values. A forest plot will be generated for following genes with their transcripts and exons:
 1. Two genes only significant at exon level:
 - FNDC3A
 - CADPS
 2. Two genes, significant at transcript and exon level:
 - CNGB1
 - CSTB
+We generated a function above, so that the plot can be generated easily for other genes as well. 
 
 ## FNDC3A
 
-Get data:
 ```{r}
-load(paste0(results_path, "/1.1_diff_expr_genes_for_diagnosis.RData"))
-colnames(topTable(fit, confint=0.95, coef = "DxCASE", adjust = "BH", number = Inf))
-colnames(topTable(fit, coef = "DxCASE", adjust = "BH", number = Inf))
-
-gene_id <- fData(gene_summaries)[fData(gene_summaries)$gene_name == "FNDC3A", "gene_id"]
-transcript_ids <- fData(transcript_summaries)[grep("FNDC3A", fData(transcript_summaries)$gene_name), "transcript_id"]
-exon_ids <- fData(exon_summaries)[grep("FNDC3A", fData(exon_summaries)$gene_name), "exon_id"]
-original_transcript_ids <- unique(gencode[gencode$gene_name == "FNDC3A" & gencode$type == "transcript", ]$transcript_id)
-original_exon_ids <- unique(gencode[gencode$gene_name == "FNDC3A" & gencode$type == "exon", ]$exon_id)
+GenerateForestPlot("FNDC3A")
 ```
 
 ## CADPS
-```{r}
 
+```{r}
+GenerateForestPlot("CADPS")
 ```
 
 ## CNGB1
-```{r}
 
+```{r}
+GenerateForestPlot("CNGB1")
 ```
 
 ## CSTB
-```{r}
 
+```{r}
+GenerateForestPlot("CSTB")
 ```
 
 
@@ -835,28 +946,45 @@ Now, we can also check the significance (p-value) of the overlap from our age DE
 ## VENN diagram
 
 When, we will generate a VENN diagram for the overlap of found eDEGenes, tDEGenes and eDEGenes for age and save it into a pdf file.  
-```{r}
+```{r, echo = F}
 gDEGenes_age <- unique(gDEGenes_age$`Ensembl Gene ID`)
 tDEGenes_age <- unique(tDEGenes_age$`Ensembl Gene ID`)
 eDEGenes_age <- unique(eDEGenes_age$`Ensembl Gene ID`)
-p <- draw.triple.venn(area1 = length(gDEGenes_age), area2 = length(tDEGenes_age),                  area3 = length(eDEGenes_age), 
+# show plot
+grid.newpage()
+overrideTriple = T
+draw.triple.venn(area1 = length(gDEGenes_age), area2 = length(tDEGenes_age), 
+                 area3 = length(eDEGenes_age), euler.d = F, scaled = F, lty = "blank", 
                  n12 = length(intersect(gDEGenes_age, tDEGenes_age)), 
                  n23 = length(intersect(tDEGenes_age, eDEGenes_age)), 
                  n13 = length(intersect(gDEGenes_age, eDEGenes_age)),
-                 euler.d = F, scaled = F, 
-                 n123 = length(intersect(gDEGenes_age, intersect(tDEGenes_age, eDEGenes_age))),  
-                 category = c(paste("gDEGenes", length(gDEGenes_age), sep = "\n"), paste("tDEGenes", length(tDEGenes_age), sep = "\n"), paste("eDEGenes", length(eDEGenes_age), sep = "\n")), 
-                 lty = "blank", fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
+                 n123 = length(intersect(gDEGenes_age, intersect(tDEGenes_age, 
+                                                                 eDEGenes_age))),  
+                 category = c(paste("gDEGenes", length(gDEGenes_age), sep = "\n"), 
+                              paste("tDEGenes", length(tDEGenes_age), sep = "\n"), 
+                              paste("eDEGenes", length(eDEGenes_age), sep = "\n")), 
+                 fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), 
+                          rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), 
+                          rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
+dev.off()
 # save plot
 pdf(paste0(outpath, "/4_VENN_DEGenes_for_age.pdf"))
 grid.newpage()
-overrideTriple=T
-p
+overrideTriple = T
+draw.triple.venn(area1 = length(gDEGenes_age), area2 = length(tDEGenes_age), 
+                 area3 = length(eDEGenes_age), euler.d = F, scaled = F, lty = "blank", 
+                 n12 = length(intersect(gDEGenes_age, tDEGenes_age)), 
+                 n23 = length(intersect(tDEGenes_age, eDEGenes_age)), 
+                 n13 = length(intersect(gDEGenes_age, eDEGenes_age)),
+                 n123 = length(intersect(gDEGenes_age, intersect(tDEGenes_age, 
+                                                                 eDEGenes_age))),  
+                 category = c(paste("gDEGenes", length(gDEGenes_age), sep = "\n"), 
+                              paste("tDEGenes", length(tDEGenes_age), sep = "\n"), 
+                              paste("eDEGenes", length(eDEGenes_age), sep = "\n")), 
+                 fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), 
+                          rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), 
+                          rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
 dev.off()
-# show plot
-grid.newpage()
-overrideTriple=T
-p
 # delete unnecessary data
 rm(gDEGenes_age, tDEGenes_age, eDEGenes_age, ageing_gene, p)
 ```
@@ -886,27 +1014,40 @@ eDEGenes_ph <- unique(eDEGenes_ph[eDEGenes_ph$`FDR estimate` < 0.1, "Ensembl Gen
 ## VENN diagram
 
 When, we will generate a VENN diagram for the overlap of found eDEGenes, tDEGenes and eDEGenes for age and save it into a pdf file.  
-```{r}
-p <- draw.triple.venn(area1 = length(gDEGenes_ph), 
-                 area2 = length(tDEGenes_ph), 
-                 area3 = length(eDEGenes_ph), 
-                 n12 = length(intersect(gDEGenes_ph, tDEGenes_ph)), 
-                 n23 = length(intersect(tDEGenes_ph, eDEGenes_ph)), 
-                 n13 = length(intersect(gDEGenes_ph, eDEGenes_ph)), 
-                 euler.d = F, scaled = F, 
-                 n123 = length(intersect(gDEGenes_ph, intersect(tDEGenes_ph, eDEGenes_ph))),  
-                 category = c(paste("gDEGenes", length(gDEGenes_ph), sep = "\n"), paste("tDEGenes", length(tDEGenes_ph), sep = "\n"), paste("eDEGenes", length(eDEGenes_ph), sep = "\n")), 
-                 lty = "blank", fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
-# save plot
-pdf(paste0(outpath, "/4_VENN_DEGenes_for_ph.pdf"))
-grid.newpage()
-overrideTriple=T
-p
-dev.off()
+```{r, echo = F}
 # show plot
 grid.newpage()
 overrideTriple = T
-p
+draw.triple.venn(area1 = length(gDEGenes_ph), area2 = length(tDEGenes_ph), 
+                 area3 = length(eDEGenes_ph), euler.d = F, scaled = F, lty = "blank", 
+                 n12 = length(intersect(gDEGenes_ph, tDEGenes_ph)), 
+                 n23 = length(intersect(tDEGenes_ph, eDEGenes_ph)), 
+                 n13 = length(intersect(gDEGenes_ph, eDEGenes_ph)), 
+                 n123 = length(intersect(gDEGenes_ph, intersect(tDEGenes_ph, eDEGenes_ph))),
+                 category = c(paste("gDEGenes", length(gDEGenes_ph), sep = "\n"), 
+                              paste("tDEGenes", length(tDEGenes_ph), sep = "\n"), 
+                              paste("eDEGenes", length(eDEGenes_ph), sep = "\n")), 
+                 fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), 
+                          rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), 
+                          rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
+dev.off()
+# save plot
+pdf(paste0(outpath, "/4_VENN_DEGenes_for_ph.pdf"))
+grid.newpage()
+overrideTriple = T
+draw.triple.venn(area1 = length(gDEGenes_ph), area2 = length(tDEGenes_ph), 
+                 area3 = length(eDEGenes_ph), euler.d = F, scaled = F, lty = "blank", 
+                 n12 = length(intersect(gDEGenes_ph, tDEGenes_ph)), 
+                 n23 = length(intersect(tDEGenes_ph, eDEGenes_ph)), 
+                 n13 = length(intersect(gDEGenes_ph, eDEGenes_ph)), 
+                 n123 = length(intersect(gDEGenes_ph, intersect(tDEGenes_ph, eDEGenes_ph))),
+                 category = c(paste("gDEGenes", length(gDEGenes_ph), sep = "\n"), 
+                              paste("tDEGenes", length(tDEGenes_ph), sep = "\n"), 
+                              paste("eDEGenes", length(eDEGenes_ph), sep = "\n")), 
+                 fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), 
+                          rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), 
+                          rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
+dev.off()
 # delete unnecessary data 
 rm(gDEGenes_ph, tDEGenes_ph, eDEGenes_ph, p)
 ```
@@ -936,27 +1077,93 @@ eDEGenes_pmi <- unique(eDEGenes_pmi[eDEGenes_pmi$`FDR estimate` < 0.1, "Ensembl 
 ## VENN diagram
 
 When, we will generate a VENN diagram for the overlap of found eDEGenes, tDEGenes and eDEGenes for PMI and save it into a pdf file.  
-```{r}
-p <- draw.triple.venn(area1 = length(gDEGenes_pmi), area2 = length(tDEGenes_pmi), 
-                 area3 = length(eDEGenes_pmi), 
+```{r, echo = F}
+# show plot
+grid.newpage()
+overrideTriple = T
+draw.triple.venn(area1 = length(gDEGenes_pmi), area2 = length(tDEGenes_pmi), 
+                 area3 = length(eDEGenes_pmi), lty = "blank", euler.d = F, 
                  n12 = length(intersect(gDEGenes_pmi, tDEGenes_pmi)), 
                  n23 = length(intersect(tDEGenes_pmi, eDEGenes_pmi)), 
-                 n13 = length(intersect(gDEGenes_pmi, eDEGenes_pmi)), euler.d = F, scaled = F, 
-                 n123 = length(intersect(gDEGenes_pmi, intersect(tDEGenes_pmi, eDEGenes_pmi))),  
-                 category = c(paste("gDEGenes", length(gDEGenes_pmi), sep = "\n"), paste("tDEGenes", length(tDEGenes_pmi), sep = "\n"), paste("eDEGenes", length(eDEGenes_pmi), sep = "\n")), 
-                 lty = "blank", fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
+                 n13 = length(intersect(gDEGenes_pmi, eDEGenes_pmi)), scaled = F, 
+                 n123 = length(intersect(gDEGenes_pmi, intersect(tDEGenes_pmi,
+                                                                 eDEGenes_pmi))),  
+                 category = c(paste("gDEGenes", length(gDEGenes_pmi), sep = "\n"), 
+                              paste("tDEGenes", length(tDEGenes_pmi), sep = "\n"), 
+                              paste("eDEGenes", length(eDEGenes_pmi), sep = "\n")), 
+                 fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), 
+                          rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), 
+                          rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
+dev.off()
 # save plot
 pdf(paste0(outpath, "/4_VENN_DEGenes_for_pmi.pdf"))
 grid.newpage()
 overrideTriple = T
-p
+draw.triple.venn(area1 = length(gDEGenes_pmi), area2 = length(tDEGenes_pmi), 
+                 area3 = length(eDEGenes_pmi), lty = "blank", euler.d = F, 
+                 n12 = length(intersect(gDEGenes_pmi, tDEGenes_pmi)), 
+                 n23 = length(intersect(tDEGenes_pmi, eDEGenes_pmi)), 
+                 n13 = length(intersect(gDEGenes_pmi, eDEGenes_pmi)), scaled = F, 
+                 n123 = length(intersect(gDEGenes_pmi, intersect(tDEGenes_pmi,
+                                                                 eDEGenes_pmi))),  
+                 category = c(paste("gDEGenes", length(gDEGenes_pmi), sep = "\n"), 
+                              paste("tDEGenes", length(tDEGenes_pmi), sep = "\n"), 
+                              paste("eDEGenes", length(eDEGenes_pmi), sep = "\n")), 
+                 fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), 
+                          rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), 
+                          rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
 dev.off()
-# show plot
-grid.newpage()
-overrideTriple = T
-p
 # delete unnecessary data
 rm(gDEGenes_pmi, tDEGenes_pmi, eDEGenes_pmi)
+```
+
+
+# PC1 DEGenes
+
+Here, we do not have any known first ancestry dimension (PC1) related genes, so we just will generate a VENN diagram of the overlapping PC1 DEGenes. 
+
+## Load data
+
+First, we need to load the gDEGenes, tDEGenes and eDEGenes for PC1 and filter the data for only significant (FDR < 10%) genes. 
+```{r}
+# gene-level
+gDEGenes_c1 <- fread(paste0(results_path, "/1.1_diff_expr_genes_for_pc1.csv"), select = c("Ensembl Gene ID", "FDR estimate"), data.table = F)
+gDEGenes_c1 <- unique(gDEGenes_c1[gDEGenes_c1$`FDR estimate` < 0.1, "Ensembl Gene ID"])
+
+# transcript-level
+tDEGenes_c1 <- fread(paste0(results_path, "/2.4_diff_expr_transcripts_for_c1_new_pvalue_and_fdr.csv"), select = c("FDR estimate", "Ensembl Gene ID"), data.table = F)
+tDEGenes_c1 <- unique(tDEGenes_c1[tDEGenes_c1$`FDR estimate` < 0.1, "Ensembl Gene ID"])
+
+# No eDEGene hits for PC1
+```
+
+## VENN diagram
+
+When, we will generate a VENN diagram for the overlap of found tDEGenes and eDEGenes for PC1 and save it into a pdf file.  
+```{r, echo = F}
+# show plot 
+grid.newpage()
+draw.pairwise.venn(area1 = length(gDEGenes_c1), area2 = length(tDEGenes_c1), 
+                   cross.area = length(intersect(gDEGenes_c1, tDEGenes_c1)), 
+                   euler.d = F, scaled = F, lty = "blank", 
+                   category = c(paste("gDEGenes", length(gDEGenes_c1), sep = "\n"), 
+                                     paste("tDEGenes", length(tDEGenes_c1), sep = "\n")), 
+                   fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), 
+                            rgb(red = 66, green = 146, blue = 198, maxColorValue = 255)))
+dev.off()
+# save plot
+pdf(paste0(outpath, "/4_VENN_DEGenes_for_c1.pdf"))
+grid.newpage()
+draw.pairwise.venn(area1 = length(gDEGenes_c1), area2 = length(tDEGenes_c1), 
+                   cross.area = length(intersect(gDEGenes_c1, tDEGenes_c1)), 
+                   euler.d = F, scaled = F, lty = "blank", 
+                   category = c(paste("gDEGenes", length(gDEGenes_c1), sep = "\n"), 
+                                     paste("tDEGenes", length(tDEGenes_c1), sep = "\n")), 
+                   fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), 
+                            rgb(red = 66, green = 146, blue = 198, maxColorValue = 255)))
+dev.off()
+# delete unnecessary data
+rm(gDEGenes_c1, tDEGenes_c1, eDEGenes_c1)
 ```
 
 
@@ -984,25 +1191,40 @@ eDEGenes_c2 <- unique(eDEGenes_c2[eDEGenes_c2$`FDR estimate` < 0.1, "Ensembl Gen
 ## VENN diagram
 
 When, we will generate a VENN diagram for the overlap of found eDEGenes, tDEGenes and eDEGenes for PC2 and save it into a pdf file.  
-```{r}
-p <- draw.triple.venn(area1 = length(gDEGenes_c2), area2 = length(tDEGenes_c2), 
-                 area3 = length(eDEGenes_c2), 
+```{r, echo = F}
+# show plot 
+grid.newpage()
+overrideTriple = T
+draw.triple.venn(area1 = length(gDEGenes_c2), area2 = length(tDEGenes_c2), 
+                 area3 = length(eDEGenes_c2), lty = "blank", 
                  n12 = length(intersect(gDEGenes_c2, tDEGenes_c2)), 
                  n23 = length(intersect(tDEGenes_c2, eDEGenes_c2)), 
-                 n13 = length(intersect(gDEGenes_c2, eDEGenes_c2)), euler.d = F, scaled = F, 
-                 n123 = length(intersect(gDEGenes_c2, intersect(tDEGenes_c2, eDEGenes_c2))),  
-                 category = c(paste("gDEGenes", length(gDEGenes_c2), sep = "\n"), paste("tDEGenes", length(tDEGenes_c2), sep = "\n"), paste("eDEGenes", length(eDEGenes_c2), sep = "\n")), 
-                 lty = "blank", fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
+                 n13 = length(intersect(gDEGenes_c2, eDEGenes_c2)), euler.d = F, scaled = F,
+                 n123 = length(intersect(gDEGenes_c2, intersect(tDEGenes_c2, eDEGenes_c2))),
+                 category = c(paste("gDEGenes", length(gDEGenes_c2), sep = "\n"), 
+                              paste("tDEGenes", length(tDEGenes_c2), sep = "\n"), 
+                              paste("eDEGenes", length(eDEGenes_c2), sep = "\n")), 
+                 fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), 
+                          rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), 
+                          rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
+dev.off()
 # save plot
 pdf(paste0(outpath, "/4_VENN_DEGenes_for_c2.pdf"))
 grid.newpage()
 overrideTriple = T
-p
+draw.triple.venn(area1 = length(gDEGenes_c2), area2 = length(tDEGenes_c2), 
+                 area3 = length(eDEGenes_c2), lty = "blank", 
+                 n12 = length(intersect(gDEGenes_c2, tDEGenes_c2)), 
+                 n23 = length(intersect(tDEGenes_c2, eDEGenes_c2)), 
+                 n13 = length(intersect(gDEGenes_c2, eDEGenes_c2)), euler.d = F, scaled = F,
+                 n123 = length(intersect(gDEGenes_c2, intersect(tDEGenes_c2, eDEGenes_c2))),
+                 category = c(paste("gDEGenes", length(gDEGenes_c2), sep = "\n"), 
+                              paste("tDEGenes", length(tDEGenes_c2), sep = "\n"), 
+                              paste("eDEGenes", length(eDEGenes_c2), sep = "\n")), 
+                 fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), 
+                          rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), 
+                          rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
 dev.off()
-# show plot 
-grid.newpage()
-overrideTriple = T
-p
 # delete unnecessary data
 rm(gDEGenes_c2, tDEGenes_c2, eDEGenes_c2)
 ```
@@ -1034,7 +1256,7 @@ fuma <- rbind(tDEGenes_fuma, eDEGenes_fuma)
 ## Barplot
 
 Generate a barplot including the results of the down-regulated tDEGenes and eDEGenes. 
-```{r}
+```{r, echo = F}
 g <- ggplot(eDEGenes_fuma, aes(y = log_adjP, x = reorder(GeneSet, order(GeneSet, decreasing = T)))) +
     geom_bar(stat = "identity") +
     coord_flip() +
@@ -1074,16 +1296,34 @@ eDEGenes <- eDEGenes[eDEGenes$`FDR estimate` < 0.1, c("Ensembl Exon ID", "Gene S
 ## VENN overlap
 
 Before, we perform the GSEA, we will generate a VENN diagram of the overlap of the tDEGenes and eDEGenes. As all six tDEGenes are also eDEGene hits, the VENN diagram should display a huge circle (2,224 eDEGenes) with a smaller circle (6 tDEGenes) inside. 
-```{r}
-p <- draw.pairwise.venn(area1 = length(unique(tDEGenes$`Gene Symbol`)), area2 = length(unique(eDEGenes$`Gene Symbol`)), cross.area = length(intersect(unique(tDEGenes$`Gene Symbol`), unique(eDEGenes$`Gene Symbol`))), fill = c(rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)), category = c(paste("tDEGenes", length(unique(tDEGenes$`Gene Symbol`)), sep = "\n"), paste("eDEGenes", length(unique(eDEGenes$`Gene Symbol`)), sep = "\n")), lty = "blank", cex = 2)
+```{r, echo = F}
+# show plot 
+grid.newpage()
+draw.pairwise.venn(area1 = length(unique(tDEGenes$`Gene Symbol`)), 
+                   area2 = length(unique(eDEGenes$`Gene Symbol`)), 
+                   cross.area = length(intersect(unique(tDEGenes$`Gene Symbol`),
+                                                 unique(eDEGenes$`Gene Symbol`))), 
+                   fill = c(rgb(red = 66, green = 146, blue = 198, maxColorValue = 255),
+                            rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)),
+                   category = c(paste("tDEGenes", length(unique(tDEGenes$`Gene Symbol`)),
+                                      sep = "\n"), 
+                                paste("eDEGenes", length(unique(eDEGenes$`Gene Symbol`)),
+                                      sep = "\n")), lty = "blank", cex = 2)
+dev.off()
 # save plot
 pdf(paste0(outpath, "/4_VENN_tDEGenes_eDEGenes_overlap.pdf"))
 grid.newpage()
-p
+draw.pairwise.venn(area1 = length(unique(tDEGenes$`Gene Symbol`)), 
+                   area2 = length(unique(eDEGenes$`Gene Symbol`)), 
+                   cross.area = length(intersect(unique(tDEGenes$`Gene Symbol`),
+                                                 unique(eDEGenes$`Gene Symbol`))), 
+                   fill = c(rgb(red = 66, green = 146, blue = 198, maxColorValue = 255),
+                            rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)),
+                   category = c(paste("tDEGenes", length(unique(tDEGenes$`Gene Symbol`)),
+                                      sep = "\n"), 
+                                paste("eDEGenes", length(unique(eDEGenes$`Gene Symbol`)),
+                                      sep = "\n")), lty = "blank", cex = 2)
 dev.off()
-# show plot 
-grid.newpage()
-p
 ```
 
 ## Load MSigDB
@@ -1101,12 +1341,13 @@ all_go <- getGmt("/storage/groups/ccm01/datasets/2020_MSigDB_v7.0/c5.all.v7.0.sy
                   collectionType = BroadCollection(category = "c5"),  
                   geneIdType = SymbolIdentifier())
 ```
+<!-- **TODO:** As the gene symbols are not as sufficient as Ensembl Gene IDs, we will map the gene symbols to Ensembl IDs using the latest GENCODE file created on GRCh37 (hg19) release 19 (downloaded from: https://www.gencodegenes.org/human/release_19.html). --> 
 
-**TODO:** As the gene symbols are not as sufficient as Ensembl Gene IDs, we will map the gene symbols to Ensembl IDs using the latest GENCODE file created on GRCh37 (hg19) release 19 (downloaded from: https://www.gencodegenes.org/human/release_19.html). 
 
 ## Gene set (Pathway) enrichment analysis
 
-Now, we use the MGSA tool to find pathways which are enriched for our dataset. As we only have six hits on transcript level (6 tDEGenes), it does not make sense to run a pathway/gene set enrichment on these as no pathway will be enriched with such a low number of genes. So, we will do the enrichment analysis only on the 2224 eDEGene hits. 
+Now, we use the MGSA tool to find pathways which are enriched for our dataset. As we only have six hits on transcript level (6 tDEGenes), it does not make sense to run a pathway/gene set enrichment on these as no pathway will be enriched with such a low number of genes. So, we will do the enrichment analysis only on the 2223 eDEGene hits. 
+
 ### MSigDB - Canonical Pathways
 
 ```{r}
@@ -1126,16 +1367,16 @@ head(mgsa_res_cp[order(mgsa_res_cp$estimate, decreasing = T),])
 write.table(mgsa_res_cp, file = paste0(results_path, "/3.6_GSEA_MGSA_MSigDB_c2_canonical_pathways_results_eDEGenes.tsv"))
 ```
 
-Generate a barplot for the top ten pathway hits.  
-```{r}
+Generate a barplot for the top (significant: estimate > 0.5) pathway hits.  
+```{r, echo = F}
 # save only the significant pathways (score > 0.5)
-mgsa_res_cp <- mgsa_res_cp[mgsa_res_cp$estimate > 0.5, ]
+mgsa_res_cp <- mgsa_res_cp[mgsa_res_cp$estimate > 0.5 & !is.na(mgsa_res_cp$estimate), ]
 mgsa_res_cp <- mgsa_res_cp[!(row.names(mgsa_res_cp) == "NA"), ]
 plot_mgsa_cp <- as.data.frame(mgsa_res_cp[order(mgsa_res_cp$estimate, decreasing = T), ])
 ## set the levels in order we want
-g <- ggplot(data = plot_mgsa_cp, aes(x = reorder(row.names(plot_mgsa_cp), estimate), y = estimate)) + geom_bar(stat = "identity") + xlab("") + coord_flip() + theme_minimal() + ggtitle("MsigDB: c2 - cp")
-g + geom_hline(yintercept = 0.5, linetype = "dashed", color = "red")
+g <- ggplot(data = plot_mgsa_cp, aes(x = reorder(row.names(plot_mgsa_cp), estimate), y = estimate)) + geom_bar(stat = "identity") + xlab("") + coord_flip() + theme_minimal() + ggtitle("MsigDB: c2 - cp") + geom_hline(yintercept = 0.5, linetype = "dashed", color = "red")
 ggsave(plot = g, file = paste0(outpath, "/3.6_barplot_eDEGenes_MSigDB_top10_enriched_c2_canonical_pathways.pdf"), width = 5, height = 2)
+g
 ```
 
 ### MSigDB - GO gene sets
@@ -1152,18 +1393,20 @@ go_res <- mgsa(o = as.character(unique(eDEGenes$`Gene Symbol`)[!is.na(unique(eDE
 plot(go_res)
 
 mgsa_res_go <- setsResults(go_res)
-head(mgsa_res_go[order(mgsa_res_go$estimate, decreasing = T),])
+head(mgsa_res_go[order(mgsa_res_go$estimate, decreasing = T), ])
 write.table(mgsa_res_go, file = paste0(results_path, "/3.6_GSEA_MGSA_MSigDB_c5_all_GO_gene_sets_results_eDEGenes.tsv"))
 ```
 
-Generate a barplot for the top ten pathway hits.  
-```{r}
-# save only the 10 pathways with the highest estimate
-plot_mgsa_go <- as.data.frame(head(mgsa_res_go[order(mgsa_res_go$estimate, decreasing = T), ], 10))
+Generate a barplot for the top (significant: estimate > 0.5) pathway hits.  
+```{r, echo = F}
+# save only significant (estimate > 0.5) pathways
+mgsa_res_go <- mgsa_res_go[mgsa_res_go$estimate > 0.5 & !is.na(mgsa_res_go$estimate), ]
+mgsa_res_go <- mgsa_res_go[!(row.names(mgsa_res_go) == "NA"), ]
+plot_mgsa_go <- as.data.frame(mgsa_res_go[order(mgsa_res_go$estimate, decreasing = T), ])
 ## set the levels in order we want
-g <- ggplot(data = plot_mgsa_go, aes(x = reorder(row.names(plot_mgsa_go), estimate), y = estimate)) + geom_bar(stat = "identity") + xlab("") + coord_flip() + theme_minimal() + ggtitle("MsigDB: c5 - GO")
-g + geom_hline(yintercept = 0.5, linetype="dashed", color = "red")
+g <- ggplot(data = plot_mgsa_go, aes(x = reorder(row.names(plot_mgsa_go), estimate), y = estimate)) + geom_bar(stat = "identity") + xlab("") + coord_flip() + theme_minimal() + ggtitle("MsigDB: c5 - GO") + geom_hline(yintercept = 0.5, linetype = "dashed", color = "red")
 ggsave(plot = g, file = paste0(outpath, "/3.6_barplot_eDEGenes_MSigDB_top10_enriched_c5_all_GO_gene_sets.pdf"), width = 6, height = 4)
+g
 ```
 
 

@@ -44,7 +44,7 @@ This document includes the differential gene expression analysis (DEA) for the g
 2. DEA for diagnosis and sex*diagnosis interaction model
 3. DEA using the polygenic risk score instead of the diagnosis (also correcting for covariates)
 
-For the transcript and exon level, we also include a 4. and 5. step, there we repeat step 1. and 3. from above with a recalculated FDR based on the included gene-level, meaning that only the transcript/exon with the best p-value per gene is taken into account. 
+For the transcript and exon level, we also include a 4. and 5. step, there we repeat step 1. and 3. from above with a recalculated FDR based on the included gene-level, meaning that only the transcript/exon with the best P-value per gene is taken into account. 
 
 Below you can find the list of packages that are required by the workflow. 
 ```{r, echo = F}
@@ -114,7 +114,7 @@ GenerateResultTableGene <- function(fit, variable, file){
   top_hits <- topTable(fit, confint = 0.95, coef = variable, adjust = "BH", number = Inf)
   print(top_hits[1:2, ])
   print(paste0("log2FC range: ", round(min(top_hits$logFC), 2), " until ", round(max(top_hits$logFC), 2)))
-  colnames(top_hits) <- c("Ensembl Gene ID", "Location", "Gene Symbol", "LogFC", "95% Confidence Interval, lower bound", "95% Confidence Interval, upper bound", "Average Expression", "T-statistic", "P-value", "FDR estimate", "B coefficient")
+  colnames(top_hits) <- c("Ensembl Gene ID", "Location", "Gene Symbol", "LogFC", "95% Confidence Interval, lower bound", "95% Confidence Interval, upper bound", "Average Expression", "T-statistic", "P-value", "FDR estimate", "Beta coefficient")
   top_hits <- unique(separate_rows(top_hits, `Ensembl Gene ID`, sep = "\\|"))
   top_hits <- unique(separate_rows(top_hits, `Gene Symbol`, sep = "\\|"))
   write.table(top_hits, file = paste0(outpath, "/", file), sep = "\t", row.names = F)
@@ -124,7 +124,7 @@ GenerateResultTableTranscript <- function(fit, variable, file){
   top_hits <- topTable(fit, confint = 0.95, coef = variable, adjust = "BH", number = Inf)
   print(top_hits[1:2, ])
   print(paste0("log2FC range: ", round(min(top_hits$logFC), 2), " until ", round(max(top_hits$logFC), 2)))
-  colnames(top_hits) <- c("Ensembl Transcript ID", "Location", "Ensembl Gene ID", "Gene Symbol", "logFC", "95% Confidence Interval, lower bound", "95% Confidence Interval, upper bound", "Average Expression", "t-statistic", "p-value", "FDR estimate", "B coefficient")
+  colnames(top_hits) <- c("Ensembl Transcript ID", "Location", "Ensembl Gene ID", "Gene Symbol", "LogFC", "95% Confidence Interval, lower bound", "95% Confidence Interval, upper bound", "Average Expression", "T-statistic", "P-value", "FDR estimate", "Beta coefficient")
   top_hits <- unique(separate_rows(top_hits, `Ensembl Gene ID`, sep = "\\|"))
   top_hits <- unique(separate_rows(top_hits, `Gene Symbol`, sep = "\\|"))
   write.table(top_hits, file = paste0(outpath, "/", file), sep = "\t", row.names = F)
@@ -134,19 +134,19 @@ GenerateResultTableExon <- function(fit, variable, file){
   top_hits <- topTable(fit, confint = 0.95, coef = variable, adjust = "BH", number = Inf)
   print(top_hits[1:2, ])
   print(paste0("log2FC range: ", round(min(top_hits$logFC), 2), " until ", round(max(top_hits$logFC), 2)))
-  colnames(top_hits) <- c("Ensembl Exon ID", "Location", "Ensembl Transcript ID", "Ensembl Gene ID", "Gene Symbol", "logFC", "95% Confidence Interval, lower bound", "95% Confidence Interval, upper bound", "Average Expression", "t-statistic", "p-value", "FDR estimate", "B coefficient")
+  colnames(top_hits) <- c("Ensembl Exon ID", "Location", "Ensembl Transcript ID", "Ensembl Gene ID", "Gene Symbol", "LogFC", "95% Confidence Interval, lower bound", "95% Confidence Interval, upper bound", "Average Expression", "T-statistic", "P-value", "FDR estimate", "Beta coefficient")
   top_hits <- unique(separate_rows(top_hits, `Ensembl Gene ID`, sep = "\\|"))
   top_hits <- unique(separate_rows(top_hits, `Gene Symbol`, sep = "\\|"))
   write.table(top_hits, file = paste0(outpath, "/", file), sep = "\t", row.names = F)
   return(top_hits)
 }
 
-# function to recalculate the p-value and fdr for transcripts and exons based on gene level (Ensmebl Gene ID NOT Symbol!!): load the result table, get the smallest p-value for a gene (Ensembl Gene ID), calculate new fdr using the genes smallest p-values and gene number as background
+# function to recalculate the P-value and fdr for transcripts and exons based on gene level (Ensmebl Gene ID NOT Symbol!!): load the result table, get the smallest P-value for a gene (Ensembl Gene ID), calculate new fdr using the genes smallest P-values and gene number as background
 GetExprWithSmallestP <- function(input, summaries){
   res <- fread(paste0(outpath, "/", input), header = T, stringsAsFactors = F)
-  # get the rows with the lowest p-value per gene ID
-  min_pval <- res[ , .SD[which.min(`p-value`)], by = `Ensembl Gene ID`]
-  # get all transcript IDs with lowest p-value per gene ID
+  # get the rows with the lowest P-value per gene ID
+  min_pval <- res[ , .SD[which.min(`P-value`)], by = `Ensembl Gene ID`]
+  # get all transcript IDs with lowest P-value per gene ID
   index <- which(rownames(exprs(summaries)) %in% as.character(c(min_pval[, 2])[[1]]))
   # reduce transcript/exon_summaries to these transcripts/exons
   summaries <- summaries[c(index), ]
@@ -675,13 +675,13 @@ rm(design, fit)
 We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the SCZ2-2014 PRS.
 
 
-### Diagnosis with recalculated p-values and FDR
+### Diagnosis with recalculated P-values and FDR
 
-As the low adjusted p-values of the transcript expressions could come from the high number of transcripts to test for, we want to redo the adjusted p-value calculation as followed:
+As the low adjusted P-values of the transcript expressions could come from the high number of transcripts to test for, we want to redo the adjusted P-value calculation as followed:
 
-1. Take the lowest p-value of all transcripts corresponding to a gene
+1. Take the lowest P-value of all transcripts corresponding to a gene
 2. Get all transcript IDs and reduce the expression Set to these transcripts
-2. Calculate p-values and FDR using limma on the reduced transcript set
+2. Calculate P-values and FDR using limma on the reduced transcript set
 ```{r, echo = F}
 # reduce expression set
 dim(transcript_summaries)
@@ -705,13 +705,13 @@ rm(fit, design)
 ```
 Now, we have multiple hits on the transcript level. We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for diagnosis, `r length(top_hits_age[top_hits_age$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for age, `r length(top_hits_ph[top_hits_ph$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for pH, `r length(top_hits_pmi[top_hits_pmi$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for pmi, `r length(top_hits_c2[top_hits_c2$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the second ancestry principal component (PC2). All hits are based on a 10% FDR (FDR < 0.1). The six diagnosis gene hits are: `r top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]`
 
-### PRS with recalculated p-value and FDR
+### PRS with recalculated P-value and FDR
 
-As the low adjusted p-values of the transcript expressions could come from the high number of transcripts to test for, we want to redo the adjusted p-value calculation for all PRS from above as follows:
+As the low adjusted P-values of the transcript expressions could come from the high number of transcripts to test for, we want to redo the adjusted P-value calculation for all PRS from above as follows:
 
-1. Take the lowest p-value of all transcripts corresponding to a gene
+1. Take the lowest P-value of all transcripts corresponding to a gene
 2. Get all transcript IDs and reduce the expression Set to these transcripts
-2. Calculate p-values and FDR using limma on the reduced transcript set
+2. Calculate P-values and FDR using limma on the reduced transcript set
 
 **ADHD-2017 PRS**
 ```{r, echo = F}
@@ -1131,13 +1131,13 @@ rm(design, fit)
 ```
 We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the SCZ2-2014 PRS.
 
-### Diagnosis with recalculated p-values and FDR
+### Diagnosis with recalculated P-values and FDR
 
-As the low adjusted p-values of the transcript expressions could come from the high number of transcripts to test for, we want to redo the adjusted p-value calculation as followed:
+As the low adjusted P-values of the transcript expressions could come from the high number of transcripts to test for, we want to redo the adjusted P-value calculation as followed:
 
-1. Take the lowest p-value of all transcripts corresponding to a gene
+1. Take the lowest P-value of all transcripts corresponding to a gene
 2. Get all transcript IDs and reduce the expression Set to these transcripts
-2. Calculate p-values and FDR using limma on the reduced transcript set
+2. Calculate P-values and FDR using limma on the reduced transcript set
 ```{r, echo = F}
 # reduce expression set
 dim(exon_summaries)
@@ -1161,7 +1161,7 @@ rm(fit, design)
 ```
 Now, we have multiple hits on the exon level. We can find `r length(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for diagnosis, `r length(top_hits_age[top_hits_age$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for age, `r length(top_hits_ph[top_hits_ph$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for pH, `r length(top_hits_pmi[top_hits_pmi$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for pmi, `r length(top_hits_c2[top_hits_c2$"FDR estimate" < 0.1, "Ensembl Gene ID"])` hits for the second ancestry principal component (PC2). All hits are based on a 10% FDR (FDR < 0.1). The first ten diagnosis gene hits are: `r top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"][1:10]`
 
-### PRS with recalculated p-value and FDR
+### PRS with recalculated P-value and FDR
 
 **ADHD-2017 PRS**
 ```{r, echo = F}
