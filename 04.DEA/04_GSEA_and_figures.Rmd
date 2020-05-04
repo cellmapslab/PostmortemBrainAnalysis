@@ -41,7 +41,7 @@ options(stringsAsFactors = T)
 
 Below you can find the list of packages that are required for all analysis steps. 
 
-```{r, echo = F}
+```{r}
 # genral packages
 library(qvalue)
 library(data.table)

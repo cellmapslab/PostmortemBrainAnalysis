@@ -44,7 +44,7 @@ opts_chunk$set(echo = TRUE,
 
 # Introduction
 
-This document includes the quality control of the different microarray pre-processing steps, generated in the first R markdown script (*01_preprocessing.Rmd*), and a covariate evaluation analysis. The covariate evaluation is based on the methods and scripts provided/used in the Fromer et al. (Nature Neuroscience 2016) Paper. The covariate evaluation is necessary for the selection of covariates for the linear model used in the differential expression analysis. We will use the different generated RData files of the first script as input for all the neccessary quality control and plot generation procedures. For the calibrated data we will only use the probeset summarized data as we continue all following analyses with this dataset. The last step is done for all three annotation stages (gene, transcript, exon). Following steps will be performed: 
+This document includes the quality control of the different microarray pre-processing steps, generated in the first R markdown script (*01_preprocessing.Rmd*), and a covariate evaluation analysis. The covariate evaluation is based on the methods and scripts used in the Common Minds Consortium (CMC: Fromer et al., Nature Neuroscience 2016) Paper. The covariate evaluation is necessary for the selection of covariates for the linear model used in the differential expression analysis. We will use the different generated RData files of the first script as input for all the neccessary quality control and plot generation procedures. For the calibrated data we will only use the probeset summarized data as we continue all following analyses with this dataset. The last step is done for all three annotation stages (gene, transcript, exon). Following steps will be performed: 
 
 1. Visual inspection of the phenotypes (barplots, violin/boxplots, correlation plots)
 2. Quality control of raw data (chip scan date, boxplot, PCA plot, arrayQualityMetrics)
@@ -90,12 +90,15 @@ library(pheatmap)
 ```
 
 
-# Generate output folder
+# Paths
 
-Before we can start, we need to make sure that the output folder for the quality control (QC) .RData files and figures exists. If it does not exist yet, we will generate it using the systems (Red Hat Enterprise Linux operating system: Fedora 25) "mkdir" command. 
-
+Before we can start, we need to make sure that all necessary paths and folder names are saved. If the output folder does not exist yet, we will generate it using the systems (Red Hat Enterprise Linux operating system: Fedora 25) "mkdir" command.
 ```{r}
+# path to the resulting RData files from the preprocessing step
+rdata_path="/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_files"
+# path to store the output into
 outpath = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/02_QC_and_cov_eval"
+# generate ouput path if not existing already
 system(paste0("mkdir -p ", outpath))
 ```
 
@@ -104,20 +107,15 @@ system(paste0("mkdir -p ", outpath))
 
 ## Load data
 
-For every step we will load the necessary data. To get all phenotypes, we need to load the batch corrected probeset summarized dataset as some samples were removed in this preprocessing step, which we also do not want in the phenotype plots. Additionally we will load the first 20 surrogate variables.
-
+As the datasets are huge, especially for the raw dataset, we will load the necessary data only when we need it (and remove it afterwards again). To get all phenotypes, we need to load the batch corrected probeset summarized dataset as some samples were removed in this preprocessing step, which we also do not want in the phenotype plots. Additionally we will load the first 20 surrogate variables.
 ```{r}
 # Phenotypes
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/5_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA.RData")
+load(paste0(rdata_path, "/5_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA.RData"))
 pheno <- pData(probeset_summaries)
 
 # Surrogate variables
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/5_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_surrogate_variables_1-20.RData")
+load(paste0(rdata_path, "/5_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_surrogate_variables_1-20.RData"))
 surrogates <- svobj$sv
-
-#mean(pheno[pheno$Diagnosis == "SCZ", "C4"])
-#sd(pheno[pheno$Diagnosis == "SCZ", "C4"])/sqrt(length(pheno[pheno$Diagnosis == "SCZ", "C4"]))
-#summary(pheno[pheno$Diagnosis == "MDD", "Suicide"])
 ```
 
 ## Covariate distributions
@@ -127,11 +125,9 @@ First, we will look more closely into our phenotype data. The five replicates an
 One of the most important covariates is the post mortem interval (PMI) giving the time in hours from the death of a person until the removal of the samples. Another important covariate is the RNA integrity number (RIN), which tells us the quality of the RNA samples and should always be higher than six. The phenotype data also includes the age at death (Age), Sex, Diagnosis (Dx), pH, suicide information, ... (DOI), batch information, ancestry and some file identifier. The ancestry information was not available for all samples, which is the reason, why we used the genotype data to calculate the ancestry information (mds). We also distributed the files into three different batches according to their filename. File batch "a" includes all samples measured in 2009. File batch "9" and "M" include all samples measured in 2014.
 
 A short summary of the most important phenotype variables:
-
 ```{r, echo = F}
 summary(pheno[, c("Age", "Sex", "Dx", "Diagnosis", "pH", "PMI", "Suicide", "Type_of_Death", "DOI", "RIN", "Batch", "Ancestry", "File")])
 ```
-
 Now, we will check the covariates visually.
 
 ### Sex

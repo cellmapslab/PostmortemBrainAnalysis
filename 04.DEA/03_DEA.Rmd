@@ -47,7 +47,7 @@ This document includes the differential gene expression analysis (DEA) for the g
 For the transcript and exon level, we also include a 4. and 5. step, there we repeat step 1. and 3. from above with a recalculated FDR based on the included gene-level, meaning that only the transcript/exon with the best P-value per gene is taken into account. 
 
 Below you can find the list of packages that are required by the workflow. 
-```{r, echo = F}
+```{r}
 # General Bioconductor packages
 library(biomaRt)
 
