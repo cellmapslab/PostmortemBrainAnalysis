@@ -46,7 +46,7 @@ opts_chunk$set(echo = TRUE,
 
 This document includes the quality control of the different microarray pre-processing steps, generated in the first R markdown script (*01_preprocessing.Rmd*), and a covariate evaluation analysis. The covariate evaluation is based on the methods and scripts used in the Common Minds Consortium (CMC: Fromer et al., Nature Neuroscience 2016) Paper. The covariate evaluation is necessary for the selection of covariates for the linear model used in the differential expression analysis. We will use the different generated RData files of the first script as input for all the neccessary quality control and plot generation procedures. For the calibrated data we will only use the probeset summarized data as we continue all following analyses with this dataset. The last step is done for all three annotation stages (gene, transcript, exon). Following steps will be performed: 
 
-1. Visual inspection of the phenotypes (barplots, violin/boxplots, correlation plots)
+1. Visual inspection of the phenotypes (barplots, violin/boxplots, correlation plots), ancestry dimensions and the surrogate eigenvalues 
 2. Quality control of raw data (chip scan date, boxplot, PCA plot, arrayQualityMetrics)
 3. Quality control of calibrated data (boxplot, PCA plot, arrayQualityMetrics)
 4. Quality control of calibrated and batch corrected data (boxplot, PCA plot, arrayQualityMetrics)
@@ -133,7 +133,6 @@ Now, we will check the covariates visually.
 ### Sex
 
 Barplot of the Sex covariate (Female, Male) for cases vs. controls.
-
 ```{r, echo = F}
 plot_data <- rbind(as.data.frame(table(pheno[pheno$Dx == "CTL", "Sex"])), as.data.frame(table(pheno[pheno$Dx == "CASE", "Sex"])))
 plot_data$Type <- c("Controls", "Controls", "Cases", "Cases")
@@ -153,9 +152,8 @@ ggplot(plot_data) +
   labs(title = "Sex", x = element_blank(), y = element_blank()) +
   # change legend 
   theme(plot.title = element_text(hjust = 0.5), legend.position = c(0.14, 0.9), legend.background = element_rect(size = 0.5, linetype = "solid", colour = "black"), legend.title = element_blank(), legend.spacing.y = unit(2, "pt"), legend.spacing = unit(1,"cm")) 
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_barplot_sex.pdf", width = 8, height = 6, units = "in")
+ggsave(paste0(outpath, "/1_barplot_sex.pdf"), width = 8, height = 6, units = "in")
 ```
-
 We can see, that we have more than threefold of males in healthy controls and schizophrenia patients and slightly more females with bipolar disorder and major depression disorder. 
 
 ### Diagnosis (Dx)
@@ -176,15 +174,13 @@ ggplot(plot_data) +
   labs(title = "Diagnosis", x = element_blank(), y = element_blank()) +
   # change legend 
   theme(plot.title = element_text(hjust = 0.5), legend.position = c(0.89, 0.9), legend.background = element_rect(size = 0.5, linetype = "solid", colour = "black"), legend.title = element_blank(), legend.spacing.y = unit(2, "pt"), legend.spacing = unit(1,"cm")) 
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_barplot_diagnosis.pdf", width = 8, height = 6, units = "in")
+ggsave(paste0(outpath, "/1_barplot_diagnosis.pdf"), width = 8, height = 6, units = "in")
 ```
-
 We have almost as many healthy controls as schizophrenia patients. The number of bipolar disorder and major despression disorder patients is relatively small compared to the amount of schizophrenia patients. 
 
 ### Suicide
 
 In the phenotype data we also have the information given, if the patients performed suicide (y) or not (n). None of the healthy controls committed suicide.  
-
 ```{r, echo = F}
 plot_data <- rbind(as.data.frame(table(pheno[pheno$Dx == "CTL", "Suicide"])), as.data.frame(table(pheno[pheno$Dx == "CASE", "Suicide"])))
 plot_data$Type <- c("Controls", "Controls", "Cases", "Cases")
@@ -205,15 +201,13 @@ ggplot(plot_data) +
   labs(title = "Suicide", x = element_blank(), y = element_blank()) +
   # change legend 
   theme(plot.title = element_text(hjust = 0.5), legend.position = c(0.14, 0.9), legend.background = element_rect(size = 0.5, linetype = "solid", colour = "black"), legend.title = element_blank(), legend.spacing.y = unit(2, "pt"), legend.spacing = unit(1,"cm")) 
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_barplot_suicide.pdf", width = 8, height = 6, units = "in")
+ggsave(paste0(outpath, "/1_barplot_suicide.pdf"), width = 8, height = 6, units = "in")
 ```
-
 We can see, that most of the major depression disorder (MDD) patients were doing suicide, whereas only half of the schizophrenia and bipolar disorder patients were performing suicide. All healthy controls died on a natural cause.
 
 ### Type of Death 
 
 As Suicide was only performed in cases, we also wanted to distribute the type of death into natural, violent (e.g. hanging, choking from food) and non-violent (e.g. poison) type of death.
-
 ```{r, echo = F}
 plot_data <- rbind(as.data.frame(table(pheno[pheno$Dx == "CTL", "Type_of_Death"])), as.data.frame(table(pheno[pheno$Dx == "CASE", "Type_of_Death"])))
 plot_data$Type <- c("Controls", "Controls", "Controls", "Cases", "Cases", "Cases")
@@ -232,7 +226,7 @@ ggplot(plot_data) +
   labs(title = "Type of Death", x = element_blank(), y = element_blank()) +
   # change legend 
   theme(plot.title = element_text(hjust = 0.5), legend.position = c(0.14, 0.9), legend.background = element_rect(size = 0.5, linetype = "solid", colour = "black"), legend.title = element_blank(), legend.spacing.y = unit(2, "pt"), legend.spacing = unit(1,"cm")) 
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_barplot_type_of_death.pdf", width = 8, height = 6, units = "in")
+ggsave(paste0(outpath, "/1_barplot_type_of_death.pdf"), width = 8, height = 6, units = "in")
 ```
 
 ### Batch
@@ -255,9 +249,8 @@ ggplot(plot_data) +
   labs(title = "Batches", x = element_blank(), y = element_blank()) +
   # change legend 
   theme(plot.title = element_text(hjust = 0.5), legend.position = c(0.14, 0.9), legend.background = element_rect(size = 0.5, linetype = "solid", colour = "black"), legend.title = element_blank(), legend.spacing.y = unit(2, "pt"), legend.spacing = unit(1,"cm")) 
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_barplot_batch.pdf", width = 8, height = 6, units = "in")
+ggsave(paste0(outpath, "/1_barplot_batch.pdf"), width = 8, height = 6, units = "in")
 ```
-
 Most of the samples were measured in batch 1 and 2. Some also in batch A and a really small number in the batches 3 and 4. The samples in batch A only include schizophrenia patients and controls and the bipolar disorder patients are only included in batch 1 and 2.
 
 We are still not sure, how the samples were distributed into the different batches, as the sample date generation does not match with the batch numbers (see section "Plot sample generation dates").
@@ -283,15 +276,13 @@ ggplot(plot_data) +
   labs(title = "Ancestry", x = element_blank(), y = element_blank()) +
   # change legend 
   theme(plot.title = element_text(hjust = 0.5), legend.position = c(0.5, 0.9), legend.background = element_rect(size = 0.5, linetype = "solid", colour = "black"), legend.title = element_blank(), legend.spacing.y = unit(2, "pt"), legend.spacing = unit(1,"cm")) 
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_barplot_ancestry.pdf", width = 8, height = 6, units = "in")
+ggsave(paste0(outpath, "/1_barplot_ancestry.pdf"), width = 8, height = 6, units = "in")
 ```
-
 It is interesting, that all bipolar disorder and major depression disorder samples (only cases) have an unknown ancestry. Most of the samples are Ceucasian (CEU) and only a small amount is Chinese (CHB). Both types can be found in the control and case samples. Only one schizophrenia sample has no ancestry information and the unique CEU/CHB sample is also a schizophrenia case.
 
 ### Age
 
 We will first check, how the Age is distributed in the dataset for cases vs. controls. 
-
 ```{r, echo = F}
 ggplot(pheno, aes(x = Dx, y = Age, fill = Dx)) +
   # add bar for each sex colored by case/control
@@ -303,9 +294,8 @@ ggplot(pheno, aes(x = Dx, y = Age, fill = Dx)) +
   scale_x_discrete(labels = c("Controls", "Cases")) +
   labs(title = "Age at Death", x = element_blank(), y = element_blank()) +
   scale_fill_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D"), guide = FALSE)
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_violinplot_age.pdf", width = 8, height = 6, units = "in")
+ggsave(paste0(outpath, "/1_violinplot_age.pdf"), width = 8, height = 6, units = "in")
 ```
-
 Cases died in the range of 18.60 to 87.30 and controls between 22.50 and 80.80, leaving cases with a wider range. The mean for cases (49.78) is slightly higher than for controls (47.27) and the same behavior can be seen for the median (cases = 51.40, controls = 44.00). 
 
 ### pH
@@ -321,9 +311,8 @@ ggplot(pheno, aes(x = Dx, y = pH, fill = Dx)) +
   scale_x_discrete(labels = c("Controls", "Cases")) +
   labs(title = "pH", x = element_blank(), y = element_blank()) +
   scale_fill_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D"), guide = FALSE)
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_violinplot_ph.pdf", width = 8, height = 6, units = "in")
+ggsave(paste0(outpath, "/1_violinplot_ph.pdf"), width = 8, height = 6, units = "in")
 ```
-
 The pH has a peak around 6.4 to 6.6 in both, cases and controls (including controls). We can see a wider range of pH values in cases than controls. 
 
 ### RNA Integrity Number (RIN)
@@ -339,9 +328,8 @@ ggplot(pheno, aes(x = Dx, y = RIN, fill = Dx)) +
   scale_x_discrete(labels = c("Controls", "Cases")) +
   labs(title = "RNA Integrity Number", x = element_blank(), y = element_blank()) +
   scale_fill_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D"), guide = FALSE)
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_violinplot_rin.pdf", width = 8, height = 6, units = "in")
+ggsave(paste0(outpath, "/1_violinplot_rin.pdf"), width = 8, height = 6, units = "in")
 ```
-
 Most of the RNA integrity numbers lies between seven and eight. The data was already filtered for low RNA integrity numbers as we do not have any RIN below a value of six.
 
 ### Postmortem Intervall (PMI)
@@ -357,9 +345,8 @@ ggplot(pheno, aes(x = Dx, y = PMI, fill = Dx)) +
   scale_x_discrete(labels = c("Controls", "Cases")) +
   labs(title = "Postmortem Interval", x = element_blank(), y = element_blank()) +
   scale_fill_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D"), guide = FALSE)
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_violinplot_pmi.pdf", width = 8, height = 6, units = "in")
+ggsave(paste0(outpath, "/1_violinplot_pmi.pdf"), width = 8, height = 6, units = "in")
 ```
-
 The highest peak of PMI in the samples lies around 40 to 50 hours (~ 2 days) after death. In the controls and major depression disorder, we can see, that some of the samples were taken earlier (around 1 day after death). 
 
 ### Surrogate Variable 1
@@ -375,7 +362,7 @@ ggplot(pheno, aes(x = Dx, y = SV1, fill = Dx)) +
   scale_x_discrete(labels = c("Controls", "Cases")) +
   labs(title = "Surrogate Variable 1", x = element_blank(), y = element_blank()) +
   scale_fill_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D"), guide = FALSE)
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_violinplot_sv1.pdf", width = 8, height = 6, units = "in")
+ggsave(paste0(outpath, "/1_violinplot_sv1.pdf"), width = 8, height = 6, units = "in")
 ```
 
 ### C1-4
@@ -392,7 +379,7 @@ ggplot(pheno, aes(x = Dx, y = C1, fill = Dx)) +
   scale_x_discrete(labels = c("Controls", "Cases")) +
   labs(title = "Ancestry Dim 1", x = element_blank(), y = element_blank()) +
   scale_fill_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D"), guide = FALSE)
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_violinplot_c1.pdf", width = 8, height = 6, units = "in")
+ggsave(paste0(outpath, "/1_violinplot_c1.pdf"), width = 8, height = 6, units = "in")
 
 # C2
 ggplot(pheno, aes(x = Dx, y = C2, fill = Dx)) +
@@ -405,7 +392,7 @@ ggplot(pheno, aes(x = Dx, y = C2, fill = Dx)) +
   scale_x_discrete(labels = c("Controls", "Cases")) +
   labs(title = "Ancestry Dim 2", x = element_blank(), y = element_blank()) +
   scale_fill_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D"), guide = FALSE)
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_violinplot_c2.pdf", width = 8, height = 6, units = "in")
+ggsave(paste0(outpath, "/1_violinplot_c2.pdf"), width = 8, height = 6, units = "in")
 
 # C3
 ggplot(pheno, aes(x = Dx, y = C3, fill = Dx)) +
@@ -418,7 +405,7 @@ ggplot(pheno, aes(x = Dx, y = C3, fill = Dx)) +
   scale_x_discrete(labels = c("Controls", "Cases")) +
   labs(title = "Ancestry Dim 3", x = element_blank(), y = element_blank()) +
   scale_fill_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D"), guide = FALSE)
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_violinplot_c3.pdf", width = 8, height = 6, units = "in")
+ggsave(paste0(outpath, "/1_violinplot_c3.pdf"), width = 8, height = 6, units = "in")
 
 # C4
 ggplot(pheno, aes(x = Dx, y = C4, fill = Dx)) +
@@ -431,7 +418,7 @@ ggplot(pheno, aes(x = Dx, y = C4, fill = Dx)) +
   scale_x_discrete(labels = c("Controls", "Cases")) +
   labs(title = "Ancestry Dim 4", x = element_blank(), y = element_blank()) +
   scale_fill_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D"), guide = FALSE)
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_violinplot_c4.pdf", width = 8, height = 6, units = "in")
+ggsave(paste0(outpath, "/1_violinplot_c4.pdf"), width = 8, height = 6, units = "in")
 ```
 
 
@@ -440,8 +427,7 @@ ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figure
 ### Age and type of death correlation
 
 Type of death and age correlation shown in a density plot: 
-
-```{r, include=F}
+```{r, echo = F}
 # combined barplots
 nat <- data.frame(sort(pheno[pheno$Type_of_Death == "Natural", "Age"]))
 vio <- data.frame(sort(pheno[pheno$Type_of_Death == "Violent", "Age"]))
@@ -455,13 +441,12 @@ nvio$Type_of_Death <- "Non-violent"
 tod_combined <- rbind(nat, vio, nvio)
 # Histogram density plot
 ggplot(tod_combined, aes(x = Age, group = Type_of_Death, fill = Type_of_Death, colour = Type_of_Death)) + theme(plot.title = element_text(hjust = 0.5)) + labs(x = "Age", y = "Density") + stat_bin(colour = "gray", breaks = seq(10, 90, by = 10), alpha = 0.5, position = "identity", aes(y = ..density..)) + geom_density(fill = NA, size = 1.5) + theme_classic(base_size = 20) + scale_x_continuous(expand = c(0, 0), limits = c(0, 100)) + scale_y_continuous(expand = c(0, 0)) + scale_color_manual(values = viridis(3, begin = 0.3, end = 0.9, option = "D")) + scale_fill_manual(values = viridis(3, begin = 0.3, end = 0.9, option = "D")) 
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_density_plot_age_vs_type_of_death.pdf", width = 8, height = 6, units = "in")
+ggsave(paste0(outpath, "/1_density_plot_age_vs_type_of_death.pdf"), width = 8, height = 6, units = "in")
 ```
 
 ### Age and suicide correlation
 
 We found out, that especially young people are committing suicide. Here, we will show the suicide and no suicide correlation to the age of the patients. As none of the controls comitted suicide, we will not include them in the plot. (The plot looks strange including controls...)
-
 ```{r, echo = F}
 # combined barplots
 sui <- data.frame(sort(pheno[pheno$Suicide == "Y" & pheno$Dx != "CTL", "Age"]))
@@ -473,7 +458,7 @@ nsui$Suicide <- "No"
 sui_combined <- rbind(sui, nsui)
 # Histogram density plot
 ggplot(sui_combined, aes(x = Age, group = Suicide, fill = Suicide, colour = Suicide)) + theme(plot.title = element_text(hjust = 0.5)) + labs(x = "Age", y = "Density") + stat_bin(colour = "gray", breaks = seq(10, 90, by = 10), alpha = 0.5, position = "identity", aes(y = ..density..)) + geom_density(fill = NA, size = 1.5) + theme_classic(base_size = 20) + scale_x_continuous(expand = c(0, 0), limits = c(0, 100)) + scale_y_continuous(expand = c(0, 0)) + scale_color_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D")) + scale_fill_manual(values = viridis(2, begin = 0.3, end = 0.9, option = "D"))
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_density_plot_age_vs_suicide.pdf", width = 8, height = 6, units = "in")
+ggsave(paste0(outpath, "/1_density_plot_age_vs_suicide.pdf"), width = 8, height = 6, units = "in")
 ```
 
 ### Correlation plot of all covariates
@@ -508,7 +493,7 @@ colnames(design_cor$r) <- c("Age", "Sex", "Diagnosis", "pH", "PMI", "RIN", "RIN2
 rownames(design_cor$r) <- c("Age", "Sex", "Diagnosis", "pH", "PMI", "RIN", "RIN2", "Batch", "Suicide", "Type of Death", "PC1", "PC2", "PC3", "PC4", "SV1")
 corrplot(design_cor$r, method = "circle", col = brewer.pal(11, "RdBu"), tl.col = "black")
 # save plot
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_corrplot_all_covariates.pdf", width = 6, height = 6)
+pdf(paste0(outpath, "/1_corrplot_all_covariates.pdf"), width = 6, height = 6)
 corrplot(design_cor$r, method = "circle", col = brewer.pal(11, "RdBu"), tl.col = "black")
 dev.off()
 ```
@@ -520,8 +505,7 @@ The ancestry information was not available for all samples (see section before),
 
 ### Check MDS (C1-C10)
 
-First, we will check the first ten mds values (C1-C10) of the genotypes given in the phenotype data against the given ancestry. For the 169 samples, 40 samples have no ancestry information given.  
-
+First, we will check the first ten mds values (C1-C10) of the genotypes given in the phenotype data against the given ancestry. For the 169 samples, 40 samples have no ancestry information given. 
 ```{r, echo = F}
 # check mds
 pheno_new <- pheno[, c(14, 22:31)]
@@ -538,15 +522,14 @@ for(i in 1:p$nrow) {
   }
 }
 p
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_mds_plot.pdf", width = 8, height = 6, units = "in")
+ggsave(paste0(outpath, "/1_mds_plot.pdf"), width = 8, height = 6, units = "in")
 ```
 
 We can not find any outliers in the figure above, so we will not remove any further samples from the dataset.
 
 ### Check MDS Eigenvalues
 
-To find out, which of the 10 mds C-values have an impact on the samples and should be included as covariates in our model, we first need to plot (scree plot) their eigenvalues.   
-
+To find out, which of the 10 mds C-values have an impact on the samples and should be included as covariates in our model, we first need to plot (scree plot) their eigenvalues.  
 ```{r, echo = F}
 mds_eigenval <- read.csv2("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/dean.eigenval", stringsAsFactors = F)
 mds_eigenval <- apply(mds_eigenval, 1, function(x) as.numeric(x))
@@ -555,20 +538,18 @@ axis(2, las = 2, tck=-.05, at = c(1.0, 1.2, 1.4, 1.6), lwd = 0, lwd.ticks = 1)
 axis(1, las = 1, tck=-.05, at = c(1, 3, 5, 7, 9, 11, 13, 15, 17, 19), lwd = 0, lwd.ticks = 1)
 abline(v = 4.5, col = c("red"), lty = c(2), lwd = c(2))
 
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_plot_eigenvalues_MDS_ancestry_dimensions.pdf", width = 7, height = 3)
+pdf(paste0(outpath, "/1_plot_eigenvalues_MDS_ancestry_dimensions.pdf"), width = 7, height = 3)
 plot(mds_eigenval, type = "p", xlab = "Ancestry dimension number", ylab = "Eigenvalue", col = "black", pch = 19, ylim = c(1.0, 1.6), yaxt = "n", xaxt = "n")
 axis(2, las = 2, tck=-.05, at = c(1.0, 1.2, 1.4, 1.6), lwd = 0, lwd.ticks = 1)
 axis(1, las = 1, tck=-.05, at = c(1, 3, 5, 7, 9, 11, 13, 15, 17, 19), lwd = 0, lwd.ticks = 1)
 abline(v = 4.5, col = c("red"), lty = c(2), lwd = c(2))
 dev.off()
 ```
-
 In the plot, we can see, that the biggest differences are between C1, C2, C3 and C4. After C4 the eigenvalues differ hardly, so we decided to only take C1 to C4 as covariates into account. 
 
 ### Dimension plots
 
 We will also plot the first four dimensions against each other (into a single plot). Not necessary if the mds plot is already included, but it is easier to see something here.  
-
 ```{r}
 pheno$Ancestry <- as.character(pheno$Ancestry)
 pheno[pheno$Ancestry == "", "Ancestry"] <- "NA"
@@ -584,7 +565,7 @@ ggplot(pheno, aes(x = C1, y = C2, shape = Ancestry, colour = Dx)) +
   ylab("PC2") +
   scale_color_viridis_d(begin = 0.3, end = 0.9, option = "D") +
   labs(color = 'Diagnosis') 
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_ancestry_dimension_plot_c1_c2.pdf", width = 10, height = 6, units = "in")
+ggsave(paste0(outpath, "/1_ancestry_dimension_plot_c1_c2.pdf"), width = 10, height = 6, units = "in")
 
 # C1 to C3
 ggplot(pheno, aes(x = C1, y = C3, shape = Ancestry, colour = Dx)) +
@@ -596,7 +577,7 @@ ggplot(pheno, aes(x = C1, y = C3, shape = Ancestry, colour = Dx)) +
   ylab("PC3") +
   scale_color_viridis_d(begin = 0.3, end = 0.9, option = "D") +
   labs(color = 'Diagnosis')
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_ancestry_dimension_plot_c1_c3.pdf", width = 10, height = 6, units = "in")
+ggsave(paste0(outpath, "/1_ancestry_dimension_plot_c1_c3.pdf"), width = 10, height = 6, units = "in")
 
 # C1 to C4
 ggplot(pheno, aes(x = C1, y = C4, shape = Ancestry, colour = Dx)) +
@@ -608,7 +589,7 @@ ggplot(pheno, aes(x = C1, y = C4, shape = Ancestry, colour = Dx)) +
   ylab("PC4") +
   scale_color_viridis_d(begin = 0.3, end = 0.9, option = "D") +
   labs(color = 'Diagnosis')
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_ancestry_dimension_plot_c1_c4.pdf", width = 10, height = 6, units = "in")
+ggsave(paste0(outpath, "/1_ancestry_dimension_plot_c1_c4.pdf"), width = 10, height = 6, units = "in")
 
 # C2 to C3
 ggplot(pheno, aes(x = C2, y = C3, shape = Ancestry, colour = Dx)) +
@@ -620,7 +601,7 @@ ggplot(pheno, aes(x = C2, y = C3, shape = Ancestry, colour = Dx)) +
   ylab("PC3") +
   scale_color_viridis_d(begin = 0.3, end = 0.9, option = "D") +
   labs(color = 'Diagnosis')
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_ancestry_dimension_plot_c2_c3.pdf", width = 10, height = 6, units = "in")
+ggsave(paste0(outpath, "/1_ancestry_dimension_plot_c2_c3.pdf"), width = 10, height = 6, units = "in")
 
 # C2 to C4
 ggplot(pheno, aes(x = C2, y = C4, shape = Ancestry, colour = Dx)) +
@@ -632,7 +613,7 @@ ggplot(pheno, aes(x = C2, y = C4, shape = Ancestry, colour = Dx)) +
   ylab("PC4") +
   scale_color_viridis_d(begin = 0.3, end = 0.9, option = "D") +
   labs(color = 'Diagnosis')
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_ancestry_dimension_plot_c2_c4.pdf", width = 10, height = 6, units = "in")
+ggsave(paste0(outpath, "/1_ancestry_dimension_plot_c2_c4.pdf"), width = 10, height = 6, units = "in")
 
 # C3 to C4
 ggplot(pheno, aes(x = C3, y = C4, shape = Ancestry, colour = Dx)) +
@@ -644,7 +625,7 @@ ggplot(pheno, aes(x = C3, y = C4, shape = Ancestry, colour = Dx)) +
   ylab("PC4") +
   scale_color_viridis_d(begin = 0.3, end = 0.9, option = "D") +
   labs(color = 'Diagnosis')
-ggsave("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_ancestry_dimension_plot_c3_c4.pdf", width = 10, height = 6, units = "in")
+ggsave(paste0(outpath, "/1_ancestry_dimension_plot_c3_c4.pdf"), width = 10, height = 6, units = "in")
 rm(contrast, design, design_cor, nat, nsui, nvio, p, pheno_new, plot_data, sui, sui_combined, tod_combined, vio, i, j, mds_eigenval, categorical_cov, classes, continuous_cov)
 ```
 
@@ -661,7 +642,7 @@ uu <- eigen(t(dats) %*% dats)
 uu_val <-uu$values / sum(uu$values)
 uu_val2 <- uu$values^2 / sum(uu$values^2)
 
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S1_plot_surrogate_variables_variance_explained.pdf", width = 7, height = 3)
+pdf(paste0(outpath, "/1_plot_surrogate_variables_variance_explained.pdf"), width = 7, height = 3)
 plot(uu_val2[1:20], type = "p", xlab = "Singular dimension index", ylab = "Percent variance explained", col = "black", pch = 19, yaxt = "n", xaxt = "n")
 axis(2, las = 2, tck=-.05, at = c(0, 0.2, 0.4, 0.6, 0.8, 1.0), lwd = 0, lwd.ticks = 1)
 axis(1, las = 1, tck=-.05, at = c(1, 3, 5, 7, 9, 11, 13, 15, 17, 19), lwd = 0, lwd.ticks = 1)
@@ -669,8 +650,7 @@ abline(v = 1.5, col = c("red"), lty = c(2), lwd = c(2))
 dev.off()
 rm(svobj, surrogates, dat, pprob, dats, uu, uu_val, uu_val2, pheno, probeset_summaries)
 ```
-
-In the plot above we can prove that the first surrogate variable is the only one that we need to include into our model. 
+In the plot above we can prove that the first surrogate variable is the only one that we need to include in our model. 
 
 
 # Quality Control of Raw Data
@@ -678,12 +658,13 @@ In the plot above we can prove that the first surrogate variable is the only one
 # Load raw data
 
 ```{r}
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/1_affymetrix_exon_microarray_raw_data.RData")
+load(paste0(rdata_path, "/1_affymetrix_exon_microarray_raw_data.RData"))
 pheno <- pData(raw_data)
 ```
 
 ## Plot sample generation dates
 
+Now, we will plot the sample generation dates as they maybe show some generation batches.
 ```{r, echo = F}
 # get dates of newer files (2014)
 dates <- raw_data@protocolData@data$dates[grep("-", raw_data@protocolData@data$dates)]
@@ -699,15 +680,20 @@ dates_sorted <- dates_new[order(dates_new)]
 date_freq <- table(as.Date(dates_sorted, format='%Y-%m-%d'))
 date_freq
 plot(levels(factor(as.Date(dates_sorted, format='%Y-%m-%d') - as.Date('2009-07-16'))), as.vector(date_freq), ylim = c(0, max(date_freq)), type = 'h', xlab = 'Days since start', ylab = '# of arrays per day', main = "Dates - All Files")
+pdf(paste0(outpath, "/2_plot_raw_data_all_array_dates.pdf"), width = 7, height = 3)
+plot(levels(factor(as.Date(dates_sorted, format='%Y-%m-%d') - as.Date('2009-07-16'))), as.vector(date_freq), ylim = c(0, max(date_freq)), type = 'h', xlab = 'Days since start', ylab = '# of arrays per day', main = "Dates - All Files")
+dev.off()
 # without 2009 samples
 dates_sorted <- dates_sorted[41:length(dates_sorted)] # remove 2009 samples
 date_freq <- table(as.Date(dates_sorted, format = '%Y-%m-%d'))
-plot(levels(factor(as.Date(dates_sorted, format='%Y-%m-%d') - as.Date('2014-06-06'))), as.vector(date_freq), ylim = c(0, max(date_freq)), type='h', xlab='Days since start', ylab='# arrays per day', main = "Dates - 2014 Files")
+plot(levels(factor(as.Date(dates_sorted, format = '%Y-%m-%d') - as.Date('2014-06-06'))), as.vector(date_freq), ylim = c(0, max(date_freq)), type = 'h', xlab = 'Days since start', ylab = '# arrays per day', main = "Dates - 2014 Files")
+pdf(paste0(outpath, "/2_plot_raw_data_only_2014_array_dates.pdf"), width = 7, height = 3)
+plot(levels(factor(as.Date(dates_sorted, format = '%Y-%m-%d') - as.Date('2014-06-06'))), as.vector(date_freq), ylim = c(0, max(date_freq)), type = 'h', xlab = 'Days since start', ylab = '# arrays per day', main = "Dates - 2014 Files")
+dev.off()
 rm(dates, dates2, better_dates, dates_new, dates_sorted, date_freq)
 ```
 
 We also check if the sample generation dates are overlapping with the different given batches. 
-
 ```{r, include = F}
 # check all dates of samples from Batch A
 a <- raw_data[, c(raw_data@phenoData@data$Batch == "A")]
@@ -756,43 +742,55 @@ table(four)
 ## Boxplot
 
 Now, we will represent the probe intensities in a boxplot graph, where each box corresponds to exactly one microarray sample. The boxplot function from the oligo package performs a log2-transformation by default, so we can use the boxplot function without any previous raw data transformation. The logarithmic scale simplifies the visualization of the data.
-
 ```{r, echo = F}
 # boxplot of raw_data
 colors <- c(replicate(length(pheno[pheno$File == "9", "File"]), "darkcyan"), replicate(length(pheno[pheno$File == "a", "File"]), "darkorange"), replicate(length(pheno[pheno$File == "M", "File"]), "deeppink4"))
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S2_boxplot_raw_data.pdf", width = 15)
+pdf(paste0(outpath, "/2_boxplot_raw_data_log2_intensity.pdf"), width = 15)
 boxplot(raw_data, target = "probeset", ylab = "log2 intensity", xlab = "Samples", las = 2, col = colors, main = "Boxplot of log2-intensities (raw data)")
 dev.off()
+boxplot(raw_data, target = "probeset", ylab = "log2 intensity", xlab = "Samples", las = 2, col = colors, main = "Boxplot of log2-intensities (raw data)")
 ```
-
 Here, we can see that the density distributions of the individual samples are quite different, especially between the samples coming from the first cohort measured in 2009 (purple) compared to the second cohort measured in 2014 (pink and orange/yellow). That is the reason, why we performed the RMA background correction, normalization and summarization step in the preprocessing pipeline. The boxplot for the normalized data will be shown in the next section. 
 
 To also check the data on original intensity scale, we just need to set the transfo parameter to identity instead of the default log2. 
-
 ```{r, echo = F}
 # with original intensities
+pdf(paste0(outpath, "/2_boxplot_raw_data_original_intensity.pdf"), width = 15)
+boxplot(raw_data, target = "probeset", transfo = identity, ylab = "Intensity", xlab = "Samples", las = 2, col = colors, main = "Boxplot of original intensities for the raw data")
+dev.off()
 boxplot(raw_data, target = "probeset", transfo = identity, ylab = "Intensity", xlab = "Samples", las = 2, col = colors, main = "Boxplot of original intensities for the raw data")
 ```
-
 You can see, that the plot using original intensities shows bigger differences than the plot using log2 transformed intensities and is making it more difficult to interpret the plot.
 
 ## PCA Plot
 
 Before we can generate the different PCA plots, we need to calculate the log2 intensities of the raw data expression set as well as the first two principal components. 
-
 ```{r, echo = F, eval = F}
 exp_raw <- log2(exprs(raw_data))	
 pca_raw <- prcomp(t(exp_raw), scale = FALSE)
 percent_var <- round(100 * pca_raw$sdev^2 / sum(pca_raw$sdev ^ 2), 1)
 sd_ratio <- sqrt(percent_var[2] / percent_var[1])
 data_raw <- data.frame(PC1 = pca_raw$x[,1], PC2 = pca_raw$x[,2], Diagnosis = pheno$Dx, Age = pheno$Age, pH = pheno$pH , File = pheno$File, Sex = pheno$Sex, Batch = pheno$Batch, MHRI = pheno$MHRIID, PMI = pheno$PMI, Suicide = pheno$Suicide, RIN = pheno$RIN, ShortName = pheno$ShortName, Ancestry = pheno$Ancestry, ToD = pheno$Type_of_Death)
-save(percent_var, sd_ratio, data_raw, file ="/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/8_affymetrix_exon_microarray_raw_data_for_PCA_plots.RData")
+save(percent_var, sd_ratio, data_raw, file = paste0(rdata_path, "/8_affymetrix_exon_microarray_raw_data_for_PCA_plots.RData"))
 ```
 
 Now, we can generate the PCA plots coloring the different covariates of the phenotype dataset. 
-
 ```{r, echo = F, fig.height = 10, fig.width = 10}
-#load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/8_affymetrix_exon_microarray_raw_data_for_PCA_plots.RData")
+# function to generate a PCA plot for a given covariate/phenotype
+GeneratePCA <- function(data, cov){
+  g <- ggplot(data, aes(PC1, PC2)) +
+       geom_point(aes(color = Age)) +
+       ggtitle("PCA plot of the raw data") +
+       xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+       ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
+       theme(plot.title = element_text(hjust = 0.5))+
+       coord_fixed(ratio = sd_ratio) +
+       scale_fill_viridis()
+  ggsave(plot = g, filename = paste0(outpath, "/2_pca_raw_data_", cov, "_colored.pdf"))
+}
+
+GeneratePCA(data_raw, cov = "Age")
+
 # PCA only colouring Age
 g1 <- ggplot(data_raw, aes(PC1, PC2)) +
   geom_point(aes(color = Age)) +
@@ -802,7 +800,7 @@ g1 <- ggplot(data_raw, aes(PC1, PC2)) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sd_ratio) +
   scale_fill_viridis()
-ggsave(plot = g1, filename = "storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/S2_pca_raw_data_age_colored.png")
+ggsave(plot = g1, filename = paste0(outpath, "/2_pca_raw_data_age_colored.pdf"))
 # PCA only colouring Sex
 g2 <- ggplot(data_raw, aes(PC1, PC2)) +
   geom_point(aes(colour = Sex)) +
@@ -812,6 +810,7 @@ g2 <- ggplot(data_raw, aes(PC1, PC2)) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sdRatio) +
   scale_color_manual(values = c(col[2], col[5]))
+ggsave(plot = g2, filename = paste0(outpath, "/2_pca_raw_data_sex_colored.pdf"))
 # PCA only colouring PMI
 g3 <- ggplot(data_raw, aes(PC1, PC2)) +
   geom_point(aes(color = PMI)) +
@@ -821,6 +820,7 @@ g3 <- ggplot(data_raw, aes(PC1, PC2)) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sdRatio) +
   scale_fill_viridis()
+ggsave(plot = g3, filename = paste0(outpath, "/2_pca_raw_data_pmi_colored.pdf"))
 # PCA only colouring pH
 g4 <- ggplot(data_raw, aes(PC1, PC2)) +
   geom_point(aes(color = pH)) +
@@ -830,6 +830,7 @@ g4 <- ggplot(data_raw, aes(PC1, PC2)) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sdRatio)+
   scale_fill_viridis()
+ggsave(plot = g4, filename = paste0(outpath, "/2_pca_raw_data_ph_colored.pdf"))
 # PCA only colouring RIN
 g5 <- ggplot(data_raw, aes(PC1, PC2)) +
   geom_point(aes(color = RIN)) +
@@ -839,6 +840,7 @@ g5 <- ggplot(data_raw, aes(PC1, PC2)) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sdRatio) +
   scale_fill_viridis()
+ggsave(plot = g5, filename = paste0(outpath, "/2_pca_raw_data_rin_colored.pdf"))
 # PCA only colouring Suicide
 g6 <- ggplot(data_raw, aes(PC1, PC2)) +
   geom_point(aes(color = Suicide)) +
@@ -848,6 +850,7 @@ g6 <- ggplot(data_raw, aes(PC1, PC2)) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sdRatio) +
   scale_color_manual(values = c(col[2], col[5]))
+ggsave(plot = g6, filename = paste0(outpath, "/2_pca_raw_data_suicide_colored.pdf"))
 # PCA only colouring Ancestry
 g7 <- ggplot(data_raw, aes(PC1, PC2)) +
   geom_point(aes(color = Ancestry)) +
@@ -857,6 +860,7 @@ g7 <- ggplot(data_raw, aes(PC1, PC2)) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sdRatio) +
   scale_color_manual(values = c(col[1], col[2], col[3], col[4]))
+ggsave(plot = g7, filename = paste0(outpath, "/2_pca_raw_data_ancestry_colored.pdf"))
 # PCA only colouring Diagnosis
 g8 <- ggplot(data_raw, aes(PC1, PC2)) +
   geom_point(aes(color = Diagnosis)) +
@@ -866,6 +870,8 @@ g8 <- ggplot(data_raw, aes(PC1, PC2)) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sdRatio) +
   scale_color_manual(values = c(col[1], col[2], col[3], col[4]))
+ggsave(plot = g8, filename = paste0(outpath, "/2_pca_raw_data_diagnosis_colored.pdf"))
+# PCA only colouring File
 g9 <- ggplot(data_raw, aes(PC1, PC2)) +
   geom_point(aes(color = File)) +
   ggtitle("PCA plot of the raw data") +
@@ -874,6 +880,8 @@ g9 <- ggplot(data_raw, aes(PC1, PC2)) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sdRatio) +
   scale_color_manual(values = c(col[1], col[2], col[3]))
+ggsave(plot = g9, filename = paste0(outpath, "/2_pca_raw_data_file_colored.pdf"))
+# PCA only colouring Batches
 g10 <- ggplot(data_raw, aes(PC1, PC2)) +
   geom_point(aes(color = Batch)) +
   ggtitle("PCA plot of the raw data") +
@@ -882,7 +890,29 @@ g10 <- ggplot(data_raw, aes(PC1, PC2)) +
   theme(plot.title = element_text(hjust = 0.5))+
   coord_fixed(ratio = sdRatio) +
   scale_color_manual(values = c(col[1], col[2], col[3], col[4], col[5]))
-ggarrange(g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, ncol = 2, nrow = 5)
+ggsave(plot = g10, filename = paste0(outpath, "/2_pca_raw_data_batch_colored.pdf"))
+# PCA only colouring Type of Death
+g11 <- ggplot(data_raw, aes(PC1, PC2)) +
+  geom_point(aes(color = Type_of_Death)) +
+  ggtitle("PCA plot of the raw data") +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
+  theme(plot.title = element_text(hjust = 0.5))+
+  coord_fixed(ratio = sdRatio) +
+  scale_color_manual(values = c(col[1], col[2], col[3], col[4], col[5]))
+ggsave(plot = g11, filename = paste0(outpath, "/2_pca_raw_data_type_of_death_colored.pdf"))
+# PCA only colouring Dx (case/control)
+g12 <- ggplot(data_raw, aes(PC1, PC2)) +
+  geom_point(aes(color = Dx)) +
+  ggtitle("PCA plot of the raw data") +
+  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
+  theme(plot.title = element_text(hjust = 0.5))+
+  coord_fixed(ratio = sdRatio) +
+  scale_color_manual(values = c(col[1], col[2], col[3], col[4], col[5]))
+ggsave(plot = g12, filename = paste0(outpath, "/2_pca_raw_data_dx_colored.pdf"))
+ggarrange(g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, ncol = 3, nrow = 4)
+ggsave(filename = paste0(outpath, "/2_pca_raw_data_all_covariates.pdf"))
 ```
 
 ## Heatmap of sample to sample distances
