@@ -62,7 +62,7 @@ path = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS"
 system(paste0("mkdir ", path, "/05_figures"))
 
 # load, filter and save phenotype data
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
 index <- which(is.na(pData(gene_summaries)$C1))  # remove all samples with C1 = NA
 dim(gene_summaries)
 pData <- pData(gene_summaries)
@@ -142,7 +142,7 @@ sum.prs <- summary(prs.scz2)
 p.value <- pf(sum.prs$fstatistic[1], sum.prs$fstatistic[2], sum.prs$fstatistic[3], lower.tail = FALSE)
 print(paste0("5e-08: Nagelkerke R2 = ", r2, "\nCos and Snell R2 = ", r2.2, "\nP-value = ", p.value))
 prs.scz2 <- lm(scz2.scores$Dx ~ scz2.scores$`0.01` + scz2.scores$Age + scz2.scores$Sex + scz2.scores$PMI + scz2.scores$Suicide + scz2.scores$Type_of_Death)
-prs.scz2 <- lm(scz2.scores$Dx ~ scz2.scores$`0.0222001`)
+prs.scz2 <- lm(scz2.scores$Dx ~ scz2.scores$`0.01`)
 r2 <- nagelkerke(prs.scz2)$Pseudo.R.squared.for.model.vs.null["Nagelkerke (Cragg and Uhler)", "Pseudo.R.squared"]
 r2.2 <- nagelkerke(prs.scz2)$Pseudo.R.squared.for.model.vs.null["Cox and Snell (ML)", "Pseudo.R.squared"]
 sum.prs <- summary(prs.scz2)

@@ -67,7 +67,6 @@ library(tidyr)  # to separate IDs
 ## Load eQTLs
 
 First, we will load all cis-eQTL datasets and filter them for only significant hits (FDR < 0.05).
-
 ```{r}
 # cases and controls cis-eQTLs genes
 data <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/output/01_pmb_CASE_CTL_matrixEQTL_cis_results_genes_probeset.txt", header = T, stringsAsFactors = F)
@@ -106,7 +105,6 @@ rm(data)
 As we need the SNP, gene, transcript and exon position for all matrixEQTL runs, we will load them in the beginning, so that we do not have to repeat this step over and over again.
 
 Load SNP positions and save the necessary information:
-
 ```{r}
 # Load snp positions
 snpspos <- read.table("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/preprocessed_genotypes/1.2_merged_chr/pmb_info06_all_chr_maf0.05_merged.bim", header = F, stringsAsFactors = FALSE) # snp chr pos
@@ -117,7 +115,6 @@ snpspos <- snpspos[!duplicated(snpspos$SNP), ]
 ```
 
 Load the GENCODE file and get informations for genes, transcripts and exons.
-
 ```{r}
 gencode <- import.gff("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/annotation_files/gencode.v19.annotation.gtf", format = "gtf")
 gencode <- gencode[gencode$gene_type == "protein_coding"] # get only protein-coding genes, transcripts and exons
@@ -137,7 +134,6 @@ rm(gencode)
 ```
 
 As the genes are unique, we will just use all GENCODE HAVANA genes and the positions given there (as we also used these genes for the annotation in DE and eQTL analysis). 
-
 ```{r}
 genespos <- genes
 genespos$seqnames <- sapply(genespos$seqnames, function(x) strsplit(as.character(x), "chr")[[1]][2])
@@ -148,7 +144,6 @@ rm(genes)
 ```
 
 For the transcripts we can not use the GENCODE information only as we merged several transcript IDs and used the min and max position of these merged transcripts. So, we first need to load the transcript positions file (used for the eQTLs) and then merge it with the gencode information.
-
 ```{r}
 transpos <- read.table("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input/transcript_locations.txt", header = TRUE)
 transpos$ids <- transpos$transcriptid
@@ -161,7 +156,6 @@ rm(transcripts)
 ```
 
 Load exon positions, merge with gencode information and save the necessary information for merging into a dataframe.
-
 ```{r}
 exonspos <- read.table("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/input/exon_locations.txt", header = TRUE)
 exonspos$ids <- exonspos$exonid
