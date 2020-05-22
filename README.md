@@ -25,6 +25,7 @@ Following analyses will be performed:
   - QC and covariate evaluation/selection
   - Differential expression analysis (DEA)
   - Gene set enrichment analysis using MGSA/MSigDB and figure generation
+  - Generate input files for FUMA pathway enrichment
 5. **eQTL analysis**
   - Pre-processing of genotype data
   - Generate input files (genotype, expression and covariate files)
@@ -32,9 +33,9 @@ Following analyses will be performed:
   - Clump eSNPs using PLINK (LD clumping) and generate result tables
   - Generate GRanges objects (and save as .Rds files)
   - eSNP based annotation and resampling 
-  - Evaluate and plot results
-6. **Functional annotation**
   - Annotation to ChromHMM, VEP, GTEx, CMC and meQTLs using resampling (10,000 times)
-7. **LD Score Regression**
+  - Evaluate and plot results
+6. **LD Score Regression**
   - Estimate heritability & calculate genetic correlation to different GWAS summary statistic files
 8. **Co-expression analysis**
+  - WGCNA???
