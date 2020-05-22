@@ -150,7 +150,7 @@ if(length(args) == 0){
   eqtls_gene <- merge(eqtls_gene, genespos, by.x = "gene", by.y = "Gene", all.x = T)  # add gene positions
   eqtls_gene <- eqtls_gene[, c("SNP", "gene", "Gene_symbol", "beta", "t-stat", "p-value", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "Gene_location", "Gene_strand")]
   eqtls_gene$eQTL_type <- "cis" 
-  colnames(eqtls_gene) <- c("SNP ID", "Ensembl Gene ID", "Gene Symbol", "Beta coefficient", "T-statistic", "P-value", "FDR estimate", "SNP Location", "SNP Allele1", "SNP Allele2", "Gene Location",  "Gene Strand", "eQTL Type")
+  colnames(eqtls_gene) <- c("SNP", "Ensembl Gene ID", "Gene Symbol", "Beta coefficient", "T-statistic", "P-value", "FDR estimate", "SNP Location", "SNP Allele1", "SNP Allele2", "Gene Location",  "Gene Strand", "eQTL Type")
   eqtls_gene <- eqtls_gene[order(eqtls_gene$FDR), ]
   print(paste0("Gene eQTLs cases vs. controls: Rows: ", dim(eqtls_gene)[[1]], "  Columns: ", dim(eqtls_gene)[[2]]))
   write.table(eqtls_gene, file = paste0(outpath, "/01_pmb_cis-eQTL_gene_hits_cases_vs_controls.txt"), row.names = F, quote = F, dec = ".", sep = "\t")
@@ -161,7 +161,7 @@ if(length(args) == 0){
   eqtls_gene_cases <- eqtls_gene_cases[complete.cases(eqtls_gene_cases), ]
   eqtls_gene_cases <- eqtls_gene_cases[, c("SNP", "gene", "Gene_symbol", "beta", "t-stat", "p-value", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "Gene_location", "Gene_strand")]
   eqtls_gene_cases$eQTL_type <- "cis" 
-  colnames(eqtls_gene_cases) <- c("SNP ID", "Ensembl Gene ID", "Gene Symbol", "Beta coefficient", "T-statistic", "P-value", "FDR estimate", "SNP Location", "SNP Allele1", "SNP Allele2", "Gene Location",  "Gene Strand", "eQTL Type")
+  colnames(eqtls_gene_cases) <- c("SNP", "Ensembl Gene ID", "Gene Symbol", "Beta coefficient", "T-statistic", "P-value", "FDR estimate", "SNP Location", "SNP Allele1", "SNP Allele2", "Gene Location",  "Gene Strand", "eQTL Type")
   eqtls_gene_cases <- eqtls_gene_cases[order(eqtls_gene_cases$FDR), ]
   print(paste0("Gene eQTLs cases only: Rows: ", dim(eqtls_gene_cases)[[1]], "  Columns: ", dim(eqtls_gene_cases)[[2]]))
   write.table(eqtls_gene_cases, file = paste0(outpath, "/02_pmb_cis-eQTL_gene_hits_cases_only.txt"), row.names = F, quote = F, dec = ".", sep = "\t")
@@ -172,7 +172,7 @@ if(length(args) == 0){
   eqtls_gene_ctl <- eqtls_gene_ctl[complete.cases(eqtls_gene_ctl), ]
   eqtls_gene_ctl <- eqtls_gene_ctl[, c("SNP", "gene", "Gene_symbol", "beta", "t-stat", "p-value", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "Gene_location", "Gene_strand")]
   eqtls_gene_ctl$eQTL_type <- "cis" 
-  colnames(eqtls_gene_ctl) <- c("SNP ID", "Ensembl Gene ID", "Gene Symbol", "Beta coefficient", "T-statistic", "P-value", "FDR estimate", "SNP Location", "SNP Allele1", "SNP Allele2", "Gene Location",  "Gene Strand", "eQTL Type")
+  colnames(eqtls_gene_ctl) <- c("SNP", "Ensembl Gene ID", "Gene Symbol", "Beta coefficient", "T-statistic", "P-value", "FDR estimate", "SNP Location", "SNP Allele1", "SNP Allele2", "Gene Location",  "Gene Strand", "eQTL Type")
   eqtls_gene_ctl <- eqtls_gene_ctl[order(eqtls_gene_ctl$FDR), ]
   print(paste0("Gene eQTLs controls only: Rows: ", dim(eqtls_gene_ctl)[[1]], "  Columns: ", dim(eqtls_gene_ctl)[[2]]))
   write.table(eqtls_gene_ctl, file = paste0(outpath, "/03_pmb_cis-eQTL_gene_hits_controls_only.txt"), row.names = F, quote = F, dec = ".", sep = "\t")
@@ -184,7 +184,7 @@ if(length(args) == 0){
   eqtls_transcript <- eqtls_transcript[complete.cases(eqtls_transcript), ]
   eqtls_transcript <- eqtls_transcript[, c("SNP", "gene", "beta", "t-stat", "p-value", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "Transcript_location", "Gene",  "Gene_symbol.x", "Gene_location", "Gene_strand")]
   eqtls_transcript$eQTL_type <- "cis"  
-  colnames(eqtls_transcript) <- c("SNP ID", "Ensembl Transcript ID", "Beta coefficient", "T-statistic", "P-value", "FDR estimate", "SNP Location", "SNP Allele1", "SNP Allele2", "Transcript Location", "Ensembl Gene ID", "Gene Symbol", "Gene Location", "Gene Strand", "eQTL Type")
+  colnames(eqtls_transcript) <- c("SNP", "Ensembl Transcript ID", "Beta coefficient", "T-statistic", "P-value", "FDR estimate", "SNP Location", "SNP Allele1", "SNP Allele2", "Transcript Location", "Ensembl Gene ID", "Gene Symbol", "Gene Location", "Gene Strand", "eQTL Type")
   eqtls_transcript <- eqtls_transcript[order(eqtls_transcript$FDR), ]
   print(paste0("Transcript eQTLs cases vs. controls: Rows: ", dim(eqtls_transcript)[[1]], "  Columns: ", dim(eqtls_transcript)[[2]]))
   write.table(eqtls_transcript, file = paste0(outpath, "/01_pmb_cis-eQTL_transcript_hits_cases_vs_controls.txt"), row.names = F, quote = F, dec = ".", sep = "\t")
@@ -195,7 +195,7 @@ if(length(args) == 0){
   eqtls_transcript_cases <- eqtls_transcript_cases[complete.cases(eqtls_transcript_cases), ]
   eqtls_transcript_cases <- eqtls_transcript_cases[, c("SNP", "gene", "beta", "t-stat", "p-value", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "Transcript_location", "Gene", "Gene_symbol.x", "Gene_location", "Gene_strand")]
   eqtls_transcript_cases$eQTL_type <- "cis"
-  colnames(eqtls_transcript_cases) <- c("SNP ID", "Ensembl Transcript ID", "Beta coefficient", "T-statistic", "P-value", "FDR estimate", "SNP Location", "SNP Allele1", "SNP Allele2", "Transcript Location", "Ensembl Gene ID", "Gene Symbol", "Gene Location", "Gene Strand", "eQTL Type")
+  colnames(eqtls_transcript_cases) <- c("SNP", "Ensembl Transcript ID", "Beta coefficient", "T-statistic", "P-value", "FDR estimate", "SNP Location", "SNP Allele1", "SNP Allele2", "Transcript Location", "Ensembl Gene ID", "Gene Symbol", "Gene Location", "Gene Strand", "eQTL Type")
   eqtls_transcript_cases <- eqtls_transcript_cases[order(eqtls_transcript_cases$FDR),]
   print(paste0("Transcript eQTLs cases only: Rows: ", dim(eqtls_transcript_cases)[[1]], "  Columns: ", dim(eqtls_transcript_cases)[[2]]))
   write.table(eqtls_transcript_cases, file = paste0(outpath, "/02_pmb_cis-eQTL_transcript_hits_cases_only.txt"), row.names = F, quote = F, dec = ".", sep = "\t")
@@ -206,7 +206,7 @@ if(length(args) == 0){
   eqtls_transcript_ctl <- eqtls_transcript_ctl[complete.cases(eqtls_transcript_ctl), ]
   eqtls_transcript_ctl <- eqtls_transcript_ctl[, c("SNP", "gene", "beta", "t-stat", "p-value", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "Transcript_location", "Gene", "Gene_symbol.x", "Gene_location", "Gene_strand")]
   eqtls_transcript_ctl$eQTL_type <- "cis"
-  colnames(eqtls_transcript_ctl) <- c("SNP ID", "Ensembl Transcript ID", "Beta coefficient", "T-statistic", "P-value", "FDR estimate", "SNP Location", "SNP Allele1", "SNP Allele2", "Transcript Location", "Ensembl Gene ID", "Gene Symbol", "Gene Location", "Gene Strand", "eQTL Type")
+  colnames(eqtls_transcript_ctl) <- c("SNP", "Ensembl Transcript ID", "Beta coefficient", "T-statistic", "P-value", "FDR estimate", "SNP Location", "SNP Allele1", "SNP Allele2", "Transcript Location", "Ensembl Gene ID", "Gene Symbol", "Gene Location", "Gene Strand", "eQTL Type")
   eqtls_transcript_ctl <- eqtls_transcript_ctl[order(eqtls_transcript_ctl$FDR),]
   print(paste0("Transcript eQTLs controls only: Rows: ", dim(eqtls_transcript_ctl)[[1]], "  Columns: ", dim(eqtls_transcript_ctl)[[2]]))
   write.table(eqtls_transcript_ctl, file = paste0(outpath, "/03_pmb_cis-eQTL_transcript_hits_controls_only.txt"), row.names = F, quote = F, dec = ".", sep = "\t")
@@ -218,7 +218,7 @@ if(length(args) == 0){
   eqtls_exon <- eqtls_exon[complete.cases(eqtls_exon), ]
   eqtls_exon <- eqtls_exon[, c("SNP", "gene", "beta", "t-stat", "p-value", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "Exon_location", "Transcript", "Gene", "Gene_symbol.x", "Gene_location", "Gene_strand")]
   eqtls_exon$eQTL_type <- "cis"  
-  colnames(eqtls_exon) <- c("SNP ID", "Ensembl Exon ID", "Beta coefficient", "T-statistic", "P-value", "FDR estimate", "SNP Location", "SNP Allele1", "SNP Allele2", "Exon Location", "Ensembl Transcript ID", "Ensembl Gene ID", "Gene Symbol", "Gene Location", "Gene Strand", "eQTL Type")
+  colnames(eqtls_exon) <- c("SNP", "Ensembl Exon ID", "Beta coefficient", "T-statistic", "P-value", "FDR estimate", "SNP Location", "SNP Allele1", "SNP Allele2", "Exon Location", "Ensembl Transcript ID", "Ensembl Gene ID", "Gene Symbol", "Gene Location", "Gene Strand", "eQTL Type")
   eqtls_exon <- eqtls_exon[order(eqtls_exon$FDR), ]
   print(paste0("Exon eQTLs cases vs. controls: Rows: ", dim(eqtls_exon)[[1]], "  Columns: ", dim(eqtls_exon)[[2]]))
   write.table(eqtls_exon, file = paste0(outpath, "/01_pmb_cis-eQTL_exon_hits_cases_vs_controls.txt"), row.names = F, quote = F, dec = ".", sep = "\t")
@@ -229,7 +229,7 @@ if(length(args) == 0){
   eqtls_exon_cases <- eqtls_exon_cases[complete.cases(eqtls_exon_cases), ]
   eqtls_exon_cases <- eqtls_exon_cases[, c("SNP", "gene", "beta", "t-stat", "p-value", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "Exon_location", "Transcript", "Gene", "Gene_symbol.x", "Gene_location", "Gene_strand")]
   eqtls_exon_cases$eQTL_type <- "cis"   
-  colnames(eqtls_exon_cases) <- c("SNP ID", "Ensembl Exon ID", "Beta coefficient", "T-statistic", "P-value", "FDR estimate", "SNP Location", "SNP Allele1", "SNP Allele2", "Exon Location", "Ensembl Transcript ID", "Ensembl Gene ID", "Gene Symbol", "Gene Location", "Gene Strand", "eQTL Type")
+  colnames(eqtls_exon_cases) <- c("SNP", "Ensembl Exon ID", "Beta coefficient", "T-statistic", "P-value", "FDR estimate", "SNP Location", "SNP Allele1", "SNP Allele2", "Exon Location", "Ensembl Transcript ID", "Ensembl Gene ID", "Gene Symbol", "Gene Location", "Gene Strand", "eQTL Type")
   eqtls_exon_cases <- eqtls_exon_cases[order(eqtls_exon_cases$FDR), ]
   print(paste0("Exon eQTLs cases only: Rows: ", dim(eqtls_exon_cases)[[1]], "  Columns: ", dim(eqtls_exon_cases)[[2]]))
   write.table(eqtls_exon_cases, file = paste0(outpath, "/02_pmb_cis-eQTL_exon_hits_cases_only.txt"), row.names = F, quote = F, dec = ".", sep = "\t")
@@ -240,9 +240,11 @@ if(length(args) == 0){
   eqtls_exon_ctl <- eqtls_exon_ctl[complete.cases(eqtls_exon_ctl), ]
   eqtls_exon_ctl <- eqtls_exon_ctl[, c("SNP", "gene", "beta", "t-stat", "p-value", "FDR", "SNP_location", "SNP_allele1", "SNP_allele2", "Exon_location", "Transcript", "Gene", "Gene_symbol.x", "Gene_location", "Gene_strand")]
   eqtls_exon_ctl$eQTL_type <- "cis"   
-  colnames(eqtls_exon_ctl) <- c("SNP ID", "Ensembl Exon ID", "Beta coefficient", "T-statistic", "P-value", "FDR estimate", "SNP Location", "SNP Allele1", "SNP Allele2", "Exon Location", "Ensembl Transcript ID", "Ensembl Gene ID", "Gene Symbol", "Gene Location", "Gene Strand", "eQTL Type")
+  colnames(eqtls_exon_ctl) <- c("SNP", "Ensembl Exon ID", "Beta coefficient", "T-statistic", "P-value", "FDR estimate", "SNP Location", "SNP Allele1", "SNP Allele2", "Exon Location", "Ensembl Transcript ID", "Ensembl Gene ID", "Gene Symbol", "Gene Location", "Gene Strand", "eQTL Type")
   eqtls_exon_ctl <- eqtls_exon_ctl[order(eqtls_exon_ctl$FDR), ]
   print(paste0("Exon eQTLs controls only: Rows: ", dim(eqtls_exon_ctl)[[1]], "  Columns: ", dim(eqtls_exon_ctl)[[2]]))
   write.table(eqtls_exon_ctl, file = paste0(outpath, "/03_pmb_cis-eQTL_exon_hits_controls_only.txt"), row.names = F, quote = F, dec = ".", sep = "\t")
   print("3. Done generating result tables")
+
+  print(sessionInfo())
 }

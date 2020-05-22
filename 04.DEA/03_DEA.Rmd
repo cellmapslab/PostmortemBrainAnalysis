@@ -187,7 +187,7 @@ prs_adhd <- GetPRS(paste0(prs_path, "/ADHD-2017/pmb_info06_all_chr_maf0.01_IDs_c
 # ASD-2019 PRS
 prs_asd <- GetPRS(paste0(prs_path, "/ASD-2019/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_ASD-2019_PRSice-2_PRS.all.score"))
 # BIP-2018 PRS
-prs_BIP <- GetPRS(paste0(prs_path, "/BIP-2018/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_BIP-2018_PRSice-2_PRS.all.score"))
+prs_bip <- GetPRS(paste0(prs_path, "/BIP-2018/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_BIP-2018_PRSice-2_PRS.all.score"))
 # BMI-2015 PRS
 prs_bmi <- GetPRS(paste0(prs_path, "/BMI-2015/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_BMI-2015_PRSice-2_PRS.all.score"))
 # CDG1-2013 PRS
@@ -215,7 +215,7 @@ pData <- join(pData, prs_adhd)
 colnames(pData)[length(pData[1,])] <- "PRS.ADHD"
 pData <- join(pData, prs_asd)
 colnames(pData)[length(pData[1,])] <- "PRS.ASD"
-pData <- join(pData, prs_BIP)
+pData <- join(pData, prs_bip)
 colnames(pData)[length(pData[1,])] <- "PRS.BIP"
 pData <- join(pData, prs_bmi)
 colnames(pData)[length(pData[1,])] <- "PRS.BMI"
@@ -240,7 +240,7 @@ colnames(pData)[length(pData[1,])] <- "PRS.SCZ2"
 row.names(pData) <- pData$ShortName
 # check if the order of the samples in pData is still the same as in the expression data
 identical(colnames(gene_summaries@assayData$exprs), row.names(pData))
-rm(prs_adhd, prs_asd, prs_BIP, prs_bmi, prs_cdg1, prs_cdg2, prs_ea, prs_he, prs_in, prs_mdd1, prs_mdd2, prs_mdd3, prs_scz2)
+rm(prs_adhd, prs_asd, prs_bip, prs_bmi, prs_cdg1, prs_cdg2, prs_ea, prs_he, prs_in, prs_mdd1, prs_mdd2, prs_mdd3, prs_scz2)
 ```
 
 

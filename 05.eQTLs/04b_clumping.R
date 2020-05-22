@@ -22,7 +22,7 @@ if(length(args) == 0){
     ### Functions ###
     # function to get all unique SNPs of the eQTL results
     GetUniqueSnps <- function(eqtls, file){
-        unique_snps <- as.data.frame(unique(eqtls$`SNP ID`))
+        unique_snps <- as.data.frame(unique(eqtls$SNP))
         colnames(unique_snps) <- "SNP"
         fwrite(unique_snps, file = paste0(outpath1, file), col.names = F, sep = "\n")
         return(unique_snps)
@@ -30,8 +30,8 @@ if(length(args) == 0){
 
     # function to get the chromosome and minimal p-value for all unique SNPs of the eQTL results
     GetChrAndPvalueOfUniqueSnps <- function(eqtls, snps, file){
-        min_pval_snps <- eqtls[ , .SD[which.min(`P-value`)], by = `SNP ID`]  # get minimal p-value for each SNP
-        unique_snps <- merge(snps, min_pval_snps[, c("SNP ID", "SNP Location", "P-value")], by.x = "SNP", by.y = "SNP ID")
+        min_pval_snps <- eqtls[ , .SD[which.min(`P-value`)], by = SNP]  # get minimal p-value for each SNP
+        unique_snps <- merge(snps, min_pval_snps[, c("SNP", "SNP Location", "P-value")], by = "SNP")
         unique_snps$CHR <- sapply(unique_snps$`SNP Location`, function(x) strsplit(x, ":")[[1]][1])
         unique_snps$P <- unique_snps$`P-value`
         unique_snps <- unique_snps[, c("SNP", "CHR", "P")]
@@ -43,7 +43,7 @@ if(length(args) == 0){
     # function to load the clumping results, reduce eQTL results to top LD SNPs and save the resulting eQTLs into an extra file
     GetClumpedSnpsEqtls <- function(input, eqtls, output){
         clumped_snps <- fread(paste0(outpath2, input), header = T, select = "SNP", stringsAsFactors = F)
-        eqtls <- eqtls[eqtls$`SNP ID` %in% clumped_snps$SNP, ]
+        eqtls <- eqtls[eqtls$SNP %in% clumped_snps$SNP, ]
         print(dim(eqtls))
         write.table(eqtls, file = paste0(outpath3, output), row.names = F, quote = F, dec = ".", sep = "\t")
     }
@@ -125,4 +125,6 @@ if(length(args) == 0){
     GetClumpedSnpsEqtls(input = "/03_pmb_cis-eQTL_transcripts_controls_only.clumped", eqtls_transcript_controls, output = "/03_pmb_cis-eQTL_transcript_hits_controls_only_clumped.txt")
     GetClumpedSnpsEqtls(input = "/03_pmb_cis-eQTL_exons_controls_only.clumped", eqtls_exon_controls, output = "/03_pmb_cis-eQTL_exon_hits_controls_only_clumped.txt")
     print("4. Done generating result tables")
+
+    print(sessionInfo())
 }

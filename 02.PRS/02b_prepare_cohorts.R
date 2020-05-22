@@ -30,3 +30,4 @@ gen.file.nodup <- gen.file[!(duplicated(gen.file$V3)), ]
 gen.file.keep <- gen.file[row.names(keep.gen.file), ]
 fwrite(rbind(gen.file.nodup, gen.file.keep), paste0(output, '_renamed_noMultiAllelicSNPs.gen'), row.names = F, col.names = F, sep = " ", quote = F)
 
+print(sessionInfo())

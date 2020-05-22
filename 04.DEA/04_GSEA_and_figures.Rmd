@@ -48,6 +48,7 @@ library(data.table)
 library(tidyr)
 library(rtracklayer)
 library(limma)
+library(plyr)
 
 # Packages for pathway enrichment
 library(GSEABase)   # to load or generate gene set data
@@ -64,6 +65,7 @@ library(viridis)  # color blind color palette
 library(ggrepel)  # for volcanoplot
 library(pheatmap)
 library(grid)
+library(gridExtra)
 ```
 
 
@@ -75,6 +77,8 @@ Before we can start, we need to make sure that all necessary paths and folder na
 rdata_path="/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_files"
 # path to the DEA result tables
 results_path = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_DEA_results"
+# path to the polygenic risk score (PRS) results
+prs_path="/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/04_PRSice-2"
 # path to FUMA results
 fuma_path = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/04_FUMA"
 # path to store the output into
@@ -163,6 +167,18 @@ GenerateVerticalBarplotOfDiffExprHits <- function(design, fit, from, to, plot_na
     scale_y_continuous(expand = c(0.02, 0.01))
   ggsave(plot = g, file = paste0(outpath, "/", plot_name))
   return(limma_res_plot)
+}
+
+# function to load the PRS all score file, change the colnames into right order and return only IID and 0.01 PRS
+GetPRS <- function(filename){
+  all_scores <- suppressWarnings(fread(filename, stringsAsFactors = F))
+  # set colnames right 
+  names <- colnames(all_scores)[-1] # remove first colname and save all others
+  all_scores$`1` <- NULL # remove last column with NAs
+  colnames(all_scores) <- names # set right colnames
+  # return only IID and PRS for 0.01
+  score <- all_scores[, c("IID", "0.01")]
+  return(score)  
 }
 
 # function, which first generates the contingency table for two datasets and then calculates the p-value using fisher exact test
@@ -844,7 +860,7 @@ for (p in prs_all) {
 
 ### Barplot
 
-Now, we can generate a barplot for all the PRS based DEA hits on transcript level, also called transcript expression quantitative trait score (teQTS). 
+Now, we can generate a barplot for all the PRS based DEA hits on exon level, also called exon expression quantitative trait score (eeQTS). 
 ```{r, echo = F}
 # first we need to get the data into the right format
 plot_prs <- reshape2::melt(prs_exons, id.vars = "PRS")
@@ -922,6 +938,64 @@ GenerateForestPlot("CNGB1")
 GenerateForestPlot("CSTB")
 ```
 
+# Exon expression quantitative trait score (eeQTS)
+
+## Load data
+
+For gene HKDC1 (ENSG00000156510.11), which has two protein-coding transcripts, we have an eeQTS hit for BIP-2018, CDG2-2019 GWAS, MDD3-2019 and SCZ2-2014. With all, except BIP-2018 (exon ENSE00003249902.1, 6th exon in both transcripts), having a hit with exon ENSE00001096309.1, which is the second-last exon of the longest (18 exons) transcript of HKDC1. To plot the polygenic risk scores (PRS) for the four mentioned GWASs against gene expression we need to load the PRS first.
+```{r}
+# BIP-2018 PRS
+prs_bip <- GetPRS(paste0(prs_path, "/BIP-2018/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_BIP-2018_PRSice-2_PRS.all.score"))
+# CDG2-2018 PRS
+prs_cdg2 <- GetPRS(paste0(prs_path, "/CDG2-2018/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_CDG2-2018_PRSice-2_PRS.all.score"))
+# MDD3-2019 PRS
+prs_mdd3 <- GetPRS(paste0(prs_path, "/MDD3-2019/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_MDD3-2019_PRSice-2_PRS.all.score"))
+# SCZ2-2014 PRS
+prs_scz2 <- GetPRS(paste0(prs_path, "/SCZ2-2014/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_SCZ2-2014_PRSice-2_PRS.all.score"))
+```
+
+Then, we add the four PRSs to pData of the gene expression dataset.
+```{r}
+pData(gene_summaries) <- join(pData(gene_summaries), as.data.frame(prs_bip))
+colnames(pData(gene_summaries))[length(pData(gene_summaries)[1,])] <- "PRS.BIP"
+pData(gene_summaries) <- join(pData(gene_summaries), as.data.frame(prs_cdg2))
+colnames(pData(gene_summaries))[length(pData(gene_summaries)[1,])] <- "PRS.CDG2"
+pData(gene_summaries) <- join(pData(gene_summaries), as.data.frame(prs_mdd3))
+colnames(pData(gene_summaries))[length(pData(gene_summaries)[1,])] <- "PRS.MDD3"
+pData(gene_summaries) <- join(pData(gene_summaries), as.data.frame(prs_scz2))
+colnames(pData(gene_summaries))[length(pData(gene_summaries)[1,])] <- "PRS.SCZ2"
+head(pData(gene_summaries))
+```
+
+## Scatterplot
+
+Now, we can generate scatterplots, where each of the four PRSs is plotted against the gene expression. 
+```{r}
+# first, we need to get the data into the right format for ggplot
+gene <- as.data.frame(exprs(gene_summaries)["ENSG00000156510.11",])
+colnames(gene) <- "gene"
+prs <- pData(gene_summaries)[, c("ShortName", "PRS.BIP", "PRS.CDG2", "PRS.MDD3", "PRS.SCZ2")]
+plot_data <- merge(prs, gene, by.x = "ShortName", by.y = "row.names")
+# BIP-2018 vs gene expression
+g1 <- ggplot(plot_data, aes(x = gene, y = PRS.BIP)) + geom_point() + xlab("Gene expression") + ylab("BIP-2018 PRS") + ggtitle("Scatterplot BIP-2018 PRS vs. gene expression")
+g2 <- ggplot(plot_data, aes(x = gene, y = PRS.CDG2)) + geom_point() + xlab("Gene expression") + ylab("CDG2-2019 PRS") + ggtitle("Scatterplot CDG2-2019 PRS vs. gene expression")
+g3 <- ggplot(plot_data, aes(x = gene, y = PRS.MDD3)) + geom_point() + xlab("Gene expression") + ylab("MDD3-2019 PRS") + ggtitle("Scatterplot MDD3-2019 PRS vs. gene expression")
+g4 <- ggplot(plot_data, aes(x = gene, y = PRS.SCZ2)) + geom_point() + xlab("Gene expression") + ylab("SCZ2-2014 PRS") + ggtitle("Scatterplot SCZ2-2014 PRS vs. gene expression")
+all <- grid.arrange(g1, g2, g3, g4, nrow = 2)
+all
+ggsave(all, file = paste0(outpath, "/4_scatterplot_BIP_CDG2_MDD3_SCZ2_PRS_vs_gene_expression.pdf"))
+```
+
+And, we can plot all four PRS in one scatterplot:
+```{r}
+# first, we need to get the data into the right format for ggplot
+prs <- reshape2::melt(prs, id.vars = "ShortName")
+plot_data <- merge(prs, gene, by.x = "ShortName", by.y = "row.names")
+
+# generate scatterplot
+ggplot(plot_data, aes(x = gene, y = value, color = variable)) + geom_point()
+ggsave(file = paste0(outpath, "/4_scatterplot_BIP_CDG2_MDD3_SCZ2_PRS_vs_gene_expression_all_in_one.pdf"))
+```
 
 # Age DEGenes
 
@@ -1553,6 +1627,7 @@ colnames(freqs3) <- c("#Exons", "#Genes", "Type")
 write.table(freqs3, paste0(results_path, "/3.6_eDEGenes_exon_counts.tsv"), sep = "\t")
 rm(features, genes, freqs, freqs2, freqs3, tfreq)
 ```
+
 
 # Session Info
 

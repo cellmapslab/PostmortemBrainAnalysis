@@ -118,3 +118,6 @@ stopCluster(cl)
 
 # 2.4.6 write results into a file
 write.table(results2, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/07_annotations/VEP/pmb_cis-eQTL_annotation_results_10000_permutations_VEP_all_states.tsv", row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")
+
+print(sessionInfo())
+

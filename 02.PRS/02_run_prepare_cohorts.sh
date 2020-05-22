@@ -8,5 +8,5 @@ tools_path="/storage/groups/ccm01/tools"
 script_path="/storage/groups/ccm01/code/PostmortemBrainAnalysis/02.PRS"
 
 # Preprocess the cohort genotypes: filter for MAF, HWE, merge chromosome files and remove duplicates
-bash ${script_path}/02a_prepare_cohorts.sh -c ${cohort} -o ${outpath_cohort} -t ${tools_path} -s ${script_path}
+bash ${script_path}/02a_prepare_cohorts.sh -c ${cohort} -o ${outpath_cohort} -t ${tools_path} -s ${script_path} &>> ${outpath_cohort}/prepare_cohorts.log
 

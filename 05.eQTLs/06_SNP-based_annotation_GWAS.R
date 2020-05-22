@@ -232,3 +232,6 @@ stopCluster(cl)
 
 # 2.4.6 write results into a file
 write.table(results2, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/07_annotations/GWAS_CMC_GTEx/pmb_cis-eQTL_annotation_results_10000_permutations_ALL_GWAS_hits_p0.05.tsv", row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")
+
+print(sessionInfo())
+

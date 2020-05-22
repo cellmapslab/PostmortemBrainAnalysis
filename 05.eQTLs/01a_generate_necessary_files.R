@@ -58,5 +58,6 @@ if(length(args) == 0){
   # save all important sample IIDs for filtering of the genotype data
   write.table(out, file = output2, sep = "\t", quote = FALSE, row.names = FALSE)
 
+  print(sessionInfo())
 }
 

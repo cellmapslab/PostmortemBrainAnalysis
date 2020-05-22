@@ -166,3 +166,5 @@ pdf(file = paste0(opt$out, "/plot_lassosum_PRS_without_covars_", opt$gwas, ".pdf
 plot(val2)
 dev.off()
 
+print(sessionInfo())
+

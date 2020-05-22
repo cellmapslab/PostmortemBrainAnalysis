@@ -83,5 +83,8 @@ manhattan(gwas_results, chr = "CHR", bp = "BP", snp = "SNP", p = "P", suggestive
               axis.title = element_text(size = 36))
     dev.off()
     rm(gwas_results, don, axisdf)
+
+
+    print(sessionInfo())
 }
 

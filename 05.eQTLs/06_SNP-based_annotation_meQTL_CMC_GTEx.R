@@ -143,3 +143,6 @@ results <- RunAnnotationForAllEQTLs(gtex_brains_sqtl, "GTEx_brain_sQTL_SNP", res
 
 # Write results into a file
 write.table(results, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_annotation_results_10000_permutations_CMC.tsv", row.names = T, col.names = T, quote = F, dec = ".", sep = "\t")
+
+print(sessionInfo())
+

@@ -100,4 +100,5 @@ if(length(args) == 0){
   # save all important sample IIDs for filtering of the genotype data
   write.table(covars, file = output5, sep = " ", quote = FALSE, row.names = FALSE)
 
+  print(sessionInfo())
 }

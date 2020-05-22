@@ -92,4 +92,6 @@ if(length(args)==0){
 
     # Run matrixEQTL For cis-eQTLs
     me.all <- run_matrix_eqtl(SNP_file = snps, expression_file = exp, cov_file = cov, outfile_cis = ciso, outfile_trans = transo, cis = 1, trans = 0)
+
+    print(sessionInfo())
 }

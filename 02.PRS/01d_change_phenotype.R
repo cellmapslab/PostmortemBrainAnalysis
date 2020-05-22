@@ -20,3 +20,4 @@ ChangePheno <- function(filename){
 # Change the phenotype .fam file of the PMB genotypes
 ChangePheno("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/01_preprocessed_genotypes/1.4_dups_removed/pmb_info06_all_chr_maf0.01_IDs_changed_merged_noDup_final.fam")
 
+print(sessionInfo())

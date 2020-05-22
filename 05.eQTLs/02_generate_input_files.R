@@ -4,7 +4,7 @@
 # This script generates all necessary files for matrixEQTL. Do not forget, that the order of the samples needs to remain/be equal for ALL files!!
 # and the expression data is always coming from the probeset-based summarization (NO core summarization for the genes)
 # Invoke the script in the commandline as follows: R CMD BATCH --slave '--args bim=<path/to/bim-file> snps=<path/and/snps-gen-file> gene=<path/to/gene-expr.RData> transcript=>path/to/transcript-expr.RData> exon=<path/to/exon-expr.RData> outpath=<path/to/save/output>" 02_generate_input_files.R
-# or Rscript 02_generate_input_files.R bim=<path/to/bim-file> snps=<path/and/snps-gen-file> gene=<path/to/gene-expr.RData> transcript=>path/to/transcript-expr.RData> exon=<path/to/exon-expr.RData> outpath=<path/to/save/output> &>> path/to/store/stdout.log
+# or using Rscript: Rscript 02_generate_input_files.R bim=<path/to/bim-file> snps=<path/and/snps-gen-file> gene=<path/to/gene-expr.RData> transcript=>path/to/transcript-expr.RData> exon=<path/to/exon-expr.RData> outpath=<path/to/save/output> &>> path/to/store/stdout.log
 
 # add installed packages from home path, to the library search path
 .libPaths("/home/icb/karolina.worf/R/x86_64-pc-linux-gnu-library/3.6/")
@@ -403,8 +403,6 @@ if(length(args) == 0){
             count <- count + 1
         }
     }
-    # Save gene expression data into a new file
-    #fwrite(expr, paste0(outpath, "/01_pmb_exon_expr_CASE_CTL.txt"), row.names = F, col.names = T, sep = "\t", quote = F)
 
     #########################
     ### ONLY CASE SAMPLES ###
@@ -432,7 +430,6 @@ if(length(args) == 0){
             count <- count + 1
         }
     }
-    #fwrite(exon_expr_case_only, paste0(outpath, "/02_pmb_exon_expr_CASE_only.txt"), row.names = F, col.names = T, sep = "\t", quote = F)
 
     ########################
     ### ONLY CTL SAMPLES ###
@@ -460,6 +457,6 @@ if(length(args) == 0){
             count <- count + 1
         }
     }
-    #fwrite(exon_expr_ctl_only, paste0(OUTPATH, "/03_pmb_exon_expr_CTL_only.txt"), row.names = F, col.names = T, sep = "\t", quote = F)
+    print(sessionInfo())
 }
 

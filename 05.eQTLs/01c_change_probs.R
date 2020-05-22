@@ -74,5 +74,6 @@ if(length(args) == 0){
             write.table(m_trans[c(start:end), ], out, append = T, row.names = T, col.names = F, sep = "\t", quote = F)
         }
     }
+    print(sessionInfo())
 }
 

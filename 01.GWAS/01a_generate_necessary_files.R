@@ -91,5 +91,7 @@ if(length(args) == 0){
   ### 4. Save only FID, IID and DX (Diagnosis)
   pheno <- covars[, c("FID", "IID", "DX")]
   write.table(pheno, file = output4, sep = "\t", quote = FALSE, row.names = FALSE)
+
+  print(sessionInfo())
 }
 
