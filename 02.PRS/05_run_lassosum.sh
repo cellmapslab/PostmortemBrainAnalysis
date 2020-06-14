@@ -25,12 +25,12 @@ Rscript --slave ${script_path}/05a_lassosum.R --base ${sumstats_path}/AD-2019.su
 wait
 echo "Done AD-2019"
 
-### ADHD-2017 ###
+### ADHD-2019 ###
 # 20,183 cases and 35,191 controls: N = 55,374
-mkdir -p ${outpath_lassosum}/ADHD-2017  # generate output path if not existing already
-Rscript --slave ${script_path}/05a_lassosum.R --base ${sumstats_path}/ADHD-2017.sumstats --target ${target} --ld ${ld_reference} --pheno ${phenotypes} --cov ${covariates} --A1 A1 --A2 A2 --stat OR --pvalue P --chr CHR --bp BP --size 55374 --beta no --thread 3 --out ${outpath_lassosum}/ADHD-2017 --gwas ADHD-2017 &> ${outpath_lassosum}/ADHD-2017/Lassosum.log
+mkdir -p ${outpath_lassosum}/ADHD-2019  # generate output path if not existing already
+Rscript --slave ${script_path}/05a_lassosum.R --base ${sumstats_path}/ADHD-2019.sumstats --target ${target} --ld ${ld_reference} --pheno ${phenotypes} --cov ${covariates} --A1 A1 --A2 A2 --stat OR --pvalue P --chr CHR --bp BP --size 55374 --beta no --thread 3 --out ${outpath_lassosum}/ADHD-2019 --gwas ADHD-2019 &> ${outpath_lassosum}/ADHD-2019/Lassosum.log
 wait
-echo "Done ADHD-2017"
+echo "Done ADHD-2019"
 
 ### ALCDEP-2018 ###
 # 11,476 cases and 23,080 controls: N = 34,556 samples
@@ -53,19 +53,19 @@ Rscript --slave ${script_path}/05a_lassosum.R --base ${sumstats_path}/ASD-2019.s
 wait
 echo "Done ASD-2019"
 
-### AUDIT-2018 ###
-# no BP...
-#mkdir -p ${outpath_lassosum}/AUDIT-2018  # generate output path if not existing already
-#Rscript --slave ${script_path}/05a_lassosum.R --base ${sumstats_path}/AN-2019.sumstats --target ${target} --ld ${ld_reference} --pheno ${phenotypes} --cov ${covariates} --A1 a_0 --A2 a_1 --stat beta_T --pvalue p_t --chr chr --bp POS --size 72517 --beta yes --thread 3 --out ${outpath_lassosum}/AN-2019 --gwas AN-2019 &> ${outpath_lassosum}/AN-2019/Lassosum.log
-#wait
-#echo "Done AUDIT-2018"
-
-### BIP-2018 ###
-# 20,352 cases and 31,358 controls: N = 51,710 samples
-mkdir -p ${outpath_lassosum}/BIP-2018  # generate output path if not existing already
-Rscript --slave ${script_path}/05a_lassosum.R --base ${sumstats_path}/BIP-2018.sumstats --target ${target} --ld ${ld_reference} --pheno ${phenotypes} --cov ${covariates} --A1 A1 --A2 A2 --stat OR --pvalue P --chr CHR --bp BP --size 51710 --beta no --thread 3 --out ${outpath_lassosum}/BIP-2018 --gwas BIP-2018 &> ${outpath_lassosum}/BIP-2018/Lassosum.log
+### AUDIT-2019 ###
+# 121,604 (UK Biobank only, no 23AndMe)
+mkdir -p ${outpath_lassosum}/AUDIT-2019  # generate output path if not existing already
+Rscript --slave ${script_path}/05a_lassosum.R --base ${sumstats_path}/AUDIT-2019.sumstats --target ${target} --ld ${ld_reference} --pheno ${phenotypes} --cov ${covariates} --A1 a_0 --A2 a_1 --stat beta_T --pvalue p_T --chr chr --bp bp --size 121604 --beta yes --thread 3 --out ${outpath_lassosum}/AUDIT-2019 --gwas AUDIT-2019 &> ${outpath_lassosum}/AUDIT-2019/Lassosum.log
 wait
-echo "Done BIP-2018"
+echo "Done AUDIT-2019"
+
+### BIP-2019 ###
+# 20,352 cases and 31,358 controls: N = 51,710 samples
+mkdir -p ${outpath_lassosum}/BIP-2019  # generate output path if not existing already
+Rscript --slave ${script_path}/05a_lassosum.R --base ${sumstats_path}/BIP-2019.sumstats --target ${target} --ld ${ld_reference} --pheno ${phenotypes} --cov ${covariates} --A1 A1 --A2 A2 --stat OR --pvalue P --chr CHR --bp BP --size 51710 --beta no --thread 3 --out ${outpath_lassosum}/BIP-2019 --gwas BIP-2019 &> ${outpath_lassosum}/BIP-2019/Lassosum.log
+wait
+echo "Done BIP-2019"
 
 ### BIPvsSCZ-2018 ###
 # 15,270 BIP cases and 23,585 SCZ cases: N = 38,855 samples
@@ -81,12 +81,33 @@ Rscript --slave ${script_path}/05a_lassosum.R --base ${sumstats_path}/BIPSCZvsCO
 wait
 echo "Done BIPSCZvsCONT-2018"
 
-### BMI-2015 ###
+### BMI-2015 (ENGAGE) ###
 # N = 87,048 samples
-mkdir -p ${outpath_lassosum}/BMI-2015  # generate output path if not existing already
-Rscript --slave ${script_path}/05a_lassosum.R --base ${sumstats_path}/BMI-2015.sumstats --target ${target} --ld ${ld_reference} --pheno ${phenotypes} --cov ${covariates} --A1 effect_allele --A2 other_allele --stat effect --pvalue P --chr chromosome --bp position --size 87048 --beta yes --thread 3 --out ${outpath_lassosum}/BMI-2015 --gwas BMI-2015 &> ${outpath_lassosum}/BMI-2015/Lassosum.log
+mkdir -p ${outpath_lassosum}/BMI-2015_ENGAGE  # generate output path if not existing already
+Rscript --slave ${script_path}/05a_lassosum.R --base ${sumstats_path}/BMI-2015_ENGAGE.sumstats --target ${target} --ld ${ld_reference} --pheno ${phenotypes} --cov ${covariates} --A1 effect_allele --A2 other_allele --stat effect --pvalue P --chr chromosome --bp position --size 87048 --beta yes --thread 3 --out ${outpath_lassosum}/BMI-2015_ENGAGE --gwas BMI-2015_ENGAGE &> ${outpath_lassosum}/BMI-2015_ENGAGE/Lassosum.log
 wait
-echo "Done BMI-2015"
+echo "Done BMI-2015 (ENGAGE)"
+
+### BMI-2015 (GIANT) ###
+# N = 322,154 samples
+mkdir -p ${outpath_lassosum}/BMI-2015_GIANT  # generate output path if not existing already
+Rscript --slave ${script_path}/05a_lassosum.R --base ${sumstats_path}/BMI-2015_GIANT.sumstats --target ${target} --ld ${ld_reference} --pheno ${phenotypes} --cov ${covariates} --A1 A1 --A2 A2 --stat b --pvalue p --chr Chromosome --bp Position --size 322154 --beta yes --thread 3 --out ${outpath_lassosum}/BMI-2015_GIANT --gwas BMI-2015_GIANT &> ${outpath_lassosum}/BMI-2015_GIANT/Lassosum.log
+wait
+echo "Done BMI-2015 (GIANT)"
+
+### BMI-2018 ###
+# N = 681,275 samples
+mkdir -p ${outpath_lassosum}/BMI-2018  # generate output path if not existing already
+Rscript --slave ${script_path}/05a_lassosum.R --base ${sumstats_path}/BMI-2018.sumstats --target ${target} --ld ${ld_reference} --pheno ${phenotypes} --cov ${covariates} --A1 Tested_Allele --A2 Other_Allele --stat BETA --pvalue P --chr CHR --bp POS --size 681275 --beta yes --thread 3 --out ${outpath_lassosum}/BMI-2018 --gwas BMI-2018 &> ${outpath_lassosum}/BMI-2018/Lassosum.log
+wait
+echo "Done BMI-2018"
+
+### BMI-2019 ###
+# N = 806,834 samples
+mkdir -p ${outpath_lassosum}/BMI-2019  # generate output path if not existing already
+Rscript --slave ${script_path}/05a_lassosum.R --base ${sumstats_path}/BMI-2019.sumstats --target ${target} --ld ${ld_reference} --pheno ${phenotypes} --cov ${covariates} --A1 Testes_Allele --A2 Other_Allele --stat BETA --pvalue P --chr CHR --bp POS --size 806834 --beta yes --thread 3 --out ${outpath_lassosum}/BMI-2019 --gwas BMI-2019 &> ${outpath_lassosum}/BMI-2019/Lassosum.log
+wait
+echo "Done BMI-2019"
 
 ### CAD-2017 ###
 # 10,801 cases (incl. angina) and 137,914 controls: N = 148,715 samples
@@ -159,9 +180,9 @@ wait
 echo "Done MDD2-2018"
 
 ### MDD3-2019 ###
-# 170,756 cases and 329,443 controls: N = 500,199 samples
+# 45,396 cases and 97,250 controls: N = 142,646 samples
 mkdir -p ${outpath_lassosum}/MDD3-2019  # generate output path if not existing already
-Rscript --slave ${script_path}/05a_lassosum.R --base ${sumstats_path}/MDD3-2019.sumstats --target ${target} --ld ${ld_reference} --pheno ${phenotypes} --cov ${covariates} --A1 A1 --A2 A2 --stat OR --pvalue P --chr CHR --bp BP --size 500199 --beta no --thread 3 --out ${outpath_lassosum}/MDD3-2019 --gwas MDD3-2019 &> ${outpath_lassosum}/MDD3-2019/Lassosum.log
+Rscript --slave ${script_path}/05a_lassosum.R --base ${sumstats_path}/MDD3-2019.sumstats --target ${target} --ld ${ld_reference} --pheno ${phenotypes} --cov ${covariates} --A1 A1 --A2 A2 --stat OR --pvalue P --chr CHR --bp BP --size 142646 --beta no --thread 3 --out ${outpath_lassosum}/MDD3-2019 --gwas MDD3-2019 &> ${outpath_lassosum}/MDD3-2019/Lassosum.log
 wait
 echo "Done MDD3-2019"
 
@@ -173,7 +194,7 @@ wait
 echo "Done OCD-2017"
 
 ### PTSD-2019 ###
-# 23,212 PTSD cases and 151,447 controls: N = 174,659 samples
+# 23,212 PTSD cases and 151,447 controls: N = 174,659 samples (only European samples)
 mkdir -p ${outpath_lassosum}/PTSD-2019  # generate output path if not existing already
 Rscript --slave ${script_path}/05a_lassosum.R --base ${sumstats_path}/PTSD-2019.sumstats --target ${target} --ld ${ld_reference} --pheno ${phenotypes} --cov ${covariates} --A1 A1 --A2 A2 --stat OR --pvalue P --chr CHR --bp BP --size 174659 --beta no --thread 3 --out ${outpath_lassosum}/PTSD-2019 --gwas PTSD-2019 &> ${outpath_lassosum}/PTSD-2019/Lassosum.log
 wait
@@ -184,6 +205,7 @@ echo "Done PTSD-2019"
 mkdir -p ${outpath_lassosum}/SCZ2-2014  # generate output path if not existing already
 Rscript --slave ${script_path}/05a_lassosum.R --base ${sumstats_path}/SCZ2-2014.sumstats --target ${target} --ld ${ld_reference} --pheno ${phenotypes} --cov ${covariates} --A1 a1 --A2 a2 --stat or --pvalue p --chr hg19chrc --bp bp --size 150064 --beta no --thread 3 --out ${outpath_lassosum}/SCZ2-2014 --gwas SCZ2-2014 &> ${outpath_lassosum}/SCZ2-2014/Lassosum.log
 wait
+echo "Done SCZ2-2014"
 
 ### T2D-2017 ###
 # 26,676 T2D cases and 132,532 controls: N = 159,208 samples

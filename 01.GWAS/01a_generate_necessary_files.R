@@ -61,28 +61,19 @@ if(length(args) == 0){
   
   ### 3. Generate a file including all covariates for the GWAS
   # get all important columns for the covariate file
-  covars <- pData[, c("FID", "IID", "SOL", "C1", "C2", "C3", "C4", "Sex", "Age", "Suicide", "Type_of_Death", "Dx")]
+  covars <- pData[, c("FID", "IID", "SOL", "C1", "C2", "C3", "C4", "Sex", "Age", "Dx")]
   covars[, ] <- lapply(covars[, ], as.character) # change all factors to character
   
   # change sex from characters to numbers (M/Male = 1, F/Female = 2)
   covars[covars$Sex == "M", "Sex"] <- "1"
   covars[covars$Sex == "F", "Sex"] <- "2"
   
-  # change suicide from characters to numbers (N/No = 1, Y/Yes = 2)
-  covars[covars$Suicide == "N", "Suicide"] <- "1"
-  covars[covars$Suicide == "Y", "Suicide"] <- "2"
-  
-  # change Type of Death from characters to numbers (Natural = 1, Non-violent = 2, Violent = 3) 
-  covars[covars$Type_of_Death == "Natural", "Type_of_Death"] <- "1"
-  covars[covars$Type_of_Death == "Non-violent", "Type_of_Death"] <- "2"
-  covars[covars$Type_of_Death == "Violent", "Type_of_Death"] <- "3"
-  
   # change Diagnosis (Dx) from characters to numbers with all NON controls as one case (CTL = , SCZ/BPD/MDD = 2) 
   covars[covars$Dx == "CTL", "Dx"] <- "1"
   covars[covars$Dx %in% c("SCZ", "BPD", "MDD"), "Dx"] <- "2"
   
   # change colnames
-  colnames(covars) <- c("FID", "IID", "SOL", "C1", "C2", "C3", "C4", "SEX", "AGE", "SUICIDE", "TYPE_OF_DEATH", "DX")
+  colnames(covars) <- c("FID", "IID", "SOL", "C1", "C2", "C3", "C4", "SEX", "AGE", "DX")
   
   # save all important sample IIDs for filtering of the genotype data
   write.table(covars, file = output3, sep = "\t", quote = FALSE, row.names = FALSE)

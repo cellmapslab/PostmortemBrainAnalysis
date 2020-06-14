@@ -16,35 +16,67 @@ library(rcompanion)
 library(oligo)
 library(RColorBrewer)
 
-# function to calculate Nagelkerkes R2 and p-value 
-# and generate a boxplot figure for a given PRS file (best PRS of PRSice-2)
-EvaluatePRS <- function(input, gwas, seperator, output){
-  # 1. read file
-  prs <- fread(file = input, sep = seperator, header = T, stringsAsFactors = F, select = c("IID", "PRS"))
+
+# function to calculate the p-value as well as Nagelkerke and Cox & Snell R2 from a data table
+GetPvalueAndR2 <- function(dt, threshold){
+  # without correcting for covariates
+  lm_no_cov <- lm(dt$Dx ~ dt[, get(threshold)])
+  r2_nk_no_cov <- nagelkerke(lm_no_cov)$Pseudo.R.squared.for.model.vs.null["Nagelkerke (Cragg and Uhler)", "Pseudo.R.squared"]
+  r2_cs_no_cov <- nagelkerke(lm_no_cov)$Pseudo.R.squared.for.model.vs.null["Cox and Snell (ML)", "Pseudo.R.squared"]
+  sum_no_cov <- summary(lm_no_cov)
+  #p_val_no_cov <- pf(sum_no_cov$fstatistic[1], sum_no_cov$fstatistic[2], sum_no_cov$fstatistic[3], lower.tail = FALSE)
+  p_val_no_cov <- sum_no_cov$coefficients[, 4][2]
+  # with correcting for covariates
+  lm_cov <- lm(dt$Dx ~ dt[, get(threshold)] + dt$Age + dt$Sex + dt$Suicide + dt$Type_of_Death + dt$C1 + dt$C2 + dt$C3 + dt$C4)
+  r2_nk_cov <- nagelkerke(lm_cov)$Pseudo.R.squared.for.model.vs.null["Nagelkerke (Cragg and Uhler)", "Pseudo.R.squared"]
+  r2_cs_cov <- nagelkerke(lm_cov)$Pseudo.R.squared.for.model.vs.null["Cox and Snell (ML)", "Pseudo.R.squared"]
+  sum_cov <- summary(lm_cov)
+  p_val_cov <- sum_cov$coefficients[, 4][2]
+#  cat(gwas, " (PRSice-2 threshold = ", threshold, ")\n", paste0(rep("-", nchar(gwas) + 1)), "\n\t\tWithout Cov\tWith Cov\nNagelkerke R2 |\t", round(r2_nk_no_cov, digits = 6), "\t", round(r2_nk_cov, digits = 6), " |\nCox&Snell R2  |\t", round(r2_cs_no_cov, digits = 6), "\t", round(r2_cs_cov, digits = 4), " |\nP-value       |\t", round(p_val_no_cov, digits = 4), "\t", round(p_val_cov, digits = 4), " |\n", sep = "")
+  mat <- cbind(c(r2_nk_no_cov, r2_cs_no_cov, p_val_no_cov), c(r2_nk_cov, r2_cs_cov, p_val_cov))
+  colnames(mat) <- c("Without_Cov", "With_Cov")
+  rownames(mat) <- c("Nagelkerke_R2", "Cox&Snell_R2", "P-value")
+  return(mat)
+}
+
+# function to calculate Nagelkerkes R2 and p-value for all scores with 1, 0.01, 0.00000005 (5e-08) 
+# and best threshold, generate a boxplot for PRS with threshold 0.01 and return the PRS (for 0.01)
+EvaluatePRS <- function(gwas, best){
+  # 1. read file of all PRSice-2 output scores and remove first colnames (accidentally generated with PRSice-2)
+  prs <- fread(file = paste0(path, "/04_PRSice-2/", gwas, "/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_", gwas, "_PRSice-2_PRS.all.score"))
+  names <- colnames(prs)[-1]
+  prs$`1` <- NULL
+  colnames(prs) <- names
   # 2. add pData information to PRS
   prs <- merge(prs, pData, by = "IID")
   # change Dx to numeric
   prs[prs$Dx == "CTL", "Dx"] <- "0"
   prs[prs$Dx == "CASE", "Dx"] <- "1"
   prs$Dx <- as.numeric(as.character(prs$Dx))
-  # 3. Get Nagelkerkes R2 and p-value
-  lm.prs <- lm(prs$Dx ~ prs$PRS)
-  r2 <- nagelkerke(lm.prs)$Pseudo.R.squared.for.model.vs.null["Nagelkerke (Cragg and Uhler)", "Pseudo.R.squared"]
-  r2.2 <- nagelkerke(lm.prs)$Pseudo.R.squared.for.model.vs.null["Cox and Snell (ML)", "Pseudo.R.squared"]
-  sum.prs <- summary(lm.prs)
-  p.value <- pf(sum.prs$fstatistic[1], sum.prs$fstatistic[2], sum.prs$fstatistic[3], lower.tail = FALSE)
-  print(paste0(gwas, ":\nNagelkerke R2 = ", r2, "\nCox and Snell R2 = ", r2.2, "\nP-value = ", p.value))
+  # 3. get PRS for 1, 0.01, 0.00000005 (5e-08) and best p-value thresholds
+  prs_new <- prs[, c("IID", "Dx", "Diagnosis", "Age", "Sex", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4", "1", "0.01", "5e-08")]
+  prs_new <- cbind(prs_new, prs[, get(best)])
+  colnames(prs_new)[length(prs_new)] <- best
+  m1 <- GetPvalueAndR2(prs_new, threshold = "1")
+  m2 <- GetPvalueAndR2(prs_new, threshold = "0.01")
+  GetPvalueAndR2(prs_new, threshold = "5e-08")
+  GetPvalueAndR2(prs_new, threshold = best)
+  return(prs)
+}
+adhd_prsice <- EvaluatePRS(gwas = "ADHD-2019", best = "0.00255005")
+
+EvaluatePRS <- function(){
   # 4. Generate boxplot
   col <- viridis(20) # get six colors (for plots)
   # change and relevel Diagnosis column of SCZ2
-  prs.plot <- prs[, c("PRS", "Diagnosis")]
-  cases <- prs.plot[prs.plot$Diagnosis != "CTL", ]
+  prs_plot <- prs[, c("0.1", "Diagnosis")]
+  cases <- prs_plot[prs_plot$Diagnosis != "CTL", ]
   cases$Diagnosis <- as.character(cases$Diagnosis)
   cases$Diagnosis <- "CASE"
-  prs.plot <- rbind(prs.plot, cases)
-  prs.plot$Diagnosis <- factor(prs.plot$Diagnosis, levels = c("CTL", "CASE", "MDD", "BPD", "SCZ"))
+  prs_plot <- rbind(prs_plot, cases)
+  prs_plot$Diagnosis <- factor(prs_plot$Diagnosis, levels = c("CTL", "CASE", "MDD", "BPD", "SCZ"))
   # boxplot of PRS
-  ggplot(prs.plot, aes(x = Diagnosis, y = PRS, fill = Diagnosis)) +
+  ggplot(prs_plot, aes(x = Diagnosis, y = prs_plot$`0.1`, fill = Diagnosis)) +
     scale_x_discrete(labels = c("Controls", "Cases", "Major depression disorder", "Bipolar disorder", "Schizophrenia")) +
     theme_classic() +
     theme(text = element_text(size = 26), axis.text.x = element_text(angle = 45, hjust = 1), axis.text = element_text(size = 26), plot.title = element_text(hjust = 0.5), axis.title.x = element_blank()) +
@@ -52,16 +84,27 @@ EvaluatePRS <- function(input, gwas, seperator, output){
     scale_fill_manual(values = viridis(5), guide = F) +
     ggtitle(paste0("PRS based on ", gwas, " GWAS summary statistic")) + 
     ylab("Polygenic risk score (PRS)") 
-  ggsave(output, width = 12, height = 10, units = "in")
-  return(prs)
+  ggsave(paste0(path, "/07_figures/boxplot_PRSice-2_PRS_", gwas, ".pdf"), width = 12, height = 10, units = "in")
 }
+adhd_prsice <- EvaluatePRS(gwas = "ADHD-2019", best = "0.01")
+
+### Load ALL Scores and get R2 + p-value for threshold of 1, 0.01 and 0.00000005 (5e-08)
+
+# 3. Get Nagelkerkes R2 and p-value
+prs.scz2 <- lm(scz2.scores$Dx ~ scz2.scores$`5e-08`)
+print(paste0("5e-08: Nagelkerke R2 = ", r2, "\nCos and Snell R2 = ", r2.2, "\nP-value = ", p.value))
+prs.scz2 <- lm(scz2.scores$Dx ~ scz2.scores$`0.01` + scz2.scores$Age + scz2.scores$Sex + scz2.scores$PMI + scz2.scores$Suicide + scz2.scores$Type_of_Death)
+print(paste0("0.01: Nagelkerke R2 = ", r2, "\nCos and Snell R2 = ", r2.2, "\nP-value = ", p.value))
+prs.scz2 <- lm(scz2.scores$Dx ~ scz2.scores$`1`)
+print(paste0("1: Nagelkerke R2 = ", r2, "\nCos and Snell R2 = ", r2.2, "\nP-value = ", p.value))
+
 
 # get PRS output path and generate the figures folder
 path = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS"
 # generate output (05_figures) folder
-system(paste0("mkdir ", path, "/05_figures"))
+system(paste0("mkdir -p ", path, "/07_figures"))
 
-# load, filter and save phenotype data
+# load and save phenotype data
 load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
 index <- which(is.na(pData(gene_summaries)$C1))  # remove all samples with C1 = NA
 dim(gene_summaries)
@@ -69,45 +112,43 @@ pData <- pData(gene_summaries)
 rm(gene_summaries)
 
 ### PRSice-2 ###
-adhd_prsice <- EvaluatePRS(input = paste0(path, "/04_PRSice-2/ADHD-2017/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_ADHD-2017_PRSice-2_PRS.best"),
-                           gwas = "ADHD-2017", seperator = " ",
-                           output = paste0(path, "/05_figures/boxplot_PRSice-2_PRS_ADHD-2017.pdf"))
+adhd_prsice <- EvaluatePRS(gwas = "ADHD-2019", best = "0.01")
 
 asd_prsice <- EvaluatePRS(input = paste0(path, "/04_PRSice-2/ASD-2017/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_ASD-2019_PRSice-2_PRS.best"),
                           gwas = "ASD-2017", seperator = " ",
-                          output = paste0(path, "/05_figures/boxplot_PRSice-2_PRS_ASD-2017.pdf"))
+                          output = paste0(path, "/07_figures/boxplot_PRSice-2_PRS_ASD-2017.pdf"))
 
 bpd_prsice <- EvaluatePRS(input = paste0(path, "/04_PRSice-2/BPD-2018/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_BPD-2018_PRSice-2_PRS.best"),
                           gwas = "BPD-2018", seperator = " ",
-                          output = paste0(path, "/05_figures/boxplot_PRSice-2_PRS_BPD-2018.pdf"))
+                          output = paste0(path, "/07_figures/boxplot_PRSice-2_PRS_BPD-2018.pdf"))
 
 bpd_vs_scz_prsice <- EvaluatePRS(input = paste0(path, "/04_PRSice-2/BPDvsSCZ-2018/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_BPDvsSCZ-2018_PRSice-2_PRS.best"),
                                  gwas = "BPDvsSCZ-2018", seperator = " ",
-                                 output = paste0(path, "/05_figures/boxplot_PRSice-2_PRS_BPDvsSCZ-2018.pdf"))
+                                 output = paste0(path, "/07_figures/boxplot_PRSice-2_PRS_BPDvsSCZ-2018.pdf"))
 
 bpd_scz_vs_ctl_prsice <- EvaluatePRS(input = paste0(path, "/04_PRSice-2/BPDSCZvsCONT-2018/"),
                                      gwas = "BPDSCZvsCONT-2018", seperator = " ",
-                                     output = paste0(path, "/05_figures/boxplot_PRSice-2_PRS_BPDSCZvsCONT-2018.pdf"))
+                                     output = paste0(path, "/07_figures/boxplot_PRSice-2_PRS_BPDSCZvsCONT-2018.pdf"))
 
 bmi_prsice <- EvaluatePRS(input = paste0(path, "/04_PRSice-2/BMI-2015/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_BMI-2015_PRSice-2_PRS.best"),
                           gwas = "BMI-2015", seperator = " ",
-                          output = paste0(path, "/05_figures/boxplot_PRSice-2_PRS_BMI-2015.pdf"))
+                          output = paste0(path, "/07_figures/boxplot_PRSice-2_PRS_BMI-2015.pdf"))
 
 cdg1_prsice <- EvaluatePRS(input = paste0(path, "/04_PRSice-2/CDG1-2013/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_CDG1-2013_PRSice-2_PRS.best"),
                            gwas = "CDG1-2013", seperator = " ",
-                           output = paste0(path, "/05_figures/boxplot_PRSice-2_PRS_CDG1-2013.pdf"))
+                           output = paste0(path, "/07_figures/boxplot_PRSice-2_PRS_CDG1-2013.pdf"))
 
 cdg2_prsice <- EvaluatePRS(input = paste0(path, "/04_PRSice-2/CDG2-2018/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_CDG2-2018_PRSice-2_PRS.best"),
                            gwas = "CDG2-2018", seperator = " ",
-                           output = paste0(path, "/05_figures/boxplot_PRSice-2_PRS_CDG2-2018.pdf"))
+                           output = paste0(path, "/07_figures/boxplot_PRSice-2_PRS_CDG2-2018.pdf"))
 
 ea_prsice <- EvaluatePRS(input = paste0(path, "/PRSice-2/EA-2018/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_EA-2018_PRSice-2_PRS.best"),
                          gwas = "EA-2018", seperator = " ",
-                         output = paste0(path, "/05_figures/boxplot_PRSice-2_PRS_EA-2018.pdf"))
+                         output = paste0(path, "/07_figures/boxplot_PRSice-2_PRS_EA-2018.pdf"))
 
 intelligence_prsice <- EvaluatePRS(input = paste0(path, "/PRSice-2/Intelligence-2018/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_Intelligence-2018_PRSice-2_PRS.best"),
                                    gwas = "Intelligence-2018", seperator = " ",
-                                   output = paste0(path, "/05_figures/boxplot_PRSice-2_PRS_Intelligence-2018.pdf"))
+                                   output = paste0(path, "/07_figures/boxplot_PRSice-2_PRS_Intelligence-2018.pdf"))
 
 mdd1_prsice <- EvaluatePRS(input = paste0(path, "/04_PRSice-2/MDD1-2012/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_MDD1-2012_PRSice-2_PRS.best"), 
                            gwas = "MDD1-2012", seperator = " ",

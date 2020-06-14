@@ -41,10 +41,10 @@ output_sumstats="${outpath_sumstats}/AD-2019.sumstats"
 awk 'NR==1 {$1=$1}; NR>1 {$6="chr"$2":"$3} 1' OFS="\t" ${sumstats} > ${output_sumstats}
 
 #################
-### ADHD-2017 ###
+### ADHD-2019 ###
 #################
-sumstats="${sum_stats_path}/ADHD-2017/adhd_jul2017"
-output_sumstats="${outpath_sumstats}/ADHD-2017.sumstats"
+sumstats="${sum_stats_path}/ADHD-2019/adhd_jul2017"
+output_sumstats="${outpath_sumstats}/ADHD-2019.sumstats"
 # Change all SNP IDs in the GWAS summary statistic file to following example format: chr:pos, e.g. chr10:10001753 & leave first line untouched
 awk 'NR==1 {$1=$1}; NR>1 {$2="chr"$1":"$3} 1' OFS="\t" ${sumstats} > ${output_sumstats}
 
@@ -73,18 +73,18 @@ output_sumstats="${outpath_sumstats}/ASD-2019.sumstats"
 awk 'NR==1 {$1=$1}; NR>1 {$2="chr"$1":"$3} 1' OFS="\t" ${sumstats} > ${output_sumstats}
 
 ##################
-### AUDIT-2018 ###
+### AUDIT-2019 ###
 ##################
-sumstats="${sum_stats_path}/AUDIT-2018/AUDIT_UKB_2018_AJP.txt"
-output_sumstats="${outpath_sumstats}/AUDIT-2018.sumstats"
+sumstats="${sum_stats_path}/AUDIT-2019/AUDIT_UKB_2018_AJP_with_positions.txt"
+output_sumstats="${outpath_sumstats}/AUDIT-2019.sumstats"
 # Remove comment lines and change all SNP IDs in the GWAS summary statistic file to following example format: chr:pos, e.g. chr10:10001753 & leave first line untouched
 awk 'NR==1 {$1=$1}; NR>1 {split($2,a,"_"); $2="chr"a[1]} 1' OFS="\t" ${sumstats} > ${output_sumstats}
 
 ################
-### BIP-2018 ###
+### BIP-2019 ###
 ################
-sumstats="${sum_stats_path}/BIP-2018/daner_PGC_BIP32b_mds7a_0416a"
-output_sumstats="${outpath_sumstats}/BIP-2018.sumstats"
+sumstats="${sum_stats_path}/BIP-2019/daner_PGC_BIP32b_mds7a_0416a"
+output_sumstats="${outpath_sumstats}/BIP-2019.sumstats"
 # Remove comment lines and change all SNP IDs in the GWAS summary statistic file to following example format: chr:pos, e.g. chr10:10001753 & leave first line untouched
 awk 'NR==1 {$1=$1}; NR>1 {$2="chr"$1":"$3} 1' OFS="\t" ${sumstats} > ${output_sumstats}
 
@@ -105,13 +105,37 @@ output_sumstats="${outpath_sumstats}/BIPSCZvsCONT-2018.sumstats"
 # Remove comment lines and change all SNP IDs in the GWAS summary statistic file to following example format: chr:pos, e.g. chr10:10001753 & leave first line untouched
 awk 'NR==1 {$1=$1}; NR>1 {$2="chr"$1":"$3} 1' OFS="\t" ${sumstats} > ${output_sumstats}
 
-################
-### BMI-2015 ###
-################
-sumstats="${sum_stats_path}/BMI-2015/ENGAGE1000G_BMI.txt"
-output_sumstats="${outpath_sumstats}/BMI-2015.sumstats"
+########################
+### BMI-2015 (ENGAGE) ###
+########################
+sumstats="${sum_stats_path}/BMI-2015_ENGAGE/ENGAGE1000G_BMI.txt"
+output_sumstats="${outpath_sumstats}/BMI-2015_ENGAGE.sumstats"
 # Remove comment lines and change all SNP IDs in the GWAS summary statistic file to following example format: chr:pos, e.g. chr10:10001753 & leave first line untouched
 awk 'NR==1 {$1=$1}; NR>1 {$1="chr"$2":"$3} 1' OFS="\t"  ${sumstats} > ${output_sumstats}
+
+########################
+### BMI-2015 (GIANT) ###
+########################
+sumstats="${sum_stats_path}/BMI-2015_GIANT/SNP_gwas_mc_merge_nogc_with_locations.tbl.uniq"
+output_sumstats="${outpath_sumstats}/BMI-2015_GIANT.sumstats"
+# Remove comment lines and change all SNP IDs in the GWAS summary statistic file to following example format: chr:pos, e.g. chr10:10001753 & leave first line untouched
+awk 'NR==1 {$1=$1}; NR>1 {$1="chr"$2":"$3} 1' OFS="\t"  ${sumstats} > ${output_sumstats}
+
+################
+### BMI-2018 ###
+################
+sumstats="${sum_stats_path}/BMI-2018/Meta-analysis_Locke_et_al+UKBiobank_2018_UPDATED.txt"
+output_sumstats="${outpath_sumstats}/BMI-2018.sumstats"
+# Remove comment lines and change all SNP IDs in the GWAS summary statistic file to following example format: chr:pos, e.g. chr10:10001753 & leave first line untouched
+awk 'NR==1 {$1=$1}; NR>1 {$3="chr"$1":"$2} 1' OFS="\t"  ${sumstats} > ${output_sumstats}
+
+################
+### BMI-2019 ###
+################
+sumstats="${sum_stats_path}/BMI-2019/Bmi.giant-ukbb.meta-analysis.combined.23May2018.HapMap2_only.txt"
+output_sumstats="${outpath_sumstats}/BMI-2019.sumstats"
+# Remove comment lines and change all SNP IDs in the GWAS summary statistic file to following example format: chr:pos, e.g. chr10:10001753 & leave first line untouched
+awk 'NR==1 {$1=$1}; NR>1 {$3="chr"$1":"$2} 1' OFS="\t"  ${sumstats} > ${output_sumstats}
 
 ################
 ### CAD-2017 ###

@@ -44,7 +44,7 @@ opts_chunk$set(echo = TRUE,
 
 # Introduction
 
-This document includes the quality control of the different microarray pre-processing steps, generated in the first R markdown script (*01_preprocessing.Rmd*), and a covariate evaluation analysis. The covariate evaluation is based on the methods and scripts used in the Common Minds Consortium (CMC: Fromer et al., Nature Neuroscience 2016) Paper. The covariate evaluation is necessary for the selection of covariates for the linear model used in the differential expression analysis. We will use the different generated RData files of the first script as input for all the neccessary quality control and plot generation procedures. For the calibrated data we will only use the probeset summarized data as we continue all following analyses with this dataset. The last step is done for all three annotation stages (gene, transcript, exon). Following steps will be performed: 
+This document includes the quality control of the different microarray pre-processing steps, generated in the first R markdown script (*01_preprocessing.Rmd*), and a covariate evaluation analysis. The covariate evaluation is based on the methods and scripts used in the Common Minds Consortium (CMC: Fromer et al., Nature Neuroscience 2016) publication. The covariate evaluation is necessary for the selection of covariates for the linear model used in the differential expression analysis. We will use the different generated RData files of the first script as input for all the neccessary quality control and plot generation procedures. For the calibrated data we will only use the probeset summarized data as we continue all following analyses with this dataset. The last step is done for all three annotation stages (gene, transcript, exon). Following steps will be performed: 
 
 1. Visual inspection of the phenotypes (barplots, violin/boxplots, correlation plots), ancestry dimensions and the surrogate eigenvalues 
 2. Quality control of raw data (chip scan date, boxplot, PCA plot, arrayQualityMetrics)
@@ -52,13 +52,14 @@ This document includes the quality control of the different microarray pre-proce
 4. Quality control of calibrated and batch corrected data (boxplot, PCA plot, arrayQualityMetrics)
 5. Quality control of calibrated, batch corrected and annotated data (boxplot, PCA plots, arrayQualityMetrics)
 6. Covariate evaluation
+7. Comparison (QC) of core and probeset based gene expression datasets
 
 We will also generate several .RData files for the different steps, as some of them include long processing times. All generated files and figures will be stored into an output folder (02_QC_and_cov_eval). 
 
+
 # Packages 
 
-Below you can find the list of packages that are required by the workflow. 
-
+Below you can find the list of packages required by the workflow. 
 ```{r}
 # add installed packages from home path to the library search path
 .libPaths("/home/icb/karolina.worf/R/x86_64-pc-linux-gnu-library/3.6/")
@@ -76,6 +77,9 @@ library(devtools)
 library(reshape2)
 library(limma)
 library(sva)
+library(variancePartition) # for correlation calculation
+library(tidyr)
+library(data.table)
 
 # Plotting and colour option packages
 library(ggplot2) # for (PCA) plots
@@ -95,13 +99,102 @@ library(pheatmap)
 Before we can start, we need to make sure that all necessary paths and folder names are saved. If the output folder does not exist yet, we will generate it using the systems (Red Hat Enterprise Linux operating system: Fedora 25) "mkdir" command.
 ```{r}
 # path to the resulting RData files from the preprocessing step
-rdata_path="/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_files"
+rdata_path = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_files"
 # path to store the output into
 outpath = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/02_QC_and_cov_eval"
 # generate ouput path if not existing already
 system(paste0("mkdir -p ", outpath))
 ```
 
+
+# Functions
+
+As we have to do several analysis multiple times, we will put these into functions to reduce the lines of code. 
+```{r, echo = F}
+#' Generate a PCA plot for a given covariate (phenotype)
+#'
+#' @param data      dataframe including PC1, PC2 and all covariates to color in the plot
+#' @param cov       covariate for which the plot should be generated
+#' @param pcol      define color for non-discrete plots
+#' @param discrete  boolean value (TRUE/FALSE), if data is discrete or not
+#' @param file      name of output file
+#' @return          the PCA plot
+GeneratePCA <- function(data, cov, pcol, discrete, file){
+  if (discrete == TRUE) {
+    g <- ggplot(data, aes(PC1, PC2)) +
+         geom_point(aes(col = get(cov))) +
+         labs(col = cov) +
+         xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+         ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
+         theme(plot.title = element_text(hjust = 0.5))+
+         coord_fixed(ratio = sd_ratio)
+  } else {
+    g <- ggplot(data, aes(PC1, PC2)) +         
+         geom_point(aes(col = get(cov))) +
+         labs(col = cov) +
+         xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
+         ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
+         theme(plot.title = element_text(hjust = 0.5))+
+         coord_fixed(ratio = sd_ratio) +
+         scale_color_manual(values = pcol)
+  }
+  ggsave(plot = g, filename = paste0(outpath, "/", file))
+  return(g)
+}
+
+#' Generate a heatmap for sample to sample distances of an expression dataset
+#'
+#' @param data      expression dataset
+#' @param name      dataset name to display on the heatmap title (e.g. "raw data")
+#' @param file      name of output file
+#' @return          the heatmap
+GenerateSampleToSampleHeatmap <- function(data, name, file){
+  # get distances
+  distances <- as.matrix(dist(t(Biobase::exprs(data)), method = "manhattan"))
+  diag(distances) <- NA
+  # get annotations and change order to CTL, SCZ, MDD, BPD
+  anno <- data.frame(Diagnosis = pData(data)$Diagnosis)
+  row.names(anno) <- row.names(pData(data))
+  anno$Diagnosis <- factor(anno$Diagnosis, levels = c("CTL", "SCZ", "MDD", "BPD"))
+  # get colors for annotation
+  ann_colors <- list(Diagnosis = c(CTL = rdbu[9], SCZ = rdbu[3], MDD = rdbu[4], BPD = rdbu[5]))
+  # generate heatmap
+  pheatmap(distances, col = hmcol,
+           show_rownames = TRUE, 
+           show_colnames = FALSE,
+           annotation_col = anno,
+           annotation_colors = ann_colors,
+           legend = TRUE,
+           treeheight_row = 0,
+           legend_breaks = c(min(distances, na.rm = TRUE),
+                             max(distances, na.rm = TRUE)),
+           legend_labels = (c("small distance", "large distance")),
+           main = paste0("Clustering sample-to-sample distances of ", name), 
+           filename = paste0(outpath, "/", file))
+  p <- pheatmap(distances, col = hmcol,
+           show_rownames = TRUE, 
+           show_colnames = FALSE,
+           annotation_col = anno,
+           annotation_colors = ann_colors,
+           legend = TRUE,
+           treeheight_row = 0,
+           legend_breaks = c(min(distances, na.rm = TRUE),
+                             max(distances, na.rm = TRUE)),
+           legend_labels = (c("small distance", "large distance")),
+           main = paste0("Clustering sample-to-sample distances of ", name))
+  return(p)
+}
+```
+
+# Set colors
+
+We will use the red-blue color palette for all figure generations and therefore save the colors into a variable for an easier usability. 
+```{r}
+# for PCA plots with continuous/numerical data
+hmcol <- rev(colorRampPalette(RColorBrewer::brewer.pal(11, "RdBu"))(200))
+# for all other plots
+rdbu <- brewer.pal(11, "RdBu")
+```
 
 # Evaluate phenotype data
 
@@ -153,6 +246,7 @@ ggplot(plot_data) +
   # change legend 
   theme(plot.title = element_text(hjust = 0.5), legend.position = c(0.14, 0.9), legend.background = element_rect(size = 0.5, linetype = "solid", colour = "black"), legend.title = element_blank(), legend.spacing.y = unit(2, "pt"), legend.spacing = unit(1,"cm")) 
 ggsave(paste0(outpath, "/1_barplot_sex.pdf"), width = 8, height = 6, units = "in")
+rm(plot_data)
 ```
 We can see, that we have more than threefold of males in healthy controls and schizophrenia patients and slightly more females with bipolar disorder and major depression disorder. 
 
@@ -175,6 +269,7 @@ ggplot(plot_data) +
   # change legend 
   theme(plot.title = element_text(hjust = 0.5), legend.position = c(0.89, 0.9), legend.background = element_rect(size = 0.5, linetype = "solid", colour = "black"), legend.title = element_blank(), legend.spacing.y = unit(2, "pt"), legend.spacing = unit(1,"cm")) 
 ggsave(paste0(outpath, "/1_barplot_diagnosis.pdf"), width = 8, height = 6, units = "in")
+rm(plot_data)
 ```
 We have almost as many healthy controls as schizophrenia patients. The number of bipolar disorder and major despression disorder patients is relatively small compared to the amount of schizophrenia patients. 
 
@@ -202,6 +297,7 @@ ggplot(plot_data) +
   # change legend 
   theme(plot.title = element_text(hjust = 0.5), legend.position = c(0.14, 0.9), legend.background = element_rect(size = 0.5, linetype = "solid", colour = "black"), legend.title = element_blank(), legend.spacing.y = unit(2, "pt"), legend.spacing = unit(1,"cm")) 
 ggsave(paste0(outpath, "/1_barplot_suicide.pdf"), width = 8, height = 6, units = "in")
+rm(plot_data)
 ```
 We can see, that most of the major depression disorder (MDD) patients were doing suicide, whereas only half of the schizophrenia and bipolar disorder patients were performing suicide. All healthy controls died on a natural cause.
 
@@ -227,6 +323,7 @@ ggplot(plot_data) +
   # change legend 
   theme(plot.title = element_text(hjust = 0.5), legend.position = c(0.14, 0.9), legend.background = element_rect(size = 0.5, linetype = "solid", colour = "black"), legend.title = element_blank(), legend.spacing.y = unit(2, "pt"), legend.spacing = unit(1,"cm")) 
 ggsave(paste0(outpath, "/1_barplot_type_of_death.pdf"), width = 8, height = 6, units = "in")
+rm(plot_data)
 ```
 
 ### Batch
@@ -250,6 +347,7 @@ ggplot(plot_data) +
   # change legend 
   theme(plot.title = element_text(hjust = 0.5), legend.position = c(0.14, 0.9), legend.background = element_rect(size = 0.5, linetype = "solid", colour = "black"), legend.title = element_blank(), legend.spacing.y = unit(2, "pt"), legend.spacing = unit(1,"cm")) 
 ggsave(paste0(outpath, "/1_barplot_batch.pdf"), width = 8, height = 6, units = "in")
+rm(plot_data)
 ```
 Most of the samples were measured in batch 1 and 2. Some also in batch A and a really small number in the batches 3 and 4. The samples in batch A only include schizophrenia patients and controls and the bipolar disorder patients are only included in batch 1 and 2.
 
@@ -277,6 +375,7 @@ ggplot(plot_data) +
   # change legend 
   theme(plot.title = element_text(hjust = 0.5), legend.position = c(0.5, 0.9), legend.background = element_rect(size = 0.5, linetype = "solid", colour = "black"), legend.title = element_blank(), legend.spacing.y = unit(2, "pt"), legend.spacing = unit(1,"cm")) 
 ggsave(paste0(outpath, "/1_barplot_ancestry.pdf"), width = 8, height = 6, units = "in")
+rm(plot_data)
 ```
 It is interesting, that all bipolar disorder and major depression disorder samples (only cases) have an unknown ancestry. Most of the samples are Ceucasian (CEU) and only a small amount is Chinese (CHB). Both types can be found in the control and case samples. Only one schizophrenia sample has no ancestry information and the unique CEU/CHB sample is also a schizophrenia case.
 
@@ -442,6 +541,7 @@ tod_combined <- rbind(nat, vio, nvio)
 # Histogram density plot
 ggplot(tod_combined, aes(x = Age, group = Type_of_Death, fill = Type_of_Death, colour = Type_of_Death)) + theme(plot.title = element_text(hjust = 0.5)) + labs(x = "Age", y = "Density") + stat_bin(colour = "gray", breaks = seq(10, 90, by = 10), alpha = 0.5, position = "identity", aes(y = ..density..)) + geom_density(fill = NA, size = 1.5) + theme_classic(base_size = 20) + scale_x_continuous(expand = c(0, 0), limits = c(0, 100)) + scale_y_continuous(expand = c(0, 0)) + scale_color_manual(values = brewer.pal(11, "RdBu")[c(9, 4, 3)]) + scale_fill_manual(values = brewer.pal(11, "RdBu")[c(9, 4, 3)]) 
 ggsave(paste0(outpath, "/1_density_plot_age_vs_type_of_death.pdf"), width = 8, height = 6, units = "in")
+rm(nat, vio, nvio, tod_combined)
 ```
 
 ### Age and suicide correlation
@@ -459,13 +559,43 @@ sui_combined <- rbind(sui, nsui)
 # Histogram density plot
 ggplot(sui_combined, aes(x = Age, group = Suicide, fill = Suicide, colour = Suicide)) + theme(plot.title = element_text(hjust = 0.5)) + labs(x = "Age", y = "Density") + stat_bin(colour = "gray", breaks = seq(10, 90, by = 10), alpha = 0.5, position = "identity", aes(y = ..density..)) + geom_density(fill = NA, size = 1.5) + theme_classic(base_size = 20) + scale_x_continuous(expand = c(0, 0), limits = c(0, 100)) + scale_y_continuous(expand = c(0, 0)) + scale_color_manual(values = brewer.pal(11, "RdBu")[c(9, 3)]) + scale_fill_manual(values = brewer.pal(11, "RdBu")[c(9, 3)])
 ggsave(paste0(outpath, "/1_density_plot_age_vs_suicide.pdf"), width = 8, height = 6, units = "in")
+rm(sui, nsui, sui_combined)
 ```
 
 ### Correlation plot of all covariates
 
+As, we also want to plot the first three PCs from the gene, transcript and exon expression, we need to load the datasets and merge them to the phenotype data. 
+```{r, echo = F}
+# load gene-level PCA's
+load(paste0(rdata_path, "/11_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated_for_PCA_plots.RData"))
+# add PC1 to PC5 to pheno
+data_gene <- data_gene[, c("PC1", "PC2", "PC3")]
+colnames(data_gene) <- c("Gene PC1", "Gene PC2", "Gene PC3")
+pheno <- merge(pheno, data_gene, by = "row.names")
+rownames(pheno) <- pheno$Row.names
+pheno$Row.names <- NULL
+# load transcript-level PCA's
+load(paste0(rdata_path, "/11_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_transcript_summaries_annotated_for_PCA_plots.RData"))
+# add PC1 to PC5 to pheno
+data_transcript <- data_transcript[, c("PC1", "PC2", "PC3")]
+colnames(data_transcript) <- c("Transcript PC1", "Transcript PC2", "Transcript PC3")
+pheno <- merge(pheno, data_transcript, by = "row.names")
+rownames(pheno) <- pheno$Row.names
+pheno$Row.names <- NULL
+# load exon-level PCA's
+load(paste0(rdata_path, "/11_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_exon_summaries_annotated_for_PCA_plots.RData"))
+# add PC1 to PC5 to pheno
+data_exon <- data_exon[, c("PC1", "PC2", "PC3")]
+colnames(data_exon) <- c("Exon PC1", "Exon PC2", "Exon PC3")
+pheno <- merge(pheno, data_exon, by = "row.names")
+rownames(pheno) <- pheno$Row.names
+pheno$Row.names <- NULL
+```
+
+First, we generate a corrplot with corr.test, but as we have to transform the data it is not a 100% correct. 
 ```{r, echo = F}
 # remove identifier columns (MHRIID, Filenamne, File, Batch and ShortName)
-pheno_new <- pheno[, c("Age", "Sex", "Dx", "pH", "PMI", "RIN", "RIN2", "Batch", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4", "SV1")]
+pheno_new <- pheno[, c("Age", "Sex", "Dx", "pH", "PMI", "RIN", "RIN2", "Batch", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4", "SV1", "Gene PC1", "Gene PC2", "Gene PC3", "Transcript PC1", "Transcript PC2", "Transcript PC3", "Exon PC1", "Exon PC2", "Exon PC3")]
 pheno_new[, c("Sex", "Dx", "Suicide")] <- lapply(pheno_new[, c("Sex", "Dx", "Suicide")], factor)
 # relevel disease (Dx) to control (CTL)
 pheno_new$Dx <- factor(pheno_new$Dx, levels = c("CTL", "CASE"))
@@ -481,23 +611,38 @@ pheno_new[pheno_new$Type_of_Death == "Violent", "Type_of_Death"] <- "3"
 pheno_new$Type_of_Death <- as.numeric(pheno_new$Type_of_Death)
 # save categorical and continuous variable names
 classes <- sapply(pheno_new, class) # get type of columns
-categorical_cov = names(classes[classes == "factor"])
-continuous_cov = names(classes[classes == "numeric"])
+categorical_cov <- names(classes[classes == "factor"])
+continuous_cov <- names(classes[classes == "numeric"])
 # generate contrast for design matrix
 contrast <- lapply(categorical_cov, function(x) {fac = pheno_new[, x]; return(contrasts(fac))})
 names(contrast) <- categorical_cov
 # generate design matrix
-design <- model.matrix(~ . + Age + Sex + Dx + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pheno_new, contrasts.arg = contrast)
-design_cor <- corr.test(design[, -1], use='pairwise.complete.obs', method = "pearson", adjust = "none")
-colnames(design_cor$r) <- c("Age", "Sex", "Diagnosis", "pH", "PMI", "RIN", "RIN2", "Batch", "Suicide", "Type of Death", "PC1", "PC2", "PC3", "PC4", "SV1")
-rownames(design_cor$r) <- c("Age", "Sex", "Diagnosis", "pH", "PMI", "RIN", "RIN2", "Batch", "Suicide", "Type of Death", "PC1", "PC2", "PC3", "PC4", "SV1")
-corrplot(design_cor$r, method = "circle", col = brewer.pal(11, "RdBu"), tl.col = "black")
+design <- model.matrix(~ . + Age + Sex + Dx + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1 + `Gene PC1` + `Gene PC2` + `Gene PC3` + `Transcript PC1` + `Transcript PC2` + `Transcript PC3` + `Exon PC1` + `Exon PC2` + `Exon PC3`, pheno_new, contrasts.arg = contrast)
+design_cor <- corr.test(design[, -1], use = 'pairwise.complete.obs', method = "pearson", adjust = "none")
+colnames(design_cor$r) <- c("Age", "Sex", "Diagnosis", "pH", "PMI", "RIN", "RIN2", "Batch", "Suicide", "Type of Death", "Ancestry Dim 1", "Ancestry Dim 2", "Ancestry Dim 3", "Ancestry Dim 4", "SV1", "Gene PC1", "Gene PC2", "Gene PC3", "Transcript PC1", "Transcript PC2", "Transcript PC3", "Exon PC1", "Exon PC2", "Exon PC3")
+rownames(design_cor$r) <- c("Age", "Sex", "Diagnosis", "pH", "PMI", "RIN", "RIN2", "Batch", "Suicide", "Type of Death", "Ancestry Dim 1", "Ancestry Dim 2", "Ancestry Dim 3", "Ancestry Dim 4", "SV1", "Gene PC1", "Gene PC2", "Gene PC3", "Transcript PC1", "Transcript PC2", "Transcript PC3", "Exon PC1", "Exon PC2", "Exon PC3")
+corrplot(design_cor$r, method = "circle", type = "upper", col = colorRampPalette(rev(brewer.pal(n = 11, name = "RdBu")))(100), tl.col = "black", p.mat = design_cor$p, sig.level = 0.05, insig = "label_sig")
 # save plot
 pdf(paste0(outpath, "/1_corrplot_all_covariates.pdf"), width = 6, height = 6)
-corrplot(design_cor$r, method = "circle", col = brewer.pal(11, "RdBu"), tl.col = "black")
+corrplot(design_cor$r, method = "circle", col = colorRampPalette(rev(brewer.pal(n = 11, name = "RdBu")))(100), tl.col = "black")
 dev.off()
+rm(classes, categorical_cov, contrast, design, design_cor)
 ```
 
+Generate corrplot with canCorPairs, which uses a Canonical Correlation Analysis (CCA) assessing the degree to which two vectors co-vary and contain the same information. Here, the variables can be continuous or categorical and they can also be given in a matrix. The mtehod uses CCA to compute the correlation between the variables and returns a pariwrise correlation matrix. Note that CCA returns correlation given from [0, 1] instead of [-1, 1], meaning that we do no tknow if it is/was a positive or negative correlation between the vectors/values.
+```{r}
+model <- ~ Age + Sex + pH + PMI + RIN + RIN2 + Dx + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1  + `Gene PC1` + `Gene PC2` + `Gene PC3` + `Transcript PC1` + `Transcript PC2` + `Transcript PC3` + `Exon PC1` + `Exon PC2` + `Exon PC3`
+corr <- canCorPairs(model, pheno_new)
+row.names(corr) <- c("Age", "Sex", "pH", "PMI", "RIN", "RIN2", "Diagnosis", "Suicide", "Type of Death", "Ancestry Dim 1", "Ancestry Dim 2", "Ancestry Dim 3", "Ancestry Dim 4", "Surrogate Variable 1", "Gene Expr PC1", "Gene Expr PC2", "Gene Expr PC3", "Transcript Expr PC1", "Transcript Expr PC2", "Transcript Expr PC3", "Exon Expr PC1", "Exon Expr PC2", "Exon Expr PC3")
+colnames(corr) <- c("Age", "Sex", "pH", "PMI", "RIN", "RIN2", "Diagnosis", "Suicide", "Type of Death", "Ancestry Dim 1", "Ancestry Dim 2", "Ancestry Dim 3", "Ancestry Dim 4", "Surrogate Variable 1","Gene Expr PC1", "Gene Expr PC2", "Gene Expr PC3", "Transcript Expr PC1", "Transcript Expr PC2", "Transcript Expr PC3", "Exon Expr PC1", "Exon Expr PC2", "Exon Expr PC3")
+#plot_corrMatrix(corr, col = colorRampPalette(col2)(200))
+corrplot(corr, method = "color", type = "upper", tl.col = "black", cl.lim = c(0, 1), is.corr = F, col = colorRampPalette(rev(brewer.pal(n = 9, name = "RdBu")))(100))
+# save plot
+pdf(paste0(outpath, "/1_canCorPairs_corrplot_all_covariates.pdf"), width = 6, height = 6)
+corrplot(corr, method = "color", type = "upper", tl.col = "black", cl.lim = c(0, 1), is.corr = F, col = colorRampPalette(rev(brewer.pal(n = 9, name = "RdBu")))(100))
+dev.off()
+rm(pheno_new, model, corr)
+```
 
 ## Ancestry dimension plots
 
@@ -523,6 +668,7 @@ for(i in 1:p$nrow) {
 }
 p
 ggsave(paste0(outpath, "/1_mds_plot.pdf"), width = 8, height = 6, units = "in")
+rm(pheno_new, p)
 ```
 
 We can not find any outliers in the figure above, so we will not remove any further samples from the dataset.
@@ -531,7 +677,7 @@ We can not find any outliers in the figure above, so we will not remove any furt
 
 To find out, which of the 10 mds C-values have an impact on the samples and should be included as covariates in our model, we first need to plot (scree plot) their eigenvalues.  
 ```{r, echo = F}
-mds_eigenval <- read.csv2("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/dean.eigenval", stringsAsFactors = F)
+mds_eigenval <- read.csv2("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/dean.eigenval", header = FALSE, stringsAsFactors = F)
 mds_eigenval <- apply(mds_eigenval, 1, function(x) as.numeric(x))
 plot(mds_eigenval, type = "p", xlab = "Ancestry dimension number", ylab = "Eigenvalue", col = "black", pch = 19, ylim = c(1.0, 1.6), yaxt = "n", xaxt = "n")
 axis(2, las = 2, tck=-.05, at = c(1.0, 1.2, 1.4, 1.6), lwd = 0, lwd.ticks = 1)
@@ -544,6 +690,7 @@ axis(2, las = 2, tck=-.05, at = c(1.0, 1.2, 1.4, 1.6), lwd = 0, lwd.ticks = 1)
 axis(1, las = 1, tck=-.05, at = c(1, 3, 5, 7, 9, 11, 13, 15, 17, 19), lwd = 0, lwd.ticks = 1)
 abline(v = 4.5, col = brewer.pal(11, "RdBu")[2], lty = c(2), lwd = c(2))
 dev.off()
+rm(mds_eigenval)
 ```
 In the plot, we can see, that the biggest differences are between C1, C2, C3 and C4. After C4 the eigenvalues differ hardly, so we decided to only take C1 to C4 as covariates into account. 
 
@@ -626,7 +773,6 @@ ggplot(pheno, aes(x = C3, y = C4, shape = Ancestry, colour = Dx)) +
   scale_color_manual(values = brewer.pal(11, "RdBu")[c(9, 3)]) +
   labs(color = 'Diagnosis')
 ggsave(paste0(outpath, "/1_ancestry_dimension_plot_c3_c4.pdf"), width = 10, height = 6, units = "in")
-rm(contrast, design, design_cor, nat, nsui, nvio, p, pheno_new, plot_data, sui, sui_combined, tod_combined, vio, i, j, mds_eigenval, categorical_cov, classes, continuous_cov)
 ```
 
 
@@ -720,6 +866,7 @@ table(three)
 four <- raw_data[, c(raw_data@phenoData@data$Batch == 4)]
 four <- unlist(lapply(four@protocolData@data$dates, function(x) strsplit(as.character(x), "T")[[1]][1]))
 table(four)
+rm(a, one, two, three, four)
 ```
 
 | Dates | 1 | 2 | 3 | 4 | A |
@@ -748,12 +895,13 @@ table(four)
 
 Now, we will represent the probe intensities in a boxplot graph, where each box corresponds to exactly one microarray sample. The boxplot function from the oligo package performs a log2-transformation by default, so we can use the boxplot function without any previous raw data transformation. The logarithmic scale simplifies the visualization of the data.
 ```{r, echo = F}
+# color for overall expression boxplots
+boxplot_colors <- c(replicate(length(pheno[pheno$File == "9", "File"]), "#4393C3"), replicate(length(pheno[pheno$File == "a", "File"]), "#F4A582"), replicate(length(pheno[pheno$File == "M", "File"]), "#D6604D"))
 # boxplot of raw_data
-colors <- c(replicate(length(pheno[pheno$File == "9", "File"]), "#D6604D"), replicate(length(pheno[pheno$File == "a", "File"]), "#FEE090"), replicate(length(pheno[pheno$File == "M", "File"]), "#4393C3"))
 pdf(paste0(outpath, "/2_boxplot_raw_data_log2_intensity.pdf"), width = 15)
-boxplot(raw_data, target = "probeset", ylab = "log2 intensity", xlab = "", las = 2, col = colors, main = "Boxplot of log2-intensities (raw data)")
+boxplot(raw_data, target = "probeset", ylab = "log2 intensity", xlab = "", las = 2, col = boxplot_colors, main = "Boxplot of log2-intensities (raw data)")
 dev.off()
-boxplot(raw_data, target = "probeset", ylab = "log2 intensity", xlab = "", las = 2, col = colors, main = "Boxplot of log2-intensities (raw data)")
+boxplot(raw_data, target = "probeset", ylab = "log2 intensity", xlab = "", las = 2, col = boxplot_colors, main = "Boxplot of log2-intensities (raw data)")
 ```
 Here, we can see that the density distributions of the individual samples are quite different, especially between the samples coming from the first cohort measured in 2009 (purple) compared to the second cohort measured in 2014 (pink and orange/yellow). That is the reason, why we performed the RMA background correction, normalization and summarization step in the preprocessing pipeline. The boxplot for the normalized data will be shown in the next section. 
 
@@ -761,209 +909,89 @@ To also check the data on original intensity scale, we just need to set the tran
 ```{r, echo = F}
 # with original intensities
 pdf(paste0(outpath, "/2_boxplot_raw_data_original_intensity.pdf"), width = 15)
-boxplot(raw_data, target = "probeset", transfo = identity, ylab = "Intensity", xlab = "", las = 2, col = colors, main = "Boxplot of original intensities for the raw data")
+boxplot(raw_data, target = "probeset", transfo = identity, ylab = "Intensity", xlab = "", las = 2, col = boxplot_colors, main = "Boxplot of original intensities for the raw data")
 dev.off()
-boxplot(raw_data, target = "probeset", transfo = identity, ylab = "Intensity", xlab = "", las = 2, col = colors, main = "Boxplot of original intensities for the raw data")
+boxplot(raw_data, target = "probeset", transfo = identity, ylab = "Intensity", xlab = "", las = 2, col = boxplot_colors, main = "Boxplot of original intensities for the raw data")
 ```
 You can see, that the plot using original intensities shows bigger differences than the plot using log2 transformed intensities and is making it more difficult to interpret the plot.
 
 ## PCA Plot
 
 Before we can generate the different PCA plots, we need to calculate the log2 intensities of the raw data expression set as well as the first two principal components. 
-```{r, echo = F, eval = F}
+```{r, echo = F}
 exp_raw <- log2(exprs(raw_data))	
 pca_raw <- prcomp(t(exp_raw), scale = FALSE)
 percent_var <- round(100 * pca_raw$sdev^2 / sum(pca_raw$sdev ^ 2), 1)
 sd_ratio <- sqrt(percent_var[2] / percent_var[1])
-data_raw <- data.frame(PC1 = pca_raw$x[,1], PC2 = pca_raw$x[,2], Diagnosis = pheno$Dx, Age = pheno$Age, pH = pheno$pH , File = pheno$File, Sex = pheno$Sex, Batch = pheno$Batch, MHRI = pheno$MHRIID, PMI = pheno$PMI, Suicide = pheno$Suicide, RIN = pheno$RIN, ShortName = pheno$ShortName, Ancestry = pheno$Ancestry, ToD = pheno$Type_of_Death)
+data_raw <- data.frame(PC1 = pca_raw$x[, 1], PC2 = pca_raw$x[, 2], PC3 = pca_raw$x[, 3], PC4 = pca_raw$x[, 4], PC5 = pca_raw$x[, 5], PC6 = pca_raw$x[, 6], PC7 = pca_raw$x[, 7], PC8 = pca_raw$x[, 8], PC9 = pca_raw$x[, 9], PC10 = pca_raw$x[, 10], Age = pheno$Age, pH = pheno$pH, PMI = pheno$PMI, RIN = pheno$RIN, RIN2 = pheno$RIN2, C1 = pheno$C1, C2 = pheno$C2, C3 = pheno$C3, C4 = pheno$C4, Diagnosis = pheno$Diagnosis, Dx = pheno$Dx, File = pheno$File, Sex = pheno$Sex, Batches = pheno$Batch, Suicide = pheno$Suicide, ShortName = pheno$ShortName, Ancestry = pheno$Ancestry, ToD = pheno$Type_of_Death)
 save(percent_var, sd_ratio, data_raw, file = paste0(rdata_path, "/8_affymetrix_exon_microarray_raw_data_for_PCA_plots.RData"))
 ```
 
 Now, we can generate the PCA plots coloring the different covariates of the phenotype dataset. 
-```{r, echo = F, fig.height = 10, fig.width = 10, eval = F}
-# function to generate a PCA plot for a given covariate/phenotype
-GeneratePCA <- function(data, cov){
-  g <- ggplot(data, aes(PC1, PC2)) +
-       geom_point(aes(color = Age)) +
-       ggtitle("PCA plot of the raw data") +
-       xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-       ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-       theme(plot.title = element_text(hjust = 0.5))+
-       coord_fixed(ratio = sd_ratio) +
-       scale_fill_viridis()
-  ggsave(plot = g, filename = paste0(outpath, "/2_pca_raw_data_", cov, "_colored.pdf"))
-}
-
-GeneratePCA(data_raw, cov = "Age")
-
-# PCA only colouring Age
-g1 <- ggplot(data_raw, aes(PC1, PC2)) +
-  geom_point(aes(color = Age)) +
-  ggtitle("PCA plot of the raw data") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sd_ratio) +
-  scale_fill_viridis()
-ggsave(plot = g1, filename = paste0(outpath, "/2_pca_raw_data_age_colored.pdf"))
-# PCA only colouring Sex
-g2 <- ggplot(data_raw, aes(PC1, PC2)) +
-  geom_point(aes(colour = Sex)) +
-  ggtitle("PCA plot of the raw data") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sdRatio) +
-  scale_color_manual(values = c(col[2], col[5]))
-ggsave(plot = g2, filename = paste0(outpath, "/2_pca_raw_data_sex_colored.pdf"))
-# PCA only colouring PMI
-g3 <- ggplot(data_raw, aes(PC1, PC2)) +
-  geom_point(aes(color = PMI)) +
-  ggtitle("PCA plot of the raw data") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sdRatio) +
-  scale_fill_viridis()
-ggsave(plot = g3, filename = paste0(outpath, "/2_pca_raw_data_pmi_colored.pdf"))
+```{r, echo = F, fig.height = 10, fig.width = 10}
+# PCA plot colouring Age
+pca_age <- GeneratePCA(data_raw, cov = "Age", pcol = NA, discrete = TRUE, file = "2_pca_raw_data_Age_colored.pdf")
 # PCA only colouring pH
-g4 <- ggplot(data_raw, aes(PC1, PC2)) +
-  geom_point(aes(color = pH)) +
-  ggtitle("PCA plot of the raw data") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sdRatio)+
-  scale_fill_viridis()
-ggsave(plot = g4, filename = paste0(outpath, "/2_pca_raw_data_ph_colored.pdf"))
+pca_ph <- GeneratePCA(data_raw, cov = "pH", pcol = NA, discrete = TRUE, file = "2_pca_raw_data_pH_colored.pdf")
+# PCA only colouring PMI
+pca_pmi <- GeneratePCA(data_raw, cov = "PMI", pcol = NA, discrete = TRUE, file = "2_pca_raw_data_PMI_colored.pdf")
 # PCA only colouring RIN
-g5 <- ggplot(data_raw, aes(PC1, PC2)) +
-  geom_point(aes(color = RIN)) +
-  ggtitle("PCA plot of the raw data") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sdRatio) +
-  scale_fill_viridis()
-ggsave(plot = g5, filename = paste0(outpath, "/2_pca_raw_data_rin_colored.pdf"))
+pca_rin <- GeneratePCA(data_raw, cov = "RIN", pcol = NA, discrete = TRUE, file = "2_pca_raw_data_RIN_colored.pdf")
+# PCA only colouring RIN2
+pca_rin2 <- GeneratePCA(data_raw, cov = "RIN2", pcol = NA, discrete = TRUE, file = "2_pca_raw_data_RIN2_colored.pdf")
+# PCA only colouring C1-C4 of genetic ancestry
+pca_c1 <- GeneratePCA(data_raw, cov = "C1", pcol = NA, discrete = TRUE, file = "2_pca_raw_data_C1_colored.pdf")
+pca_c2 <- GeneratePCA(data_raw, cov = "C2", pcol = NA, discrete = TRUE, file = "2_pca_raw_data_C2_colored.pdf")
+pca_c3 <- GeneratePCA(data_raw, cov = "C3", pcol = NA, discrete = TRUE, file = "2_pca_raw_data_C3_colored.pdf")
+pca_c4 <- GeneratePCA(data_raw, cov = "C4", pcol = NA, discrete = TRUE, file = "2_pca_raw_data_C4_colored.pdf")
+# PCA plot colouring Sex
+pca_sex <- GeneratePCA(data_raw, cov = "Sex", pcol = brewer.pal(11, "RdBu")[c(3, 9)], discrete = FALSE, file = "2_pca_raw_data_Sex_colored.pdf")
 # PCA only colouring Suicide
-g6 <- ggplot(data_raw, aes(PC1, PC2)) +
-  geom_point(aes(color = Suicide)) +
-  ggtitle("PCA plot of the raw data") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sdRatio) +
-  scale_color_manual(values = c(col[2], col[5]))
-ggsave(plot = g6, filename = paste0(outpath, "/2_pca_raw_data_suicide_colored.pdf"))
+pca_suicide <- GeneratePCA(data_raw, cov = "Suicide", pcol = brewer.pal(11, "RdBu")[c(9, 3)], discrete = FALSE, file = "2_pca_raw_data_Suicide_colored.pdf")
 # PCA only colouring Ancestry
-g7 <- ggplot(data_raw, aes(PC1, PC2)) +
-  geom_point(aes(color = Ancestry)) +
-  ggtitle("PCA plot of the raw data") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sdRatio) +
-  scale_color_manual(values = c(col[1], col[2], col[3], col[4]))
-ggsave(plot = g7, filename = paste0(outpath, "/2_pca_raw_data_ancestry_colored.pdf"))
+# here, we need to first change the undefined Ancestry values to NA
+data_raw$Ancestry <- as.character(data_raw$Ancestry)
+data_raw[data_raw$Ancestry == "", "Ancestry"] <- "NA"
+data_raw$Ancestry <- as.factor(data_raw$Ancestry)
+pca_ancestry <- GeneratePCA(data_raw, cov = "Ancestry", pcol = brewer.pal(11, "RdBu")[c(10, 8, 4, 2)], discrete = FALSE, file = "2_pca_raw_data_Ancestry_colored.pdf")
 # PCA only colouring Diagnosis
-g8 <- ggplot(data_raw, aes(PC1, PC2)) +
-  geom_point(aes(color = Diagnosis)) +
-  ggtitle("PCA plot of the raw data") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sdRatio) +
-  scale_color_manual(values = c(col[1], col[2], col[3], col[4]))
-ggsave(plot = g8, filename = paste0(outpath, "/2_pca_raw_data_diagnosis_colored.pdf"))
-# PCA only colouring File
-g9 <- ggplot(data_raw, aes(PC1, PC2)) +
-  geom_point(aes(color = File)) +
-  ggtitle("PCA plot of the raw data") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sdRatio) +
-  scale_color_manual(values = c(col[1], col[2], col[3]))
-ggsave(plot = g9, filename = paste0(outpath, "/2_pca_raw_data_file_colored.pdf"))
-# PCA only colouring Batches
-g10 <- ggplot(data_raw, aes(PC1, PC2)) +
-  geom_point(aes(color = Batch)) +
-  ggtitle("PCA plot of the raw data") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sdRatio) +
-  scale_color_manual(values = c(col[1], col[2], col[3], col[4], col[5]))
-ggsave(plot = g10, filename = paste0(outpath, "/2_pca_raw_data_batch_colored.pdf"))
-# PCA only colouring Type of Death
-g11 <- ggplot(data_raw, aes(PC1, PC2)) +
-  geom_point(aes(color = Type_of_Death)) +
-  ggtitle("PCA plot of the raw data") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sdRatio) +
-  scale_color_manual(values = c(col[1], col[2], col[3], col[4], col[5]))
-ggsave(plot = g11, filename = paste0(outpath, "/2_pca_raw_data_type_of_death_colored.pdf"))
+pca_dx <- GeneratePCA(data_raw, cov = "Dx", pcol = brewer.pal(11, "RdBu")[c(3, 9)], discrete = FALSE, file = "2_pca_raw_data_Dx_colored.pdf")
 # PCA only colouring Dx (case/control)
-g12 <- ggplot(data_raw, aes(PC1, PC2)) +
-  geom_point(aes(color = Dx)) +
-  ggtitle("PCA plot of the raw data") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sdRatio) +
-  scale_color_manual(values = c(col[1], col[2], col[3], col[4], col[5]))
-ggsave(plot = g12, filename = paste0(outpath, "/2_pca_raw_data_dx_colored.pdf"))
-ggarrange(g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, ncol = 3, nrow = 4)
+pca_diagnosis <- GeneratePCA(data_raw, cov = "Diagnosis", pcol = brewer.pal(11, "RdBu")[c(5, 9, 4, 3)], discrete = FALSE, file = "2_pca_raw_data_Diagnosis_colored.pdf")
+# PCA only colouring File
+pca_file <- GeneratePCA(data_raw, cov = "File", pcol = brewer.pal(11, "RdBu")[c(1, 3, 10)], discrete = FALSE, file = "2_pca_raw_data_File_colored.pdf")
+# PCA only colouring Batches
+pca_batches <- GeneratePCA(data_raw, cov = "Batches", pcol = brewer.pal(11, "RdBu")[c(10, 8, 4, 3, 1)], discrete = FALSE, file = "2_pca_raw_data_Batches_colored.pdf")
+# PCA only colouring Type of Death
+# here, we need to first change the undefined ToD values to NA
+data_raw$ToD <- as.character(data_raw$ToD)
+data_raw[is.na(data_raw$ToD), "ToD"] <- "NA"
+data_raw$ToD <- as.factor(data_raw$ToD)
+pca_tod <- GeneratePCA(data_raw, cov = "ToD", pcol = brewer.pal(11, "RdBu")[c(10, 8, 4, 2)], discrete = FALSE, file = "2_pca_raw_data_Type_of_Death_colored.pdf")
+# plot all PCAs together (without colouring File as we cover it using Batch)
+ggarrange(pca_age, pca_ph, pca_pmi, pca_rin, pca_c1, pca_c2, pca_c3, pca_c4, pca_ancestry, pca_diagnosis, pca_sex, pca_file, pca_batches, pca_suicide, pca_tod, ncol = 3, nrow = 5)
 ggsave(filename = paste0(outpath, "/2_pca_raw_data_all_covariates.pdf"))
+rm(pca_age, pca_ph, pca_pmi, pca_rin, pca_rin2, pca_c1, pca_c2, pca_c3, pca_c4, pca_sex, pca_suicide, pca_ancestry, pca_dx, pca_diagnosis, pca_file, pca_batches, pca_tod)
 ```
 
 ## Heatmap of sample to sample distances
 
-```{r, echo = F, include = F, eval = F}
-# get distances
-dists <- as.matrix(dist(t(Biobase::exprs(raw_data)), method = "manhattan"))
-rownames(dists) <- row.names(pData(raw_data))
-hmcol <- rev(colorRampPalette(RColorBrewer::brewer.pal(11, "RdBu"))(255))
-colnames(dists) <- NULL
-diag(dists) <- NA
-# get annotations
-annotation_for_heatmap <- data.frame(Phenotype = phenotype_names, Disease = disease_names)
-ann_colors <- list(Phenotype = c(non_infl. = "chartreuse4", infl. = "burlywood3"), Disease = c(CD = "blue4", UC = "cadetblue2"))
-# generate heatmap
-pheatmap(dists, col = hmcol,
-          annotation_row = annotation_for_heatmap,
-          annotation_colors = ann_colors,
-          legend = TRUE,
-          treeheight_row = 0,
-          legend_breaks = c(min(dists, na.rm = TRUE),
-                            max(dists, na.rm = TRUE)),
-          legend_labels = (c("small distance", "large distance")),
-          main = "Clustering heatmap for the calibrated samples")
-pheatmap(dists, col = hmcol,
-         annotation_row = annotation_for_heatmap,
-         annotation_colors = ann_colors,
-         legend = TRUE,
-         treeheight_row = 0,
-         legend_breaks = c(min(dists, na.rm = TRUE),
-                           max(dists, na.rm = TRUE)),
-         legend_labels = (c("small distance", "large distance")),
-         main = "Clustering heatmap for the calibrated samples", 
-         filename = paste0(outpath, "2_pheatmap_raw_data_sample_to_sample_distances.pdf"))
+```{r, echo = F}
+GenerateSampleToSampleHeatmap(data = raw_data, name = "raw_data", file = "2_pheatmap_raw_data_sample_to_sample_distances.pdf")
+dev.off()
+rm(raw_data, pheno)
 ```
 
 ## arrayQualityMetrics
 
-One easy way to do quality control of Microarray data is the use of the package arrayQualityMetrics. This package performs different quality control metrics and produces a html file including all generated plots and suggested samples to remove from the dataset. We will store the html file and check its output separately. 
-
+One easy way to do quality control of Microarray data is the use of the package arrayQualityMetrics. This package performs different quality control metrics and produces a html file including all generated plots and suggested samples to remove from the dataset. We will store the html file and check its output separately. **TODO:** install arrayQualityMetrics for R 3.6.1, jpeg package can not be installed due to dependencies of packages and tools not installed in Fedora 25 (the servers) and without sudo rights almost impossible to get running...
 ```{r, eval = F, include = F}
 rownames(pheno) <- pheno$ShortName
 phenoData <- new("AnnotatedDataFrame", data = pheno)
 exprs <- exprs(raw_data)
 exampleSet <- ExpressionSet(assayData = exprs, phenoData = phenoData)
 arrayQualityMetrics(expressionset = exampleSet, outdir = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/raw_data/Report_before_rma", force = TRUE, do.logtransform = TRUE, intgroup = c("Dx"))
+rm(pheno, exprs, exampleSet, raw_data)
 ```
 
 
@@ -980,152 +1008,86 @@ pheno <- pData(probeset_summaries)
 ## Boxplot
 
 ```{r, echo = F}
-# with log2 intensities
-colors <- c(replicate(length(pheno[pheno$File == "9", "File"]), "#D6604D"), replicate(length(pheno[pheno$File == "a", "File"]), "#FEE090"), replicate(length(pheno[pheno$File == "M", "File"]), "#4393C3"))
-pdf(paste0(outpath, "/3_boxplot_rma_normalized_data_log2_intensity.pdf"), width = 15)
-boxplot(probeset_summaries, target = "full", ylab = "log2 intensity", xlab = "", las = 2, col = colors, main = "Boxplot of log2-intensities after RMA calibration")
+# for RMA normalized data
+pdf(paste0(outpath, "/3_boxplot_rma_probeset_normalized_data_log2_intensity.pdf"), width = 15)
+boxplot(probeset_summaries, target = "probeset", transfo = identity, ylab = "log2 intensity", xlab = "", las = 2, col = boxplot_colors, main = "Boxplot of log2-intensities after RMA calibration")
 dev.off()
-boxplot(probeset_summaries, target = "full", ylab = "log2 intensity", xlab = "", las = 2, col = colors, main = "Boxplot of log2-intensities after RMA calibration")
+boxplot(probeset_summaries, target = "probeset", transfo = identity, ylab = "log2 intensity", xlab = "", las = 2, col = boxplot_colors, main = "Boxplot of log2-intensities after RMA calibration")
 ```
 
 ## PCA Plots
 
 Here, we need to get the expression (NOT log 2 transformed as for the raw dataset) of the normalized data expression set and calculate the first two principal components. 
-```{r, echo = F, eval = F, include = F}
+```{r, echo = F}
 exprs_rma <- exprs(probeset_summaries)
 pca_rma <- prcomp(t(exprs_rma), scale = FALSE)
 percent_var <- round(100 * pca_rma$sdev^2 / sum(pca_rma$sdev^2), 1)
 sd_ratio <- sqrt(percent_var[2] / percent_var[1])
-data_gg <- data.frame(PC1 = pca_rma$x[,1], PC2 = pca_rma$x[,2], Ancestry = pheno$Ancestry, Diagnosis = pheno$Dx, Age = pheno$Age, pH = pheno$pH , File = pheno$File, Sex = pheno$Sex, Batch = pheno$Batch, PMI = pheno$PMI, Suicide = pheno$Suicide, RIN = pheno$RIN, ToD = pheno$Type_of_Death)
-save(percent_var, exprs_rma, sd_ratio, data_gg, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/8_affymetrix_exon_microarray_data_after_rma_probeset_summaries_for_PCA_plots.RData")
+data_gg <- data.frame(PC1 = pca_rma$x[, 1], PC2 = pca_rma$x[, 2], PC3 = pca_rma$x[, 3], PC4 = pca_rma$x[, 4], PC5 = pca_rma$x[, 5], PC6 = pca_rma$x[, 6], PC7 = pca_rma$x[, 7], PC8 = pca_rma$x[, 8], PC9 = pca_rma$x[, 9], PC10 = pca_rma$x[, 10], Age = pheno$Age, pH = pheno$pH, PMI = pheno$PMI, RIN = pheno$RIN, RIN2 = pheno$RIN2, C1 = pheno$C1, C2 = pheno$C2, C3 = pheno$C3, C4 = pheno$C4, Diagnosis = pheno$Diagnosis, Dx = pheno$Dx, File = pheno$File, Sex = pheno$Sex, Batches = pheno$Batch, Suicide = pheno$Suicide, ShortName = pheno$ShortName, Ancestry = pheno$Ancestry, ToD = pheno$Type_of_Death)
+save(percent_var, sd_ratio, data_gg, file = paste0(rdata_path, "/9_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_for_PCA_plots.RData"))
 ```
 
 Now, we can generate the PCA plots coloring the different covariates of the phenotype dataset. 
-```{r, echo = F, eval = F, include = F, fig.height = 10, fig.width = 10}
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/6_affymetrix_exon_microarray_data_after_rma_core_gene_summaries_annotated_for_PCA_plots.RData")
-# PCA only colouring Age
-g1 <- ggplot(data_gg, aes(PC1, PC2)) +
-  geom_point(aes(color = Age)) +
-  ggtitle("PCA plot of the normalized data") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sd_ratio)
-# PCA only colouring Sex
-g2 <- ggplot(data_gg, aes(PC1, PC2)) +
-  geom_point(aes(color = Sex)) +
-  ggtitle("PCA plot of the normalized data)") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sd_ratio) +
-  scale_color_manual(values = c("darkorange", "dodgerblue4"))
-# PCA only colouring PMI
-g3 <- ggplot(data_gg, aes(PC1, PC2)) +
-  geom_point(aes(color = PMI)) +
-  ggtitle("PCA plot of the normalized data") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sd_ratio)
+```{r, echo = F, fig.height = 10, fig.width = 10}
+# PCA plot colouring Age
+pca_age <- GeneratePCA(data_gg, cov = "Age", pcol = NA, discrete = TRUE, file = "3_pca_rma_probeset_normalized_data_Age_colored.pdf")
 # PCA only colouring pH
-g4 <- ggplot(data_gg, aes(PC1, PC2)) +
-  geom_point(aes(color = pH)) +
-  ggtitle("PCA plot of the normalized data") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sd_ratio) 
+pca_ph <- GeneratePCA(data_gg, cov = "pH", pcol = NA, discrete = TRUE, file = "3_pca_rma_probeset_normalized_data_pH_colored.pdf")
+# PCA only colouring PMI
+pca_pmi <- GeneratePCA(data_gg, cov = "PMI", pcol = NA, discrete = TRUE, file = "3_pca_rma_probeset_normalized_data_PMI_colored.pdf")
 # PCA only colouring RIN
-g5 <- ggplot(data_gg, aes(PC1, PC2)) +
-  geom_point(aes(color = RIN)) +
-  ggtitle("PCA plot of the normalized data") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sd_ratio) 
+pca_rin <- GeneratePCA(data_gg, cov = "RIN", pcol = NA, discrete = TRUE, file = "3_pca_rma_probeset_normalized_data_RIN_colored.pdf")
+# PCA only colouring RIN2
+pca_rin2 <- GeneratePCA(data_gg, cov = "RIN2", pcol = NA, discrete = TRUE, file = "3_pca_rma_probeset_normalized_data_RIN2_colored.pdf")
+# PCA only colouring C1-C4 of genetic ancestry
+pca_c1 <- GeneratePCA(data_gg, cov = "C1", pcol = NA, discrete = TRUE, file = "3_pca_rma_probeset_normalized_data_C1_colored.pdf")
+pca_c2 <- GeneratePCA(data_gg, cov = "C2", pcol = NA, discrete = TRUE, file = "3_pca_rma_probeset_normalized_data_C2_colored.pdf")
+pca_c3 <- GeneratePCA(data_gg, cov = "C3", pcol = NA, discrete = TRUE, file = "3_pca_rma_probeset_normalized_data_C3_colored.pdf")
+pca_c4 <- GeneratePCA(data_gg, cov = "C4", pcol = NA, discrete = TRUE, file = "3_pca_rma_probeset_normalized_data_C4_colored.pdf")
+# PCA plot colouring Sex
+pca_sex <- GeneratePCA(data_gg, cov = "Sex", pcol = brewer.pal(11, "RdBu")[c(3, 9)], discrete = FALSE, file = "3_pca_rma_probeset_normalized_data_Sex_colored.pdf")
 # PCA only colouring Suicide
-g6 <- ggplot(data_gg, aes(PC1, PC2)) +
-  geom_point(aes(color = Suicide)) +
-  ggtitle("PCA plot of the normalized data") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sd_ratio) +
-  scale_color_manual(values = c("darkorange", "dodgerblue4"))
+pca_suicide <- GeneratePCA(data_gg, cov = "Suicide", pcol = brewer.pal(11, "RdBu")[c(9, 3)], discrete = FALSE, file = "3_pca_rma_probeset_normalized_data_Suicide_colored.pdf")
 # PCA only colouring Ancestry
-g7 <- ggplot(data_gg, aes(PC1, PC2)) +
-  geom_point(aes(color = Ancestry)) +
-  ggtitle("PCA plot of the batch corrected data") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sd_ratio) +
-  scale_color_manual(values = c("brown", "green", "darkorange2", "dodgerblue4"))
+# here, we need to first change the undefined Ancestry values to NA
+data_gg$Ancestry <- as.character(data_gg$Ancestry)
+data_gg[data_gg$Ancestry == "", "Ancestry"] <- "NA"
+data_gg$Ancestry <- as.factor(data_gg$Ancestry)
+pca_ancestry <- GeneratePCA(data_gg, cov = "Ancestry", pcol = brewer.pal(11, "RdBu")[c(10, 8, 4, 2)], discrete = FALSE, file = "3_pca_rma_probeset_normalized_data_Ancestry_colored.pdf")
 # PCA only colouring Diagnosis
-g8 <- ggplot(data_gg, aes(PC1, PC2)) +
-  geom_point(aes(color = Diagnosis)) +
-  ggtitle("PCA plot of the normalized data") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sd_ratio) +
-  scale_color_manual(values = c("brown", "green", "darkorange2", "dodgerblue4"))
-# PCA only coloring File
-g9 <- ggplot(data_gg, aes(PC1, PC2)) +
-  geom_point(aes(color = File)) +
-  ggtitle("PCA plot of the normalized data") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sd_ratio) +
-  scale_color_manual(values = c("green", "darkorange2", "dodgerblue4"))
-# PCA only coloring Batches
-g10 <- ggplot(data_gg, aes(PC1, PC2)) +
-  geom_point(aes(color = Batch)) +
-  ggtitle("PCA plot of the normalized data") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sd_ratio) +
-  scale_color_manual(values = c("brown", "red", "green", "darkorange2", "dodgerblue4"))
-ggarrange(g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, ncol = 2, nrow = 5)
+pca_dx <- GeneratePCA(data_gg, cov = "Dx", pcol = brewer.pal(11, "RdBu")[c(3, 9)], discrete = FALSE, file = "3_pca_rma_probeset_normalized_data_Dx_colored.pdf")
+# PCA only colouring Dx (case/control)
+pca_diagnosis <- GeneratePCA(data_gg, cov = "Diagnosis", pcol = brewer.pal(11, "RdBu")[c(5, 9, 4, 3)], discrete = FALSE, file = "3_pca_rma_normalized_data_Diagnosis_colored.pdf")
+# PCA only colouring File
+pca_file <- GeneratePCA(data_gg, cov = "File", pcol = brewer.pal(11, "RdBu")[c(1, 3, 10)], discrete = FALSE, file = "3_pca_rma_probeset_normalized_data_File_colored.pdf")
+# PCA only colouring Batches
+pca_batches <- GeneratePCA(data_gg, cov = "Batches", pcol = brewer.pal(11, "RdBu")[c(10, 8, 4, 3, 1)], discrete = FALSE, file = "3_pca_rma_probeset_normalized_data_Batches_colored.pdf")
+# PCA only colouring Type of Death
+# here, we need to first change the undefined ToD values to NA
+data_gg$ToD <- as.character(data_gg$ToD)
+data_gg[is.na(data_gg$ToD), "ToD"] <- "NA"
+data_gg$ToD <- as.factor(data_gg$ToD)
+pca_tod <- GeneratePCA(data_gg, cov = "ToD", pcol = brewer.pal(11, "RdBu")[c(10, 8, 4, 2)], discrete = FALSE, file = "3_pca_rma_probeset_normalized_data_Type_of_Death_colored.pdf")
+# plot all PCAs together (without colouring File as we cover it using Batch)
+ggarrange(pca_age, pca_ph, pca_pmi, pca_rin, pca_c1, pca_c2, pca_c3, pca_c4, pca_ancestry, pca_diagnosis, pca_sex, pca_file, pca_batches, pca_suicide, pca_tod, ncol = 3, nrow = 5)
+ggsave(filename = paste0(outpath, "/3_pca_rma_probeset_normalized_data_all_covariates.pdf"))
+rm(pca_age, pca_ph, pca_pmi, pca_rin, pca_rin2, pca_c1, pca_c2, pca_c3, pca_c4, pca_sex, pca_suicide, pca_ancestry, pca_dx, pca_diagnosis, pca_file, pca_batches, pca_tod)
 ```
 
-## PC1-10 for the different covariates
+## Heatmap of sample to sample distances
 
-```{r, echo = F, include = F, eval = F}
-pca_rma <- prcomp(exprs_rma)
-pca_rma_rot <- pca_rma$rotation
-varnames =c("Age", "Sex", "PMI", "pH", "RIN", "Suicide", "Ancestry", "Dx", "Batch", "File")
-vartype = c("continuous", "categorical", "continuous", "continuous", "continuous", "categorical", "categorical","categorical","categorical","categorical")
-numPCs = 10  # Number of the top PCs to be used in subsequent association tests
-results.assoc = results.pval = matrix(NA, nrow = length(varnames), ncol = numPCs)
-colnames(results.assoc) = colnames(results.pval) = paste("PC", 1:numPCs, sep = "")
-rownames(results.assoc) = rownames(results.pval) = varnames
-for(i in 1:length(varnames)) {
-  for(j in 1:numPCs) {
-    if(vartype[i]  == "continuous") {
-      fit = lm(pca_rma_rot[,j]~pheno[,varnames[i]])
-      results.pval[i,j] = summary(fit)[[4]][[8]]
-    }
-    else if(vartype[i] == "categorical") {
-      fit = aov(pca_rma_rot[,j] ~ factor(pheno[,varnames[i]]))
-      results.pval[i,j] = summary(fit)[[1]][[5]][[1]]
-    }
-    results.assoc[i,] = results.pval[i,]
-  }
-}
-results.assoc
-rm(pca_rma, pca_rma_rot, varnames, vartype, numPCs, results.pval, results.assoc)
+```{r, echo = F}
+GenerateSampleToSampleHeatmap(data = probeset_summaries, name = "RMA probeset normalized data", file = "3_pheatmap_rma_probeset_normalized_data_sample_to_sample_distances.pdf")
+dev.off()
+rm(probeset_summaries, pheno)
 ```
 
 ## arrayQualityMetrics
 
 ```{r, eval = F, include = F}
 exampleSet2 <- ExpressionSet(assayData = exprs_rma, phenoData = phenoData)
-arrayQualityMetrics(expressionset = exampleSet2, outdir = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/afterRMA/Report_after_rma", force=TRUE, do.logtransform = TRUE, intgroup = c("Dx"))
-rm(exprs_rma, exampleSet2)
+arrayQualityMetrics(expressionset = exampleSet2, outdir = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/afterRMA/Report_after_rma", force = TRUE, do.logtransform = TRUE, intgroup = c("Dx"))
+rm(probeset_summaries, pheno)
 ```
 
 
@@ -1133,7 +1095,7 @@ rm(exprs_rma, exampleSet2)
 
 ## Load Batch Corrected Data
 
-Then, we will check the data after removing known batch effects and calculating unknown batch effects. 
+Then, we will check the data after removing known batch effects and calculating unknown (hidden) batch effects. 
 ```{r}
 load(paste0(rdata_path, "/5_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA.RData"))
 pheno <- pData(probeset_summaries)
@@ -1142,111 +1104,80 @@ pheno <- pData(probeset_summaries)
 ## Boxplot
 
 ```{r, echo = F}
-# with log2 intensities
-colors <- c(replicate(length(pheno[pheno$File == "9", "File"]), "#D6604D"), replicate(length(pheno[pheno$File == "a", "File"]), "#FEE090"), replicate(length(pheno[pheno$File == "M", "File"]), "#4393C3"))
+# for batch corrected data
 pdf(paste0(outpath, "/4_boxplot_batch_corrected_data_log2_intensity.pdf"), width = 15)
-boxplot(probeset_summaries, target = "full", ylab = "log2 intensity", xlab = "", las = 2, col = colors, main = "Boxplot of log2-intensities after batch correction")
+boxplot(probeset_summaries, target = "probeset", transfo = identity, ylab = "log2 intensity", xlab = "", las = 2, col = boxplot_colors, main = "Boxplot after batch correction")
 dev.off()
-boxplot(probeset_summaries, target = "full", ylab = "log2 intensity", xlab = "", las = 2, col = colors, main = "Boxplot of log2-intensities after batch correction")
+boxplot(probeset_summaries, target = "probeset", transfo = identity, ylab = "log2 intensity", xlab = "", las = 2, col = boxplot_colors, main = "Boxplot after batch correction")
 ```
 
 ## PCA Plots
 
 Exactly as for the PCA plots of the normalized data, we need to get the expression of the batch corrected data and calculate the first two principal components.
-
-```{r, echo = F, eval = F, include = F}
+```{r, echo = F}
 exprs_bc <- exprs(probeset_summaries)
 pca_bc <- prcomp(t(exprs_bc), scale = FALSE)
 percent_var <- round(100 * pca_bc$sdev^2 / sum(pca_bc$sdev^2), 1)
 sd_ratio <- sqrt(percent_var[2] / percent_var[1])
-data_bc <- data.frame(PC1 = pca_bc$x[,1], PC2 = pca_bc$x[,2], Ancestry = pheno$Ancestry, Diagnosis = pheno$Dx, Age = pheno$Age, pH = pheno$pH , File = pheno$File, Sex = pheno$Sex, PMI = pheno$PMI, Suicide = pheno$Suicide, RIN = pheno$RIN, ToD = pheno$Type_of_Death)
-save(percent_var, sd_ratio, data_bc, file ="/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/8_affymetrix_exon_microarray_data_after_rma_gene_summaries_annotated_combat_batch_corrected_SVA_for_PCA_plots.RData")
+data_bc <- data.frame(PC1 = pca_bc$x[,1], PC2 = pca_bc$x[,2], PC3 = pca_bc$x[, 3], PC4 = pca_bc$x[, 4], PC5 = pca_bc$x[, 5], PC6 = pca_bc$x[, 6], PC7 = pca_bc$x[, 7], PC8 = pca_bc$x[, 8], PC9 = pca_bc$x[, 9], PC10 = pca_bc$x[, 10], Age = pheno$Age, pH = pheno$pH, PMI = pheno$PMI, RIN = pheno$RIN, RIN2 = pheno$RIN2, C1 = pheno$C1, C2 = pheno$C2, C3 = pheno$C3, C4 = pheno$C4, Diagnosis = pheno$Diagnosis, Dx = pheno$Dx, File = pheno$File, Sex = pheno$Sex, Batches = pheno$Batch, Suicide = pheno$Suicide, ShortName = pheno$ShortName, Ancestry = pheno$Ancestry, ToD = pheno$Type_of_Death, SV1 = pheno$SV1)
+save(percent_var, sd_ratio, data_bc, file = paste0(rdata_path, "/10_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_for_PCA_plots.RData"))
 ```
 
 Now, we can generate the PCA plots coloring the different covariates of the phenotype dataset. 
-
-```{r, echo = F, fig.height = 10, fig.width = 10, eval = F, include = F}
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/7_affymetrix_exon_microarray_data_after_rma_gene_summaries_annotated_combat_batch_corrected_for_PCA_plots.RData")
-
-# plot only PCA of Ancestry
-ggplot(data_bc, aes(PC1, PC2)) +
-  geom_point(aes(color = Ancestry), size = 3) +
-  ggtitle("PCA of batch corrected data (log-transformed)") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5), text = element_text(size = 18)) +
-  coord_fixed(ratio = sd_ratio) +
-  scale_color_manual(labels = c("MISSING", "CEU", "CEU/CHB", "CHB"), values = viridis(4))
-
-# PCA only colouring Age
-g1 <- ggplot(data_bc, aes(PC1, PC2)) +
-  geom_point(aes(color = Age)) +
-  ggtitle("PCA plot of the batch corrected data") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sd_ratio)
-# PCA only colouring Sex
-g2 <- ggplot(data_bc, aes(PC1, PC2)) +
-  geom_point(aes(color = Sex)) +
-  ggtitle("PCA plot of the batch corrected data") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sd_ratio) +
-  scale_color_manual(values = c("darkorange", "dodgerblue4"))
-# PCA only colouring PMI
-g3 <- ggplot(data_bc, aes(PC1, PC2)) +
-  geom_point(aes(color = PMI)) +
-  ggtitle("PCA plot of the batch corrected data") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sd_ratio)
+```{r, echo = F, fig.height = 10, fig.width = 10}
+# PCA plot colouring Age
+pca_age <- GeneratePCA(data_bc, cov = "Age", pcol = NA, discrete = TRUE, file = "4_pca_batch_corrected_data_Age_colored.pdf")
 # PCA only colouring pH
-g4 <- ggplot(data_bc, aes(PC1, PC2)) +
-  geom_point(aes(color = pH)) +
-  ggtitle("PCA plot of the batch corrected data") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sd_ratio) 
+pca_ph <- GeneratePCA(data_bc, cov = "pH", pcol = NA, discrete = TRUE, file = "4_pca_batch_corrected_data_pH_colored.pdf")
+# PCA only colouring PMI
+pca_pmi <- GeneratePCA(data_bc, cov = "PMI", pcol = NA, discrete = TRUE, file = "4_pca_batch_corrected_data_PMI_colored.pdf")
 # PCA only colouring RIN
-g5 <- ggplot(data_bc, aes(PC1, PC2)) +
-  geom_point(aes(color = RIN)) +
-  ggtitle("PCA plot of the batch corrected data") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sd_ratio) 
+pca_rin <- GeneratePCA(data_bc, cov = "RIN", pcol = NA, discrete = TRUE, file = "4_pca_batch_corrected_data_RIN_colored.pdf")
+# PCA only colouring RIN2
+pca_rin2 <- GeneratePCA(data_bc, cov = "RIN2", pcol = NA, discrete = TRUE, file = "4_pca_batch_corrected_data_RIN2_colored.pdf")
+# PCA only colouring SV1
+pca_sv1 <- GeneratePCA(data_bc, cov = "SV1", pcol = NA, discrete = TRUE, file = "4_pca_batch_corrected_data_SV1_colored.pdf")
+# PCA only colouring C1-C4 of genetic ancestry
+pca_c1 <- GeneratePCA(data_bc, cov = "C1", pcol = NA, discrete = TRUE, file = "4_pca_batch_corrected_data_C1_colored.pdf")
+pca_c2 <- GeneratePCA(data_bc, cov = "C2", pcol = NA, discrete = TRUE, file = "4_pca_batch_corrected_data_C2_colored.pdf")
+pca_c3 <- GeneratePCA(data_bc, cov = "C3", pcol = NA, discrete = TRUE, file = "4_pca_batch_corrected_data_C3_colored.pdf")
+pca_c4 <- GeneratePCA(data_bc, cov = "C4", pcol = NA, discrete = TRUE, file = "4_pca_batch_corrected_data_C4_colored.pdf")
+# PCA plot colouring Sex
+pca_sex <- GeneratePCA(data_bc, cov = "Sex", pcol = brewer.pal(11, "RdBu")[c(3, 9)], discrete = FALSE, file = "4_pca_batch_corrected_data_Sex_colored.pdf")
 # PCA only colouring Suicide
-g6 <- ggplot(data_bc, aes(PC1, PC2)) +
-  geom_point(aes(color = Suicide)) +
-  ggtitle("PCA plot of the batch corrected data") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sd_ratio) +
-  scale_color_manual(values = c("darkorange", "dodgerblue4"))
+pca_suicide <- GeneratePCA(data_bc, cov = "Suicide", pcol = brewer.pal(11, "RdBu")[c(9, 3)], discrete = FALSE, file = "4_pca_batch_corrected_data_Suicide_colored.pdf")
 # PCA only colouring Ancestry
-g7 <- ggplot(data_bc, aes(PC1, PC2)) +
-  geom_point(aes(color = Ancestry)) +
-  ggtitle("PCA plot of the batch corrected data") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sd_ratio) +
-  scale_color_manual(values = viridis(4))
+# here, we need to first change the undefined Ancestry values to NA
+data_bc$Ancestry <- as.character(data_bc$Ancestry)
+data_bc[data_bc$Ancestry == "", "Ancestry"] <- "NA"
+data_bc$Ancestry <- as.factor(data_bc$Ancestry)
+pca_ancestry <- GeneratePCA(data_bc, cov = "Ancestry", pcol = brewer.pal(11, "RdBu")[c(10, 8, 4, 2)], discrete = FALSE, file = "4_pca_batch_corrected_data_Ancestry_colored.pdf")
 # PCA only colouring Diagnosis
-g8 <- ggplot(data_bc, aes(PC1, PC2)) +
-  geom_point(aes(color = Diagnosis)) +
-  ggtitle("PCA plot of the batch corrected data") +
-  xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
-  ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-  theme(plot.title = element_text(hjust = 0.5))+
-  coord_fixed(ratio = sd_ratio) +
-  scale_color_manual(values = c("brown", "green", "darkorange2", "dodgerblue4"))
-ggarrange(g1, g2, g3, g4, g5, g6, g7, g8, ncol = 2, nrow = 4)
+pca_dx <- GeneratePCA(data_bc, cov = "Dx", pcol = brewer.pal(11, "RdBu")[c(3, 9)], discrete = FALSE, file = "4_pca_batch_corrected_data_Dx_colored.pdf")
+# PCA only colouring Dx (case/control)
+pca_diagnosis <- GeneratePCA(data_bc, cov = "Diagnosis", pcol = brewer.pal(11, "RdBu")[c(5, 9, 4, 3)], discrete = FALSE, file = "4_pca_batch_corrected_data_Diagnosis_colored.pdf")
+# PCA only colouring File
+pca_file <- GeneratePCA(data_bc, cov = "File", pcol = brewer.pal(11, "RdBu")[c(1, 3, 10)], discrete = FALSE, file = "4_pca_batch_corrected_data_File_colored.pdf")
+# PCA only colouring Batches
+pca_batches <- GeneratePCA(data_bc, cov = "Batches", pcol = brewer.pal(11, "RdBu")[c(10, 8, 4, 3, 1)], discrete = FALSE, file = "4_pca_batch_corrected_data_Batches_colored.pdf")
+# PCA only colouring Type of Death
+# here, we need to first change the undefined ToD values to NA
+data_bc$ToD <- as.character(data_bc$ToD)
+data_bc[is.na(data_bc$ToD), "ToD"] <- "NA"
+data_bc$ToD <- as.factor(data_bc$ToD)
+pca_tod <- GeneratePCA(data_bc, cov = "ToD", pcol = brewer.pal(11, "RdBu")[c(10, 8, 4, 2)], discrete = FALSE, file = "4_pca_batch_corrected_data_Type_of_Death_colored.pdf")
+# plot all PCAs together (without colouring File as we cover it using Batch)
+ggarrange(pca_age, pca_ph, pca_pmi, pca_rin, pca_c1, pca_c2, pca_c3, pca_c4, pca_ancestry, pca_diagnosis, pca_sex, pca_file, pca_batches, pca_suicide, pca_tod, ncol = 3, nrow = 5)
+ggsave(filename = paste0(outpath, "/4_pca_batch_corrected_data_all_covariates.pdf"))
+rm(pca_age, pca_ph, pca_pmi, pca_rin, pca_rin2, pca_c1, pca_c2, pca_c3, pca_c4, pca_sex, pca_suicide, pca_ancestry, pca_dx, pca_diagnosis, pca_file, pca_batches, pca_tod, pca_bc, exprs_bc)
+```
+
+## Heatmap of sample to sample distances
+
+```{r, echo = F}
+GenerateSampleToSampleHeatmap(data = probeset_summaries, name = "batch corrected data", file = "4_pheatmap_batch_corrected_data_sample_to_sample_distances.pdf")
+dev.off()
+rm(probeset_summaries, pheno)
 ```
 
 ## arrayQualityMetrics
@@ -1255,96 +1186,323 @@ ggarrange(g1, g2, g3, g4, g5, g6, g7, g8, ncol = 2, nrow = 4)
 exprs_bc <- exprs(gene_summaries)
 exampleSet3 <- ExpressionSet(assayData = exprs_bc, phenoData = phenoData)
 arrayQualityMetrics(expressionset = exampleSet3, outdir = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/figures/afterBatchCorrection/Report_after_batch_correction", force=TRUE, do.logtransform = TRUE, intgroup = c("Dx"))
-rm(exprs_bc, exampleSet3)
+rm(probeset_summaries, pheno, exprs_bc, exampleSet3)
 ```
 
 
-# Correlation of the different gene summarization methods
+# Quality Control Of Batch Corrected, Summarized and Annotated Data
 
-Correlation between genes using oligos core (transcript) summarization vs. probeset summarization. 
+Now, we will perform the quality control three times as we summarized and annotated the probeset summaries to gene-, transcript- and exon-level.
 
-Correlation calculated for all overlapping genes of the two datasets. Once the correlation of all gene expression is calculated and once for each gene (giving the number of genes with a correlation higher than 90%, 80% and 50%).
-```{r, eval = F, include = F}
-# 1. Load geneSummarizations after batch correction
-# based on coreSummarization
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/7_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
-gene_summaries_core <- gene_summaries
-rm(gene_summaries)
-# based on probesetSummarization
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
-gene_summaries_probesets <- gene_summaries
-rm(gene_summaries)
+## Gene-level expression
 
-# 2. get expression and separate collapsed gene IDs
-exprs_core <- as.data.frame(exprs(gene_summaries_core))
-exprs_core$rownames <- rownames(exprs_core)
-exprs_core <- separate_rows(exprs_core, rownames, sep = "\\|")
-exprs_probesets <- as.data.frame(exprs(gene_summaries_probesets))
-exprs_probesets$rownames <- rownames(exprs_probesets)
-exprs_probesets <- separate_rows(exprs_probesets, rownames, sep = "\\|")
+### Load Data
 
-# 2. Get all overlapping gene IDs
-overlapping_genes <- intersect(exprs_core$rownames, exprs_probesets$rownames)
+Then, we will check the data after removing known batch effects and calculating unknown batch effects. 
+```{r}
+load(paste0(rdata_path, "/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData"))
+pheno <- pData(gene_summaries)
+```
 
-# 3. Calculate correlation of all overlapping genes
-res <- as.data.frame(overlapping_genes)
-res$pearson <- lapply(overlapping_genes, function(x) cor(as.numeric(exprs_core[exprs_core$rownames == x, -c(length(exprs_core))]), as.numeric(exprs_probesets[exprs_probesets$rownames == x, -c(length(exprs_probesets))]), method = "pearson"))
-res$spearman <- lapply(overlapping_genes, function(x) cor(as.numeric(exprs_core[exprs_core$rownames == x, -c(length(exprs_core))]), as.numeric(exprs_probesets[exprs_probesets$rownames == x, -c(length(exprs_probesets))]), method = "spearman"))
-fwrite(res, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/results/genes_pearson_correlation_core_vs_probeset.csv", sep = ",")
+### Boxplot
 
-length(res[res$pearson >= 0.5, "pearson"])
-length(res[res$spearman >= 0.5, "spearman"])
-
-# Gene IFNA10 (Ensembl ID: ENSG00000186803.3) => example for high correlation
-test <- rbind(exprs_core[exprs_core$rownames == "ENSG00000186803.3", -c(length(exprs_core))], exprs_probesets[exprs_probesets$rownames == "ENSG00000186803.3",-c(length(exprs_probesets))])
-# correlation
-cor.test(as.numeric(exprs_core[exprs_core$rownames == "ENSG00000186803.3", -c(length(exprs_core))]), as.numeric(exprs_probesets[exprs_probesets$rownames == "ENSG00000186803.3",-c(length(exprs_probesets))]))
-# plot expressions against each other
-pdf("/home/icb/karolina.worf/plot_expression_core_vs_probeset_IFNA10.pdf")
-plot(t(test), xlab = "expression core_summaries", ylab = "expression probeset_summaries")
+```{r, echo = F}
+# for gene summarized and annotated data
+exprs_gene <- ExpressionSet(assayData = as.matrix(exprs(gene_summaries)))
+pdf(paste0(outpath, "/5_boxplot_gene_summarized_data_log2_intensity.pdf"), width = 15)
+oligo::boxplot(exprs_gene, transfo = identity, ylab = "log2 intensity", xlab = "", las = 2, col = boxplot_colors, main = "Boxplot of log2-intensities after gene summarization and annotation")
 dev.off()
+oligo::boxplot(exprs_gene, transfo = identity, ylab = "log2 intensity", xlab = "", las = 2, col = boxplot_colors, main = "Boxplot of log2-intensities after gene summarization and annotation")
+```
 
-# Gene FKBP5 (Ensembl ID: ENSG00000096060.10)
-test <- rbind(exprs_core[exprs_core$rownames == "ENSG00000096060.10", -c(length(exprs_core))], exprs_probesets[exprs_probesets$rownames == "ENSG00000096060.10",-c(length(exprs_probesets))])
-# correlation
-cor.test(as.numeric(exprs_core[exprs_core$rownames == "ENSG00000096060.10", -c(length(exprs_core))]), as.numeric(exprs_probesets[exprs_probesets$rownames == "ENSG00000096060.10",-c(length(exprs_probesets))]))
-# plot expressions against each other
-pdf("/home/icb/karolina.worf/plot_expression_core_vs_probeset_FKBP5.pdf")
-plot(t(test), xlab = "expression core_summaries", ylab = "expression probeset_summaries")
+### PCA Plots
+
+Calculate the PCs.
+```{r, echo = F}
+exprs_gene <- exprs(gene_summaries)
+pca_gene <- prcomp(t(exprs_gene), scale = FALSE)
+percent_var <- round(100 * pca_gene$sdev^2 / sum(pca_gene$sdev^2), 1)
+sd_ratio <- sqrt(percent_var[2] / percent_var[1])
+data_gene <- data.frame(PC1 = pca_gene$x[, 1], PC2 = pca_gene$x[, 2], PC3 = pca_gene$x[, 3], PC4 = pca_gene$x[, 4], PC5 = pca_gene$x[, 5], PC6 = pca_gene$x[, 6], PC7 = pca_gene$x[, 7], PC8 = pca_gene$x[, 8], PC9 = pca_gene$x[, 9], PC10 = pca_gene$x[, 10], Age = pheno$Age, pH = pheno$pH, PMI = pheno$PMI, RIN = pheno$RIN, RIN2 = pheno$RIN2, C1 = pheno$C1, C2 = pheno$C2, C3 = pheno$C3, C4 = pheno$C4, Diagnosis = pheno$Diagnosis, Dx = pheno$Dx, File = pheno$File, Sex = pheno$Sex, Batches = pheno$Batch, Suicide = pheno$Suicide, ShortName = pheno$ShortName, Ancestry = pheno$Ancestry, ToD = pheno$Type_of_Death, SV1 = pheno$SV1)
+save(percent_var, sd_ratio, data_gene, file = paste0(rdata_path, "/11_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated_for_PCA_plots.RData"))
+```
+
+Generate PCA plots: 
+```{r, echo = F, fig.height = 10, fig.width = 10}
+# PCA plot colouring Age
+pca_age <- GeneratePCA(data_gene, cov = "Age", pcol = NA, discrete = TRUE, file = "5_pca_gene_summarized_data_Age_colored.pdf")
+# PCA only colouring pH
+pca_ph <- GeneratePCA(data_gene, cov = "pH", pcol = NA, discrete = TRUE, file = "5_pca_gene_summarized_data_pH_colored.pdf")
+# PCA only colouring PMI
+pca_pmi <- GeneratePCA(data_gene, cov = "PMI", pcol = NA, discrete = TRUE, file = "5_pca_gene_summarized_data_PMI_colored.pdf")
+# PCA only colouring RIN
+pca_rin <- GeneratePCA(data_gene, cov = "RIN", pcol = NA, discrete = TRUE, file = "5_pca_gene_summarized_data_RIN_colored.pdf")
+# PCA only colouring RIN2
+pca_rin2 <- GeneratePCA(data_gene, cov = "RIN2", pcol = NA, discrete = TRUE, file = "5_pca_gene_summarized_data_RIN2_colored.pdf")
+# PCA only colouring SV1
+pca_sv1 <- GeneratePCA(data_gene, cov = "SV1", pcol = NA, discrete = TRUE, file = "5_pca_gene_summarized_data_SV1_colored.pdf")
+# PCA only colouring C1-C4 of genetic ancestry
+pca_c1 <- GeneratePCA(data_gene, cov = "C1", pcol = NA, discrete = TRUE, file = "5_pca_gene_summarized_data_C1_colored.pdf")
+pca_c2 <- GeneratePCA(data_gene, cov = "C2", pcol = NA, discrete = TRUE, file = "5_pca_gene_summarized_data_C2_colored.pdf")
+pca_c3 <- GeneratePCA(data_gene, cov = "C3", pcol = NA, discrete = TRUE, file = "5_pca_gene_summarized_data_C3_colored.pdf")
+pca_c4 <- GeneratePCA(data_gene, cov = "C4", pcol = NA, discrete = TRUE, file = "5_pca_gene_summarized_data_C4_colored.pdf")
+# PCA plot colouring Sex
+pca_sex <- GeneratePCA(data_gene, cov = "Sex", pcol = brewer.pal(11, "RdBu")[c(3, 9)], discrete = FALSE, file = "5_pca_gene_summarized_data_Sex_colored.pdf")
+# PCA only colouring Suicide
+pca_suicide <- GeneratePCA(data_gene, cov = "Suicide", pcol = brewer.pal(11, "RdBu")[c(9, 3)], discrete = FALSE, file = "5_pca_gene_summarized_data_Suicide_colored.pdf")
+# PCA only colouring Ancestry
+# here, we need to first change the undefined Ancestry values to NA
+data_gene$Ancestry <- as.character(data_gene$Ancestry)
+data_gene[data_gene$Ancestry == "", "Ancestry"] <- "NA"
+data_gene$Ancestry <- as.factor(data_gene$Ancestry)
+pca_ancestry <- GeneratePCA(data_gene, cov = "Ancestry", pcol = brewer.pal(11, "RdBu")[c(10, 8, 4, 2)], discrete = FALSE, file = "5_pca_gene_summarized_data_Ancestry_colored.pdf")
+# PCA only colouring Diagnosis
+pca_dx <- GeneratePCA(data_gene, cov = "Dx", pcol = brewer.pal(11, "RdBu")[c(3, 9)], discrete = FALSE, file = "5_pca_gene_summarized_data_Dx_colored.pdf")
+# PCA only colouring Dx (case/control)
+pca_diagnosis <- GeneratePCA(data_gene, cov = "Diagnosis", pcol = brewer.pal(11, "RdBu")[c(5, 9, 4, 3)], discrete = FALSE, file = "5_pca_gene_summarized_data_Diagnosis_colored.pdf")
+# PCA only colouring File
+pca_file <- GeneratePCA(data_gene, cov = "File", pcol = brewer.pal(11, "RdBu")[c(1, 3, 10)], discrete = FALSE, file = "5_pca_gene_summarized_data_File_colored.pdf")
+# PCA only colouring Batches
+pca_batches <- GeneratePCA(data_gene, cov = "Batches", pcol = brewer.pal(11, "RdBu")[c(10, 8, 4, 3, 1)], discrete = FALSE, file = "5_pca_gene_summarized_data_Batches_colored.pdf")
+# PCA only colouring Type of Death
+# here, we need to first change the undefined ToD values to NA
+data_gene$ToD <- as.character(data_gene$ToD)
+data_gene[is.na(data_gene$ToD), "ToD"] <- "NA"
+data_gene$ToD <- as.factor(data_gene$ToD)
+pca_tod <- GeneratePCA(data_gene, cov = "ToD", pcol = brewer.pal(11, "RdBu")[c(10, 8, 4, 2)], discrete = FALSE, file = "5_pca_gene_summarized_data_Type_of_Death_colored.pdf")
+# plot all PCAs together (without colouring File as we cover it using Batch)
+ggarrange(pca_age, pca_ph, pca_pmi, pca_rin, pca_c1, pca_c2, pca_c3, pca_c4, pca_ancestry, pca_diagnosis, pca_sex, pca_file, pca_batches, pca_suicide, pca_tod, ncol = 3, nrow = 5)
+ggsave(filename = paste0(outpath, "/5_pca_gene_summarized_data_all_covariates.pdf"))
+rm(pca_age, pca_ph, pca_pmi, pca_rin, pca_rin2, pca_c1, pca_c2, pca_c3, pca_c4, pca_sex, pca_suicide, pca_ancestry, pca_dx, pca_diagnosis, pca_file, pca_batches, pca_tod, pca_bc, exprs_bc)
+```
+
+## Heatmap of sample to sample distances
+
+```{r, echo = F}
+GenerateSampleToSampleHeatmap(data = gene_summaries, name = "gene summarized data", file = "5_pca_gene_summarized_data_sample_to_sample_distances.pdf")
 dev.off()
+rm(gene_summaries, pheno)
+```
 
-# Gene PTPN4 (Ensembl ID: ENSG00000088179.4) => example highest negative corr
-test <- rbind(exprs_core[exprs_core$rownames == "ENSG00000088179.4", -c(length(exprs_core))], exprs_probesets[exprs_probesets$rownames == "ENSG00000088179.4",-c(length(exprs_probesets))])
-# correlation
-cor.test(as.numeric(exprs_core[exprs_core$rownames == "ENSG00000088179.4", -c(length(exprs_core))]), as.numeric(exprs_probesets[exprs_probesets$rownames == "ENSG00000088179.4",-c(length(exprs_probesets))]))
-# plot expressions against each other
-pdf("/home/icb/karolina.worf/plot_expression_core_vs_probeset_PTPN4.pdf")
-plot(t(test), xlab = "expression core_summaries", ylab = "expression probeset_summaries")
+### arrayQualityMetrics
+
+```{r, eval = F, eval = F, include = F}
+exprs_gene <- exprs(gene_summaries)
+set_gene <- ExpressionSet(assayData = exprs_gene, phenoData = phenoData)
+arrayQualityMetrics(expressionset = set_gene, outdir = paste0(outpath, "/Report_of_gene_summaries"), force = TRUE, do.logtransform = TRUE, intgroup = c("Diagnosis"))
+rm(exprs_gene, set_gene)
+```
+
+
+## Transcript-level expression
+
+### Load Data
+
+Then, we will check the data after removing known batch effects and calculating unknown batch effects. 
+```{r}
+load(paste0(rdata_path, "/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_transcript_summaries_annotated.RData"))
+pheno <- pData(transcript_summaries)
+```
+
+### Boxplot
+
+```{r, echo = F}
+# for transcript summarized and annotated data
+exprs_transcript <- ExpressionSet(assayData = as.matrix(exprs(transcript_summaries)))
+pdf(paste0(outpath, "/6_boxplot_transcript_summarized_data_log2_intensity.pdf"), width = 15)
+oligo::boxplot(exprs_transcript, transfo = identity, ylab = "log2 intensity", xlab = "", las = 2, col = boxplot_colors, main = "Boxplot of log2-intensities after transcript summarization and annotation")
 dev.off()
+oligo::boxplot(exprs_transcript, transfo = identity, ylab = "log2 intensity", xlab = "", las = 2, col = boxplot_colors, main = "Boxplot of log2-intensities after transcript summarization and annotation")
+rm(exprs_transcript)
+```
 
-### overall correlation ###
-# 1. reduce matrices to overlapping genes
-exprs_core <- exprs_core[exprs_core$rownames %in% overlapping_genes, ]
-exprs_probesets <- exprs_probesets[exprs_probesets$rownames %in% overlapping_genes, ]
+### PCA Plots
 
-# 2. same order of both matrices
-exprs_core <- exprs_core[order(exprs_core$rownames), ]
-exprs_probesets <- exprs_probesets[order(exprs_probesets$rownames), ]
-identical(exprs_core$rownames, exprs_probesets$rownames)
+Calculate the PCs.
+```{r, echo = F}
+exprs_transcript <- exprs(transcript_summaries)
+pca_transcript <- prcomp(t(exprs_transcript), scale = FALSE)
+percent_var <- round(100 * pca_transcript$sdev^2 / sum(pca_transcript$sdev^2), 1)
+sd_ratio <- sqrt(percent_var[2] / percent_var[1])
+data_transcript <- data.frame(PC1 = pca_transcript$x[, 1], PC2 = pca_transcript$x[, 2], PC3 = pca_transcript$x[, 3], PC4 = pca_transcript$x[, 4], PC5 = pca_transcript$x[, 5], PC6 = pca_transcript$x[, 6], PC7 = pca_transcript$x[, 7], PC8 = pca_transcript$x[, 8], PC9 = pca_transcript$x[, 9], PC10 = pca_transcript$x[, 10], Age = pheno$Age, pH = pheno$pH, PMI = pheno$PMI, RIN = pheno$RIN, RIN2 = pheno$RIN2, C1 = pheno$C1, C2 = pheno$C2, C3 = pheno$C3, C4 = pheno$C4, Diagnosis = pheno$Diagnosis, Dx = pheno$Dx, File = pheno$File, Sex = pheno$Sex, Batches = pheno$Batch, Suicide = pheno$Suicide, ShortName = pheno$ShortName, Ancestry = pheno$Ancestry, ToD = pheno$Type_of_Death, SV1 = pheno$SV1)
+save(percent_var, sd_ratio, data_transcript, file = paste0(rdata_path, "/11_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_transcript_summaries_annotated_for_PCA_plots.RData"))
+```
 
-# 3. correlation of both matrices
-cor.test(unlist(c(exprs_core[, -c(length(exprs_core))])), unlist(c(exprs_probesets[, -c(length(exprs_probesets))])), alternative = "two.sided", method = "pearson")
-cor.test(unlist(c(exprs_core[, -c(length(exprs_core))])), unlist(c(exprs_probesets[, -c(length(exprs_probesets))])), alternative = "two.sided", method = "spearman")
+Generate PCA plots: 
+```{r, echo = F, fig.height = 10, fig.width = 10}
+# PCA plot colouring Age
+pca_age <- GeneratePCA(data_transcript, cov = "Age", pcol = NA, discrete = TRUE, file = "6_pca_transcript_summarized_data_Age_colored.pdf")
+# PCA only colouring pH
+pca_ph <- GeneratePCA(data_transcript, cov = "pH", pcol = NA, discrete = TRUE, file = "6_pca_transcript_summarized_data_pH_colored.pdf")
+# PCA only colouring PMI
+pca_pmi <- GeneratePCA(data_transcript, cov = "PMI", pcol = NA, discrete = TRUE, file = "6_pca_transcript_summarized_data_PMI_colored.pdf")
+# PCA only colouring RIN
+pca_rin <- GeneratePCA(data_transcript, cov = "RIN", pcol = NA, discrete = TRUE, file = "6_pca_transcript_summarized_data_RIN_colored.pdf")
+# PCA only colouring RIN2
+pca_rin2 <- GeneratePCA(data_transcript, cov = "RIN2", pcol = NA, discrete = TRUE, file = "6_pca_transcript_summarized_data_RIN2_colored.pdf")
+# PCA only colouring SV1
+pca_sv1 <- GeneratePCA(data_transcript, cov = "SV1", pcol = NA, discrete = TRUE, file = "6_pca_transcript_summarized_data_SV1_colored.pdf")
+# PCA only colouring C1-C4 of genetic ancestry
+pca_c1 <- GeneratePCA(data_transcript, cov = "C1", pcol = NA, discrete = TRUE, file = "6_pca_transcript_summarized_data_C1_colored.pdf")
+pca_c2 <- GeneratePCA(data_transcript, cov = "C2", pcol = NA, discrete = TRUE, file = "6_pca_transcript_summarized_data_C2_colored.pdf")
+pca_c3 <- GeneratePCA(data_transcript, cov = "C3", pcol = NA, discrete = TRUE, file = "6_pca_transcript_summarized_data_C3_colored.pdf")
+pca_c4 <- GeneratePCA(data_transcript, cov = "C4", pcol = NA, discrete = TRUE, file = "6_pca_transcript_summarized_data_C4_colored.pdf")
+# PCA plot colouring Sex
+pca_sex <- GeneratePCA(data_transcript, cov = "Sex", pcol = brewer.pal(11, "RdBu")[c(3, 9)], discrete = FALSE, file = "6_pca_transcript_summarized_data_Sex_colored.pdf")
+# PCA only colouring Suicide
+pca_suicide <- GeneratePCA(data_transcript, cov = "Suicide", pcol = brewer.pal(11, "RdBu")[c(9, 3)], discrete = FALSE, file = "6_pca_transcript_summarized_data_Suicide_colored.pdf")
+# PCA only colouring Ancestry
+# here, we need to first change the undefined Ancestry values to NA
+data_transcript$Ancestry <- as.character(data_transcript$Ancestry)
+data_transcript[data_transcript$Ancestry == "", "Ancestry"] <- "NA"
+data_transcript$Ancestry <- as.factor(data_transcript$Ancestry)
+pca_ancestry <- GeneratePCA(data_transcript, cov = "Ancestry", pcol = brewer.pal(11, "RdBu")[c(10, 8, 4, 2)], discrete = FALSE, file = "6_pca_transcript_summarized_data_Ancestry_colored.pdf")
+# PCA only colouring Diagnosis
+pca_dx <- GeneratePCA(data_transcript, cov = "Dx", pcol = brewer.pal(11, "RdBu")[c(3, 9)], discrete = FALSE, file = "6_pca_transcript_summarized_data_Dx_colored.pdf")
+# PCA only colouring Dx (case/control)
+pca_diagnosis <- GeneratePCA(data_transcript, cov = "Diagnosis", pcol = brewer.pal(11, "RdBu")[c(5, 9, 4, 3)], discrete = FALSE, file = "6_pca_transcript_summarized_data_Diagnosis_colored.pdf")
+# PCA only colouring File
+pca_file <- GeneratePCA(data_transcript, cov = "File", pcol = brewer.pal(11, "RdBu")[c(1, 3, 10)], discrete = FALSE, file = "6_pca_transcript_summarized_data_File_colored.pdf")
+# PCA only colouring Batches
+pca_batches <- GeneratePCA(data_transcript, cov = "Batches", pcol = brewer.pal(11, "RdBu")[c(10, 8, 4, 3, 1)], discrete = FALSE, file = "6_pca_transcript_summarized_data_Batches_colored.pdf")
+# PCA only colouring Type of Death
+# here, we need to first change the undefined ToD values to NA
+data_transcript$ToD <- as.character(data_transcript$ToD)
+data_transcript[is.na(data_transcript$ToD), "ToD"] <- "NA"
+data_transcript$ToD <- as.factor(data_transcript$ToD)
+pca_tod <- GeneratePCA(data_transcript, cov = "ToD", pcol = brewer.pal(11, "RdBu")[c(10, 8, 4, 2)], discrete = FALSE, file = "6_pca_transcript_summarized_data_Type_of_Death_colored.pdf")
+# plot all PCAs together (without colouring File as we cover it using Batch)
+ggarrange(pca_age, pca_ph, pca_pmi, pca_rin, pca_c1, pca_c2, pca_c3, pca_c4, pca_ancestry, pca_diagnosis, pca_sex, pca_file, pca_batches, pca_suicide, pca_tod, ncol = 3, nrow = 5)
+ggsave(filename = paste0(outpath, "/6_pca_transcript_summarized_data_all_covariates.pdf"))
+rm(pca_age, pca_ph, pca_pmi, pca_rin, pca_rin2, pca_c1, pca_c2, pca_c3, pca_c4, pca_sex, pca_suicide, pca_ancestry, pca_dx, pca_diagnosis, pca_file, pca_batches, pca_tod, pca_transcript, exprs_transcript, percent_var, sd_ratio, data_transcript)
+```
+
+## Heatmap of sample to sample distances
+
+```{r, echo = F}
+GenerateSampleToSampleHeatmap(data = transcript_summaries, name = "transcript summarized data", file = "6_pca_transcript_summarized_data_sample_to_sample_distances.pdf")
+dev.off()
+rm(transcript_summaries, pheno)
+```
+
+### arrayQualityMetrics
+
+```{r, eval = F, eval = F, include = F}
+exprs_transcript <- exprs(transcript_summaries)
+set_transcript <- ExpressionSet(assayData = exprs_transcript, phenoData = pheno)
+arrayQualityMetrics(expressionset = set_transcript, outdir = paste0(outpath, "Report_of_transcript_expression"), force = TRUE, do.logtransform = TRUE, intgroup = c("Diagnosis"))
+rm(exprs_transcript, set_transcript)
+```
+
+
+## Exon-level expression
+
+### Load Data
+
+Then, we will check the data after removing known batch effects and calculating unknown batch effects. 
+```{r}
+load(paste0(rdata_path, "/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_exon_summaries_annotated.RData"))
+pheno <- pData(exon_summaries)
+```
+
+### Boxplot
+
+```{r, echo = F}
+# for exon summarized and annotated data
+exprs_exon <- ExpressionSet(assayData = as.matrix(exprs(exon_summaries)))
+pdf(paste0(outpath, "/7_boxplot_exon_summarized_data_log2_intensity.pdf"), width = 15)
+oligo::boxplot(exprs_exon, transfo = identity, ylab = "log2 intensity", xlab = "", las = 2, col = boxplot_colors, main = "Boxplot of log2-intensities after exon summarization and annotation")
+dev.off()
+oligo::boxplot(exprs_exon, transfo = identity, ylab = "log2 intensity", xlab = "", las = 2, col = boxplot_colors, main = "Boxplot of log2-intensities after exon summarization and annotation")
+rm(exprs_exon)
+```
+
+### PCA Plots
+
+Calculate the PCs.
+```{r, echo = F}
+exprs_exon <- exprs(exon_summaries)
+pca_exon <- prcomp(t(exprs_exon), scale = FALSE)
+percent_var <- round(100 * pca_exon$sdev^2 / sum(pca_exon$sdev^2), 1)
+sd_ratio <- sqrt(percent_var[2] / percent_var[1])
+data_exon <- data.frame(PC1 = pca_exon$x[, 1], PC2 = pca_exon$x[, 2], PC3 = pca_exon$x[, 3], PC4 = pca_exon$x[, 4], PC5 = pca_exon$x[, 5], PC6 = pca_exon$x[, 6], PC7 = pca_exon$x[, 7], PC8 = pca_exon$x[, 8], PC9 = pca_exon$x[, 9], PC10 = pca_exon$x[, 10], Age = pheno$Age, pH = pheno$pH, PMI = pheno$PMI, RIN = pheno$RIN, RIN2 = pheno$RIN2, C1 = pheno$C1, C2 = pheno$C2, C3 = pheno$C3, C4 = pheno$C4, Diagnosis = pheno$Diagnosis, Dx = pheno$Dx, File = pheno$File, Sex = pheno$Sex, Batches = pheno$Batch, Suicide = pheno$Suicide, ShortName = pheno$ShortName, Ancestry = pheno$Ancestry, ToD = pheno$Type_of_Death, SV1 = pheno$SV1)
+save(percent_var, sd_ratio, data_exon, file = paste0(rdata_path, "/11_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_exon_summaries_annotated_for_PCA_plots.RData"))
+```
+
+Generate PCA plots: 
+```{r, echo = F, fig.height = 10, fig.width = 10}
+# PCA plot colouring Age
+pca_age <- GeneratePCA(data_exon, cov = "Age", pcol = NA, discrete = TRUE, file = "7_pca_exon_summarized_data_Age_colored.pdf")
+# PCA only colouring pH
+pca_ph <- GeneratePCA(data_exon, cov = "pH", pcol = NA, discrete = TRUE, file = "7_pca_exon_summarized_data_pH_colored.pdf")
+# PCA only colouring PMI
+pca_pmi <- GeneratePCA(data_exon, cov = "PMI", pcol = NA, discrete = TRUE, file = "7_pca_exon_summarized_data_PMI_colored.pdf")
+# PCA only colouring RIN
+pca_rin <- GeneratePCA(data_exon, cov = "RIN", pcol = NA, discrete = TRUE, file = "7_pca_exon_summarized_data_RIN_colored.pdf")
+# PCA only colouring RIN2
+pca_rin2 <- GeneratePCA(data_exon, cov = "RIN2", pcol = NA, discrete = TRUE, file = "7_pca_exon_summarized_data_RIN2_colored.pdf")
+# PCA only colouring SV1
+pca_sv1 <- GeneratePCA(data_exon, cov = "SV1", pcol = NA, discrete = TRUE, file = "7_pca_exon_summarized_data_SV1_colored.pdf")
+# PCA only colouring C1-C4 of genetic ancestry
+pca_c1 <- GeneratePCA(data_exon, cov = "C1", pcol = NA, discrete = TRUE, file = "7_pca_exon_summarized_data_C1_colored.pdf")
+pca_c2 <- GeneratePCA(data_exon, cov = "C2", pcol = NA, discrete = TRUE, file = "7_pca_exon_summarized_data_C2_colored.pdf")
+pca_c3 <- GeneratePCA(data_exon, cov = "C3", pcol = NA, discrete = TRUE, file = "7_pca_exon_summarized_data_C3_colored.pdf")
+pca_c4 <- GeneratePCA(data_exon, cov = "C4", pcol = NA, discrete = TRUE, file = "7_pca_exon_summarized_data_C4_colored.pdf")
+# PCA plot colouring Sex
+pca_sex <- GeneratePCA(data_exon, cov = "Sex", pcol = brewer.pal(11, "RdBu")[c(3, 9)], discrete = FALSE, file = "7_pca_exon_summarized_data_Sex_colored.pdf")
+# PCA only colouring Suicide
+pca_suicide <- GeneratePCA(data_exon, cov = "Suicide", pcol = brewer.pal(11, "RdBu")[c(9, 3)], discrete = FALSE, file = "7_pca_exon_summarized_data_Suicide_colored.pdf")
+# PCA only colouring Ancestry
+# here, we need to first change the undefined Ancestry values to NA
+data_exon$Ancestry <- as.character(data_exon$Ancestry)
+data_exon[data_exon$Ancestry == "", "Ancestry"] <- "NA"
+data_exon$Ancestry <- as.factor(data_exon$Ancestry)
+pca_ancestry <- GeneratePCA(data_exon, cov = "Ancestry", pcol = brewer.pal(11, "RdBu")[c(10, 8, 4, 2)], discrete = FALSE, file = "7_pca_exon_summarized_data_Ancestry_colored.pdf")
+# PCA only colouring Diagnosis
+pca_dx <- GeneratePCA(data_exon, cov = "Dx", pcol = brewer.pal(11, "RdBu")[c(3, 9)], discrete = FALSE, file = "7_pca_exon_summarized_data_Dx_colored.pdf")
+# PCA only colouring Dx (case/control)
+pca_diagnosis <- GeneratePCA(data_exon, cov = "Diagnosis", pcol = brewer.pal(11, "RdBu")[c(5, 9, 4, 3)], discrete = FALSE, file = "7_pca_exon_summarized_data_Diagnosis_colored.pdf")
+# PCA only colouring File
+pca_file <- GeneratePCA(data_exon, cov = "File", pcol = brewer.pal(11, "RdBu")[c(1, 3, 10)], discrete = FALSE, file = "7_pca_exon_summarized_data_File_colored.pdf")
+# PCA only colouring Batches
+pca_batches <- GeneratePCA(data_exon, cov = "Batches", pcol = brewer.pal(11, "RdBu")[c(10, 8, 4, 3, 1)], discrete = FALSE, file = "7_pca_exon_summarized_data_Batches_colored.pdf")
+# PCA only colouring Type of Death
+# here, we need to first change the undefined ToD values to NA
+data_exon$ToD <- as.character(data_exon$ToD)
+data_exon[is.na(data_exon$ToD), "ToD"] <- "NA"
+data_exon$ToD <- as.factor(data_exon$ToD)
+pca_tod <- GeneratePCA(data_exon, cov = "ToD", pcol = brewer.pal(11, "RdBu")[c(10, 8, 4, 2)], discrete = FALSE, file = "7_pca_exon_summarized_data_Type_of_Death_colored.pdf")
+# plot all PCAs together (without colouring File as we cover it using Batch)
+ggarrange(pca_age, pca_ph, pca_pmi, pca_rin, pca_c1, pca_c2, pca_c3, pca_c4, pca_ancestry, pca_diagnosis, pca_sex, pca_file, pca_batches, pca_suicide, pca_tod, ncol = 3, nrow = 5)
+ggsave(filename = paste0(outpath, "/7_pca_exon_summarized_data_all_covariates.pdf"))
+rm(pca_age, pca_ph, pca_pmi, pca_rin, pca_rin2, pca_c1, pca_c2, pca_c3, pca_c4, pca_sex, pca_suicide, pca_ancestry, pca_dx, pca_diagnosis, pca_file, pca_batches, pca_tod, pca_exon, exprs_exon, data_exon, percent_var, sd_ratio)
+```
+
+## Heatmap of sample to sample distances
+
+```{r, echo = F}
+GenerateSampleToSampleHeatmap(data = exon_summaries, name = "exon summarized data", file = "7_pca_exon_summarized_data_sample_to_sample_distances.pdf")
+dev.off()
+rm(exon_summaries, pheno)
+```
+
+### arrayQualityMetrics
+
+```{r, eval = F, eval = F, include = F}
+exprs_exon <- exprs(exon_summaries)
+set_exon <- ExpressionSet(assayData = exprs_exon, phenoData = pheno)
+arrayQualityMetrics(expressionset = set_exon, outdir = paste0(outpath, "Report_of_exon_expression"), force = TRUE, do.logtransform = TRUE, intgroup = c("Diagnosis"))
+rm(exprs_exon, set_exon)
 ```
 
 
 # Covariate evaluation
 
-Here, we will check, if the covariates are significantly changing the gene expression using different methods.
+Here, we will check, if the covariates are significantly changing the gene expression using different methods. We will perform the covariate evaluation on gene-level only.
 
 ## Load Microarray Data
 
-First, we will load the RMA normalized, annotated and batch corrected data as well as the corresponding phenotype data.
+First, we will load the RMA normalized, batch corrected, gene-level summarized and annotated dataset with its the corresponding phenotype dataset.
 ```{r}
 # Import RMA corrected and annotated Affymetrix Microarray Data
 load(paste0(rdata_path, "/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData"))
@@ -1354,35 +1512,35 @@ dim(gene_summaries)
 As it is important, that the phenotype dataset and the microarray expressions have an identical order of the sample names, we will now check if this is true.
 ```{r}
 # check if pData and gene_summaries_final are identical
-pData <- pData(gene_summaries)
-identical(as.character(pData$ShortName), colnames(exprs(gene_summaries)))
+pdata <- pData(gene_summaries)
+identical(as.character(pdata$ShortName), colnames(exprs(gene_summaries)))
 ```
 
 ### Principal Variance Component Analysis (PVCA)
 
 Principal Variance Component Analysis is a screening tool to determine which sources of variability (biological, technical or other) are most prominent in a given microarray data set and should be included as covariates in the model. This step takes a long time to calculate as PVCA is not made for a large number of covariates.
-```{r, echo = F, eval = F, include = F}
+```{r, echo = F, include = F, eval = F}
 # get the neccessary phenoData
-pData2 <- pData[, c("Age", "Sex", "Dx", "pH", "PMI", "RIN", "Batch", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "SV1")]
-pData2[, "Age"] <- cut(pData2[, "Age"], breaks = c(15, 30, 45, 60, 75, 90))
-pData2[, "pH"] <- cut(pData2[, "pH"], breaks = c(min(pData2[, "pH"]), mean(pData2[, "pH"]), max(pData2[, "pH"])), labels= c("Mean_or_Below", "Above"))
-pData2[, "PMI"] <- cut(pData2[, "PMI"], breaks = c(5, 20, 35, 50, 65, 80))
-pData2[, "RIN"] <- cut(pData2[, "RIN"], breaks = c(min(pData2[, "RIN"]), mean(pData2[, "RIN"]), max(pData2[, "RIN"])), labels= c("Mean_or_Below", "Above"))
-edata <- ExpressionSet(assayData = as.matrix(exprs(gene_summaries)), phenoData = AnnotatedDataFrame(pData2), featureData = AnnotatedDataFrame(fData(gene_summaries)))
+pdata <- pdata[, c("Age", "Sex", "Dx", "pH", "PMI", "RIN", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "SV1")]
+pdata[, "Age"] <- cut(pdata[, "Age"], breaks = c(15, 30, 45, 60, 75, 90))
+pdata[, "pH"] <- cut(pdata[, "pH"], breaks = c(min(pdata[, "pH"]), mean(pdata[, "pH"]), max(pdata[, "pH"])), labels = c("Mean_or_Below", "Above"))
+pdata[, "PMI"] <- cut(pdata[, "PMI"], breaks = c(5, 20, 35, 50, 65, 80))
+pdata[, "RIN"] <- cut(pdata[, "RIN"], breaks = c(min(pdata[, "RIN"]), mean(pdata[, "RIN"]), max(pdata[, "RIN"])), labels = c("Mean_or_Below", "Above"))
+edata <- ExpressionSet(assayData = as.matrix(exprs(gene_summaries)), phenoData = AnnotatedDataFrame(pdata), featureData = AnnotatedDataFrame(fData(gene_summaries)))
 # Set the covariates whose effect size on the data needs to be calculated
-cov_eff_var <- c("Age", "Sex", "Dx", "pH", "PMI", "RIN", "Batch", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "SV1")
+cov_eff_var <- c("Age", "Sex", "Dx", "pH", "PMI", "RIN", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "SV1")
 # The PVCA Threshold Value (between 0 and 1) is the percentile value of the minimum amount of the variabilities that the selected principal components need to explain, here requiring 75% of the expression variance to be captured by the PCs
 pct_threshold <- 0.75 
 # Perform the PVCA analysis
-pvcaObj <- pvcaBatchAssess(edata, cov_eff_var, pct_threshold)
+pvca_obj <- pvcaBatchAssess(edata, cov_eff_var, pct_threshold)
 pdf(file = paste0(outpath, "6_barplot_PVCA_cov_evaluation.pdf"))
-bp <- barplot(pvcaObj$dat,  xlab = "Effects", ylab = "Weighted average proportion variance",
+bp <- barplot(pvca_obj$dat,  xlab = "Effects", ylab = "Weighted average proportion variance",
               ylim = c(0,1.1), col = brewer.pal(11, "RdBu")[9], las = 2, 
               main = "PVCA estimation bar chart")
-axis(1, at = bp, labels = pvcaObj$label, xlab = "Effects", cex.axis = 0.5, las = 2)
-values = pvcaObj$dat
+axis(1, at = bp, labels = pvca_obj$label, xlab = "Effects", cex.axis = 0.5, las = 2)
+values = pvca_obj$dat
 new_values = round(values , 3)
-text(bp, pvcaObj$dat, labels = new_values, pos = 3, cex = 0.8)
+text(bp, pvca_obj$dat, labels = new_values, pos = 3, cex = 0.8)
 dev.off()
 ```
 
@@ -1391,81 +1549,81 @@ dev.off()
 First, we need to filter out phenotype data with missing values as well as unuseful columns in the phenotype data (e.g. MHRIID; Filename, ShortName, Batch and File) as these are just identifiers for mapping or already excluded (e.g. batch correction) from the dataset. Then, we will generate the design matrix including all covariates that we want to test. Therefore, we first need to convert all categorical covariates into factor and all continuous covariates into numerical class. We will also change all BPD and MDD diagnosis into AFF (as they did in Fromer et al.) and calculate the design matrix of all leftover covariates (see below).
 ```{r, echo = F}
 # get only columns, we want to test for
-pData_new <- pData[, c("Age", "Sex", "Dx", "pH", "PMI", "RIN", "Batch", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "SV1")]
+pdata_new <- pdata[, c("Age", "Sex", "Dx", "pH", "PMI", "RIN", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "SV1")]
 # save categorical and continuous variable names
-classes <- sapply(pData_new, class) # get type of columns
+classes <- sapply(pdata_new, class) # get type of columns
 categorical_cov = names(classes[classes == "factor"])
 continuous_cov = names(classes[classes == "numeric"])
 # relevel disease (Dx) to control (CTL)
-pData_new$Dx <- factor(pData_new$Dx, levels = c("CTL", "CASE"))
+pdata_new$Dx <- factor(pdata_new$Dx, levels = c("CTL", "CASE"))
 # generate contrast for design matrix
-contrast <- lapply(categorical_cov, function(x) {fac = pData_new[, x]; return(contrasts(fac))})
+contrast <- lapply(categorical_cov, function(x) {fac = pdata_new[, x]; return(contrasts(fac))})
 names(contrast) <- categorical_cov
 # generate design matrix
-design <- model.matrix(~ . + Age + Sex + Dx + pH + PMI + Suicide + RIN + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData_new, contrasts.arg = contrast)
+design <- model.matrix(~ . + Age + Sex + Dx + pH + PMI + Suicide + RIN + Type_of_Death + C1 + C2 + C3 + C4 + C5 + C6 + C7 + C8 + C9 + C10 + SV1, pdata_new, contrasts.arg = contrast)
 head(design)
 ```
-At the moment, we consider following covariates: `r paste(colnames(pData_new), collapse = ", ")`
+At the moment, we consider following covariates: `r paste(colnames(pdata_new), collapse = ", ")`
 
 Now, we will calculate the different principal components. The eigenvalues are not directly calculated by prcomp, so we need to do this on our own. Then we filter for all PCs with >= 1 % variance explained:
 ```{r, echo = F}
 pc <- prcomp(t(exprs(gene_summaries)), scale.= T) # scaling default is FALSE, but it is advisable to set to TRUE (see help of prcomp)
 # calculate eigenvalue (PCA variance)
-pc.var <- pc$sdev^2
-pve <- round(100 * (pc.var / sum(pc.var)))
+pc_var <- pc$sdev^2
+pve <- round(100 * (pc_var / sum(pc_var)))
 # examine how much variance is explained by PCs, and consider those with PVE >= 1%:
 npca = max(1, length(which(pve >= 1.0)))
-samplePCvals = pc$x[, 1:npca, drop = FALSE]
-colnames(samplePCvals) = paste(colnames(samplePCvals), " (", pve[1:npca], "%)", sep = "")
+sample_pc_vals = pc$x[, 1:npca, drop = FALSE]
+colnames(sample_pc_vals) = paste(colnames(sample_pc_vals), " (", pve[1:npca], "%)", sep = "")
 ```
-`r paste(colnames(samplePCvals), sep=", ")`
+`r paste(colnames(sample_pc_vals), sep = ", ")`
 
-Then, we will calculate the correlation of the covariances to the PCs. Then calculate the FDR values of each covariate to each PC and filter for all covariates that have a significant (< 0.1) correlation to at least one PC. 
+Now, we will calculate the correlation of the covariances to the PCs. Then, we calculate the FDR values of each covariate to each PC and filter for all covariates that have a significant (< 0.1) correlation to at least one PC. 
 ```{r}
-all_cor <- corr.test(samplePCvals, design, use='pairwise.complete.obs', method = "pearson", adjust = "none")
-cor_mat <- melt(all_cor$p, varnames=c("PC", "Covariate"))
+all_cor <- corr.test(sample_pc_vals, design, use = 'pairwise.complete.obs', method = "pearson", adjust = "none")
+cor_mat <- melt(all_cor$p, varnames = c("PC", "Covariate"))
 colnames(cor_mat)[colnames(cor_mat) == "value"] <- "pvalue"
 cor_mat$r <- melt(all_cor$r)$value # add r to data frame
 # Now calculate the fdr for all different covariates and check if they are significant (< 0.1) in ANY of the significant PC's
-fdr <- p.adjust(cor_mat$pvalue, method="fdr")
+fdr <- p.adjust(cor_mat$pvalue, method = "fdr")
 cor_mat$fdr <- fdr 
 significant <- fdr <= 0.1
 # get covariate names
-cov.names <- lapply(colnames(pData_new), function(x) colnames(design)[grep(x, colnames(design))])
-names(cov.names) <- colnames(pData_new)
-significant.cov <- sort(unique(cor_mat$Covariate[significant]))
-significant.cov <- names(which(sapply(cov.names, function(v) any(v %in% significant.cov))))
-not.significant.cov <- setdiff(colnames(pData_new), significant.cov)
+cov_names <- lapply(colnames(pdata_new), function(x) colnames(design)[grep(x, colnames(design))])
+names(cov_names) <- colnames(pdata_new)
+significant_cov <- sort(unique(cor_mat$Covariate[significant]))
+significant_cov <- names(which(sapply(cov_names, function(v) any(v %in% significant_cov))))
+not_significant_cov <- setdiff(colnames(pdata_new), significant_cov)
 ```
-Here, are all significant covariates from the design matrix: `r paste(significant.cov, sep = ", ")`
+Here, are all significant covariates from the design matrix: `r paste(significant_cov, sep = ", ")`
 
 Furthermore, we plot the significance of the correlations between the different covariates and significant PCs. We will also present the complete covariate list, which we will consider for our differential expression analysis.  
 ```{r, echo = F}
-cov.to.keep <- c("Age", "Sex", "PMI")
+cov_to_keep <- c("Age", "Sex", "PMI")
 # remove NA columns (Intercept)
-plotCor = na.omit(cor_mat[1:nrow(cor_mat), ])
-plotCor$PC = factor(plotCor$PC, levels = rev(levels(plotCor$PC)))
-plot_x_labels = levels(plotCor$Covariate)[levels(plotCor$Covariate) %in% plotCor$Covariate]
-ggplot(plotCor, aes(Covariate, PC, fill = fdr)) + geom_tile() + scale_alpha_manual(values = c('TRUE' = 0.85, 'FALSE' = 1)) + xlab("") + ylab("")
+plot_cor = na.omit(cor_mat[1:nrow(cor_mat), ])
+plot_cor$PC = factor(plot_cor$PC, levels = rev(levels(plot_cor$PC)))
+plot_x_labels = levels(plot_cor$Covariate)[levels(plot_cor$Covariate) %in% plot_cor$Covariate]
+ggplot(plot_cor, aes(Covariate, PC, fill = fdr)) + geom_tile() + scale_alpha_manual(values = c('TRUE' = 0.85, 'FALSE' = 1)) + xlab("") + ylab("")
 # get covariate names
-cov_to_use <- union(cov.to.keep, significant.cov)
+cov_to_use <- union(cov_to_keep, significant_cov)
 design_cor <- corr.test(design[, -1], use = 'pairwise.complete.obs', method = "pearson", adjust = "none")
 ```
 The final known covariates, we will keep in our analysis are: `r paste(cov_to_use, collapse=", ")`
 
-Following covariates should not be included: `r setdiff(colnames(pData_new), cov_to_use)`
+Following covariates should not be included: `r setdiff(colnames(pdata_new), cov_to_use)`
 
 ### Using BIC
 
 In the Common Mind Consortium publication (Fromer et al., Nature Neuroscience 2016) they used a second method to check for the importance of a covariate (with max. 2 df): they ask, how many genes have an improved Bayesian Information Criterion (BIC) score, also known as the Schwarz Criterion, compared to a linear regression model containing only the diagnosis as covariate. So, we will generate a design matrix only including the diagnosis (Dx) as covariate and a second design matrix including diagnosis + one other covariate (each covariate once). Then, we will use the selectModel function of the limma package with the criterion parameter set to bic and check, how many genes have an improved BIC score compared to the deisgn only using diagnosis as a covariate. 
 ```{r}
-design <- model.matrix(~ Dx, pData_new) # design using ONLY diagnosis as covariate
-# go through all other possible covariates in pData_new
+design <- model.matrix(~ Dx, pdata_new) # design using ONLY diagnosis as covariate
+# go through all other possible covariates in pdata_new
 bics <- data.frame(matrix(NA, nrow = 1, ncol = 1))
 # go through all covariates
-for (cov in colnames(pData_new)) {
+for (cov in colnames(pdata_new)) {
   if (cov != "Dx") {
-    design2 <- model.matrix(~ Dx + get(cov), pData_new) # design using diagnosis and one other covariate
+    design2 <- model.matrix(~ Dx + get(cov), pdata_new) # design using diagnosis and one other covariate
     designlist <- list(design = design, design2 = design2)
     out <- selectModel(ExpressionSet(as.matrix(exprs(gene_summaries))), designlist = designlist, criterion = "bic")
     bics[cov] <- table(out$pref)[2][[1]] # get number of genes with improved BIC
@@ -1490,17 +1648,17 @@ Df = Degree of freedom (that is, the number of design matrix columns for one var
 Next, we will evaluate whether the quasi-continuous variables - Age, PMI, RIN and pH - affect gene expression in a simple linear manner or whether including quadratic terms also improves the model. Therefore, we will test the design matrix using the base model (all selected covariates from above, including diagnosis - Dx) with the base model + one of the quadratic terms. 
 ```{r, echo = F}
 # include Age, PMI, RIN and pH as quadratic terms Age^2, PMI^2, RIN^2 and pH^2
-pData.quad <- cbind(pData_new, pData_new[, "Age"]^2, pData_new[, "PMI"]^2, pData_new[, "RIN"]^2, pData_new[, "pH"]^2)
-colnames(pData.quad) <- c(colnames(pData_new), "Age2", "PMI2", "RIN2", "pH2")
-head(pData.quad)
+pData_quad <- cbind(pdata_new, pdata_new[, "Age"]^2, pdata_new[, "PMI"]^2, pdata_new[, "RIN"]^2, pdata_new[, "pH"]^2)
+colnames(pData_quad) <- c(colnames(pdata_new), "Age2", "PMI2", "RIN2", "pH2")
+head(pData_quad)
 # generate design using the base model (diagnosis, Age, Sex )
-design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + Suicide + Type_of_Death + C1 + C2 + C3 + C4, pData_new) 
-# go through all other possible covariates in pData_new
+design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + Suicide + Type_of_Death + C1 + C2 + C3 + C4, pdata_new) 
+# go through all other possible covariates in pdata_new
 bics_quad <- data.frame(matrix(NA, nrow = 1, ncol = 1))
 # go through all covariates
-for (cov in colnames(pData.quad)) {
-  if (!cov %in% colnames(pData_new)) {
-    design2 <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + get(cov), pData.quad) # design using diagnosis and one other covariate
+for (cov in colnames(pData_quad)) {
+  if (!cov %in% colnames(pdata_new)) {
+    design2 <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + get(cov), pData_quad) # design using diagnosis and one other covariate
     designlist <- list(design = design, design2 = design2)
     out <- selectModel(ExpressionSet(as.matrix(exprs(gene_summaries))), designlist = designlist, criterion = "bic")
     bics_quad[cov] <- table(out$pref)[2][[1]] # get number of genes with imprved BIC
@@ -1517,6 +1675,116 @@ bics_quad$matrix.NA..nrow...1..ncol...1. <- NULL
 | pH^2 | pH2 | 1 | `r bics_quad$pH2` |
 
 Final covariates for model design: **Dx, Age, Sex, pH, PMI, RIN, RIN2, Suicide, Type of Death, C1, C2, C3, C4**
+
+
+# Correlation Of Different Gene Summarization Methods
+
+Correlation between genes using oligos core (transcript) summarization vs. probeset summarization. 
+
+Once an overall correlation of all gene expression values is calculated and once for each gene separately (giving the number of genes with a correlation higher than 90%, 80% and 50%).
+
+## Correlation Between Genes
+
+### Load Data
+
+First, we need to load the core (transcript) summarized and the probeset summarized expression datasets, both mapped to gene-level. 
+```{r}
+# based on core summarization
+load(paste0(rdata_path, "/7_affymetrix_exon_microarray_data_after_rma_core_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData"))
+gene_summaries_core <- gene_summaries
+rm(gene_summaries)
+# based on probeset summarization
+load(paste0(rdata_path, "/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData"))
+gene_summaries_probesets <- gene_summaries
+rm(gene_summaries)
+```
+
+### Pre-process Expression Datasets
+
+Now, we will save the expression values into a data.frame and separate merged gene IDs, so that we have only one Ensembl gene ID per row. 
+```{r}
+# core transcript dataset
+exprs_core <- as.data.frame(exprs(gene_summaries_core))
+exprs_core$rownames <- rownames(exprs_core)
+exprs_core <- separate_rows(exprs_core, rownames, sep = "\\|")
+# probeset dataset
+exprs_probesets <- as.data.frame(exprs(gene_summaries_probesets))
+exprs_probesets$rownames <- rownames(exprs_probesets)
+exprs_probesets <- separate_rows(exprs_probesets, rownames, sep = "\\|")
+```
+
+### Correlation Per Gene
+
+Here, we will reduce both datasets into overlapping genes only. Then, calculate the correlation for each gene between both datasets and save the resulting correlations (Pearson and Spearman correlation) into a file. 
+```{r}
+# Get all overlapping gene IDs
+overlapping_genes <- intersect(exprs_core$rownames, exprs_probesets$rownames)
+
+# Reduce both matrices to overlapping genes only
+exprs_core <- exprs_core[exprs_core$rownames %in% overlapping_genes, ]
+exprs_probesets <- exprs_probesets[exprs_probesets$rownames %in% overlapping_genes, ]
+
+# Calculate correlation of all overlapping genes
+res <- as.data.frame(overlapping_genes)
+res$pearson <- lapply(overlapping_genes, function(x) cor(as.numeric(exprs_core[exprs_core$rownames == x, -c(length(exprs_core))]), as.numeric(exprs_probesets[exprs_probesets$rownames == x, -c(length(exprs_probesets))]), method = "pearson"))
+res$spearman <- lapply(overlapping_genes, function(x) cor(as.numeric(exprs_core[exprs_core$rownames == x, -c(length(exprs_core))]), as.numeric(exprs_probesets[exprs_probesets$rownames == x, -c(length(exprs_probesets))]), method = "spearman"))
+# save correlations into a file
+fwrite(res, file = paste0(outpath, "/gene_correlations_core_vs_probeset_summaries.csv"), sep = ",")
+```
+For the `r length(res$pearson)` genes, we can find `r length(res[res$pearson > 0.9, "pearson"])` with a Pearson correlation > 90% (`r length(res[res$spearman > 0.9, "spearman"])` for Spearman), `r length(res[res$pearson > 0.8, "pearson"])` with a Pearson correlation > 80% (`r length(res[res$spearman > 0.8, "spearman"])` for Spearman) and `r length(res[res$pearson > 0.5, "pearson"])` with a Pearson correlation > 50% (`r length(res[res$spearman > 0.5, "spearman"])` for Spearman). 
+
+Now, we will look into more detail for specific genes. First, we will check a gene with a high positive correlation **IFNA10**: 
+```{r}
+# Gene IFNA10 (Ensembl ID: ENSG00000186803.3) => example for high positive correlation
+test <- rbind(exprs_core[exprs_core$rownames == "ENSG00000186803.3", -c(length(exprs_core))], exprs_probesets[exprs_probesets$rownames == "ENSG00000186803.3",-c(length(exprs_probesets))])
+# correlation
+cor.test(as.numeric(exprs_core[exprs_core$rownames == "ENSG00000186803.3", -c(length(exprs_core))]), as.numeric(exprs_probesets[exprs_probesets$rownames == "ENSG00000186803.3",-c(length(exprs_probesets))]))
+# plot expressions against each other
+pdf(paste0(outpath, "/8_plot_expression_core_vs_probeset_IFNA10.pdf"))
+plot(t(test), xlab = "expression core_summaries", ylab = "expression probeset_summaries")
+dev.off()
+plot(t(test), xlab = "expression core_summaries", ylab = "expression probeset_summaries")
+```
+
+Then, for **FKBP5** as this is interestin gfor our collaboration partners and also a gene with many exons and transcripts: 
+```{r}
+# Gene FKBP5 (Ensembl ID: ENSG00000096060.10)
+test <- rbind(exprs_core[exprs_core$rownames == "ENSG00000096060.10", -c(length(exprs_core))], exprs_probesets[exprs_probesets$rownames == "ENSG00000096060.10",-c(length(exprs_probesets))])
+# correlation
+cor.test(as.numeric(exprs_core[exprs_core$rownames == "ENSG00000096060.10", -c(length(exprs_core))]), as.numeric(exprs_probesets[exprs_probesets$rownames == "ENSG00000096060.10",-c(length(exprs_probesets))]))
+# plot expressions against each other
+pdf(paste0(outpath, "/8_plot_expression_core_vs_probeset_FKBP5.pdf"))
+plot(t(test), xlab = "expression core_summaries", ylab = "expression probeset_summaries")
+dev.off()
+```
+
+Last but not least an example for a high negative correlation between the two datasets seen in gene **PTPN4**: 
+```{r}
+# Gene PTPN4 (Ensembl ID: ENSG00000088179.4) => example highest negative correlation
+test <- rbind(exprs_core[exprs_core$rownames == "ENSG00000088179.4", -c(length(exprs_core))], exprs_probesets[exprs_probesets$rownames == "ENSG00000088179.4",-c(length(exprs_probesets))])
+# correlation
+cor.test(as.numeric(exprs_core[exprs_core$rownames == "ENSG00000088179.4", -c(length(exprs_core))]), as.numeric(exprs_probesets[exprs_probesets$rownames == "ENSG00000088179.4",-c(length(exprs_probesets))]))
+# plot expressions against each other
+pdf(paste0(outpath, "/8_plot_expression_core_vs_probeset_PTPN4.pdf"))
+plot(t(test), xlab = "expression core_summaries", ylab = "expression probeset_summaries")
+dev.off()
+```
+
+
+## Overall Correlation
+
+At the end, we will calculate an overall correlation between the two gene expression matrices. Therefore, we need to order both in the exact same way and then calculate the correlation by converting the matrices into long vectors. 
+```{r}
+# Get both matrices into the same gene order
+exprs_core <- exprs_core[order(exprs_core$rownames), ]
+exprs_probesets <- exprs_probesets[order(exprs_probesets$rownames), ]
+print(paste0("Identical: ", identical(exprs_core$rownames, exprs_probesets$rownames)))
+
+# Calculate correlation of both matrices
+print(paste0("Pearson correlation: ", cor.test(unlist(c(exprs_core[, -c(length(exprs_core))])), unlist(c(exprs_probesets[, -c(length(exprs_probesets))])), alternative = "two.sided", method = "pearson")))
+print(paste0("Spearman correlation: ", cor.test(unlist(c(exprs_core[, -c(length(exprs_core))])), unlist(c(exprs_probesets[, -c(length(exprs_probesets))])), alternative = "two.sided", method = "spearman")))
+```
+
 
 # Session Info
 

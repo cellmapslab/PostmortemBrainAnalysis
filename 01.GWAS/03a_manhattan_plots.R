@@ -1,6 +1,6 @@
-############
-### GWAS ###
-############
+##############################
+### GWAS - Manhattan plots ###
+##############################
 # Invoke the script in the commandline as follows: R CMD BATCH --slave "--args input=<path/input-file> output=<path/output-file>" 03a_manhattan_plots.R
 # or with Rscript: Rscript --slave 03a_manhattan_plots.R input=<path/input-file> output=<path/output-file>
 
@@ -36,29 +36,28 @@ if(length(args) == 0){
     # 4. Generate Manhattan Plot for the GWAS (logistic regression) with covariates
     # 4.1 The easy way using the qqman package:
     pdf(paste0(output, ".pdf"), width = 17, height = 7)
-manhattan(gwas_results, chr = "CHR", bp = "BP", snp = "SNP", p = "P", suggestiveline = -log10(1e-02))
+    manhattan(gwas_results, chr = "CHR", bp = "BP", snp = "SNP", p = "P", suggestiveline = -log10(1e-02))
     dev.off()
 
     # 4.2 The more complicated way using ggplot2:
     #  First of all, we need to compute the cumulative position of SNPs
     don <- gwas_results %>% 
-    # Compute chromosome size
-    group_by(CHR) %>% 
-    summarise(chr_len = max(BP)) %>% 
-    # Calculate cumulative position of each chromosome
-    mutate(tot = cumsum(as.numeric(chr_len)) - chr_len) %>%
-    select(-chr_len) %>%
-    # Add this info to the initial dataset
-    left_join(gwas_results, ., by = c("CHR" = "CHR")) %>%
-    # Add a cumulative position of each SNP
-    arrange(CHR, BP) %>%
-    mutate( BPcum=BP+tot)
+           # Compute chromosome size
+           group_by(CHR) %>% 
+           summarise(chr_len = max(BP)) %>% 
+           # Calculate cumulative position of each chromosome
+           mutate(tot = cumsum(as.numeric(chr_len)) - chr_len) %>%
+           select(-chr_len) %>%
+           # Add this info to the initial dataset
+           left_join(gwas_results, ., by = c("CHR" = "CHR")) %>%
+           # Add a cumulative position of each SNP
+           arrange(CHR, BP) %>%
+           mutate(BPcum = BP + tot)
 
     # Then we need to prepare the x-axis (indeed we do not want to display the cumulative position of SNP in bp, but just show the chromosome name instead)
     axisdf <- don %>% group_by(CHR) %>% summarize(center = (max(BPcum) + min(BPcum)) / 2)
 
     # Ready to make the plot using ggplot2:
-    pdf(paste0(output, "2.pdf"), width = 17, height = 7)
     ggplot(don, aes(x = BPcum, y = -log10(P))) +
         # Show all points
         geom_point(aes(color = as.factor(CHR)), alpha = 0.8, size = 2) +
@@ -81,9 +80,8 @@ manhattan(gwas_results, chr = "CHR", bp = "BP", snp = "SNP", p = "P", suggestive
               panel.grid.minor.x = element_blank(),
               axis.text = element_text(size = 30),
               axis.title = element_text(size = 36))
-    dev.off()
+    ggsave(paste0(output, "2.pdf"), width = 17, height = 7)
     rm(gwas_results, don, axisdf)
-
 
     print(sessionInfo())
 }

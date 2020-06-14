@@ -2,8 +2,8 @@
 ### Generate GRanges objects ###
 ################################
 # This R-Script generates GRanges objects for the eQTL data as well as several public datasets (CMC, GTEx, VEP)
-# Invoke the script in the commandline as follows: R CMD BATCH --slave "--args inpath=<path/input-file> snps=<path/snp-file> gtf=<path/gtf-file> gpos=<path/genespos-file> tpos=<path/transpos-file> epos=<path/exonspos-file> outpath=<path/for/output> 05_generate_GRanges_objects.R
-# or using Rscript: Rscript --slave 04a_generate_result_table.R inpath=<path/input-file> snps=<path/snp-file> gtf=<path/gtf-file> gpos=<path/genespos-file> tpos=<path/transpos-file> epos=<path/exonspos-file> outpath=<path/for/output>
+# Invoke the script in the commandline as follows: R CMD BATCH --slave "--args frq=<path/maf-file> geno=<path/to/geno-files> eqtls=<path/to/eQTL-files> clump=<path/to/clumped-eQTL-files> cmc=<path/to/CMC-files> gtex=<path/to/gtex-v8> cortex=<path/to/cortex-files> gwas=<path/to/gwas-sumstats> outpath=<path/for/output>" 05_generate_GRanges_objects.R &>> generate_GRanges_objects.log
+# or using Rscript: Rscript --slave 04a_generate_result_table.R frq=<path/maf-file> geno=<path/to/geno-files> eqtls=<path/to/eQTL-files> clump=<path/to/clumped-eQTL-files> cmc=<path/to/CMC-files> gtex=<path/to/gtex-v8> cortex=<path/to/cortex-files> gwas=<path/to/gwas-sumstats> outpath=<path/for/output> &>> generate_GRanges_objects.log
 
 # Load locally installed packages for R version 3.6
 .libPaths("/home/icb/karolina.worf/R/x86_64-pc-linux-gnu-library/3.6/")
@@ -18,11 +18,11 @@ library(arules)
 library(biomaRt) # to get SNP positions
 
 # First read the arguments listed in the commandline, trailingOnly uses only the parameters after --args
-args = (commandArgs(trailingOnly=TRUE))	
+args = (commandArgs(trailingOnly = TRUE))	
 
 # go through the list of arguments
 if(length(args) == 0){
-    cat("\nScript to generate GRanges objects from the eQTL data as well as public datasets, such as CMC, GTEx, VEP, etc.\n\nYou can invoke the script as follows:\nRscript 05_generate_GRanges_objects.R inpath=\"/home/.../to/input-files\" snps=\"/home/.../SNP.file\" gtf=\"/home/.../gencode.gtf\" gpos=\"/home/.../gene-positions.file\" tpos=\"/home/.../transcript-positions.file\" epos=\"/home/.../exons-positions.file\" outpath=\"/home/.../for/output-files\" \n\nCommandline parameters:\n\ninpath\t\tpath, where the input files are stored\nsnps\t\tpath and file name of the SNP genotype data\ngtf\t\tpath and file name of the gencode .gtf file\ngpos\t\tpath and file name of the positions for all genes\ntpos\t\tpath and file name of the positions for all transcripts\nepos\t\tpath and file name of the positions for all exons\noutpath\t\tpath to store the output files\n\n")
+    cat("\nScript to generate GRanges objects from the eQTL data as well as public datasets, such as CMC, GTEx, VEP, etc.\n\nYou can invoke the script as follows:\nRscript 05_generate_GRanges_objects.R inpath=\"/home/.../to/input-files\" frq=\"/home/.../to/maf.frq/\" geno=\"path/to/genotype-files\" eqtls=\"path/to/eqtl-files\" clump=\"path/to/clumping-files\" cmc=\"path/to/cmc-files\" gtex=\"path/to/gtes-files\" cortex=\"/home/.../cortex.file\" gwas=\"path/to/gwas-files\" outpath=\"path/to/store/output\" &>> generate_GRanges_objects.log \n\nCommandline parameters:\n\nfrq\t\tfrequency file including the maf values for all SNPs\ngeno\t\tpath and file name without ending of the SNP genotype files in PLINK format (.bim/.bed/.fam)\neqtls\t\tpath to eqtl result files\nclump\t\tpath to clumped eQTL result files\ncmc\t\tpath to CMC (Fromer et al.) eQTL and isoQTL files\ngtex\t\tpath to GTEx v8 eQTL and sQTL files\ncortex\t\tpath to Cortex meQTL files\ngwas\t\tpath to GWAS summary statistic files\noutpath\t\tpath to store all output files into\n\n")
 } else {
     for(i in 1:length(args)){
         eval(parse(text = args[[i]]))
@@ -116,6 +116,7 @@ if(length(args) == 0){
     length(geSNPs_gr$snp_id) 
     rm(geSNPs, geSNPs_gr)
     print("Done with geSNPs cases vs. controls")
+    
     # Cases only
     geSNPs_cases <- fread(paste0(eqtls, "/02_pmb_cis-eQTL_gene_hits_cases_only.txt"), header = T, stringsAsFactors = F)
     geSNPs_cases_gr <- GenerateGrangesObjecteQTL(input = geSNPs_cases,
@@ -124,6 +125,7 @@ if(length(args) == 0){
     length(geSNPs_cases_gr$snp_id) 
     rm(geSNPs_cases, geSNPs_cases_gr)
     print("Done with geSNPs cases only")
+    
     # Controls only
     geSNPs_controls <- fread(paste0(eqtls, "/03_pmb_cis-eQTL_gene_hits_controls_only.txt"), header = T, stringsAsFactors = F)
     geSNPs_controls_gr <- GenerateGrangesObjecteQTL(input = geSNPs_controls,
@@ -132,6 +134,7 @@ if(length(args) == 0){
     length(geSNPs_controls_gr$snp_id) 
     rm(geSNPs_controls, geSNPs_controls_gr)
     print("Done with geSNPs controls only")
+    
     # Clumped cases vs. controls
     geSNPs_clumped <- fread(paste0(clump, "/01_pmb_cis-eQTL_gene_hits_cases_vs_controls_clumped.txt"), header = T, stringsAsFactors = F)
     geSNPs_clumped_gr <- GenerateGrangesObjecteQTL(input = geSNPs_clumped,
@@ -140,6 +143,7 @@ if(length(args) == 0){
     length(geSNPs_clumped_gr$snp_id) 
     rm(geSNPs_clumped, geSNPs_clumped_gr)
     print("Done with geSNPs cases vs. controls clumped")
+    
     # Clumped cases only
     geSNPs_cases_clumped <- fread(paste0(clump, "/02_pmb_cis-eQTL_gene_hits_cases_only_clumped.txt"), header = T, stringsAsFactors = F)
     geSNPs_cases_clumped_gr <- GenerateGrangesObjecteQTL(input = geSNPs_cases_clumped,
@@ -148,6 +152,7 @@ if(length(args) == 0){
     length(geSNPs_cases_clumped_gr$snp_id) 
     rm(geSNPs_cases_clumped, geSNPs_cases_clumped_gr)
     print("Done with geSNPs cases only clumed")
+    
     # Clumped controls only
     geSNPs_controls_clumped <- fread(paste0(clump, "/03_pmb_cis-eQTL_gene_hits_controls_only_clumped.txt"), header = T, stringsAsFactors = F)
     geSNPs_controls_clumped_gr <- GenerateGrangesObjecteQTL(input = geSNPs_controls_clumped,
@@ -166,6 +171,7 @@ if(length(args) == 0){
     length(teSNPs_gr$snp_id) 
     rm(teSNPs, teSNPs_gr)
     print("Done with teSNPs cases vs. controls")
+    
     # Cases only
     teSNPs_cases <- fread(paste0(eqtls, "/02_pmb_cis-eQTL_transcript_hits_cases_only.txt"), header = T, stringsAsFactors = F)
     teSNPs_cases_gr <- GenerateGrangesObjecteQTL(input = teSNPs_cases,
@@ -174,6 +180,7 @@ if(length(args) == 0){
     length(teSNPs_cases_gr$snp_id) 
     rm(teSNPs_cases, teSNPs_cases_gr)
     print("Done with teSNPs cases only")
+    
     # Controls only
     teSNPs_controls <- fread(paste0(eqtls, "/03_pmb_cis-eQTL_transcript_hits_controls_only.txt"), header = T, stringsAsFactors = F)
     teSNPs_controls_gr <- GenerateGrangesObjecteQTL(input = teSNPs_controls,
@@ -182,6 +189,7 @@ if(length(args) == 0){
     length(teSNPs_controls_gr$snp_id) 
     rm(teSNPs_controls, teSNPs_controls_gr)
     print("Done with teSNPs controls only")
+    
     # Clumped cases vs. controls
     teSNPs_clumped <- fread(paste0(clump, "/01_pmb_cis-eQTL_transcript_hits_cases_vs_controls_clumped.txt"), header = T, stringsAsFactors = F)
     teSNPs_clumped_gr <- GenerateGrangesObjecteQTL(input = teSNPs_clumped,
@@ -190,6 +198,7 @@ if(length(args) == 0){
     length(teSNPs_clumped_gr$snp_id) 
     rm(teSNPs_clumped, teSNPs_clumped_gr)
     print("Done with teSNPs cases vs. controls clumped")
+    
     # Clumped cases only
     teSNPs_cases_clumped <- fread(paste0(clump, "/02_pmb_cis-eQTL_transcript_hits_cases_only_clumped.txt"), header = T, stringsAsFactors = F)
     teSNPs_cases_clumped_gr <- GenerateGrangesObjecteQTL(input = teSNPs_cases_clumped,
@@ -198,6 +207,7 @@ if(length(args) == 0){
     length(teSNPs_cases_clumped_gr$snp_id) 
     rm(teSNPs_cases_clumped, teSNPs_cases_clumped_gr)
     print("Done with teSNPs cases only clumped")
+    
     # Clumped controls only
     teSNPs_controls_clumped <- fread(paste0(clump, "/03_pmb_cis-eQTL_transcript_hits_controls_only_clumped.txt"), header = T, stringsAsFactors = F)
     teSNPs_controls_clumped_gr <- GenerateGrangesObjecteQTL(input = teSNPs_controls_clumped,
@@ -216,6 +226,7 @@ if(length(args) == 0){
     length(eeSNPs_gr$snp_id) 
     rm(eeSNPs, eeSNPs_gr)
     print("Done with eeSNPs cases vs. controls")
+    
     # Cases only
     eeSNPs_cases <- fread(paste0(eqtls, "/02_pmb_cis-eQTL_exon_hits_cases_only.txt"), header = T, stringsAsFactors = F)
     eeSNPs_cases_gr <- GenerateGrangesObjecteQTL(input = eeSNPs_cases,
@@ -224,6 +235,7 @@ if(length(args) == 0){
     length(eeSNPs_cases_gr$snp_id) 
     rm(eeSNPs_cases, eeSNPs_cases_gr)
     print("Done with eeSNPs cases only")
+    
     # Controls only
     eeSNPs_controls <- fread(paste0(eqtls, "/03_pmb_cis-eQTL_exon_hits_controls_only.txt"), header = T, stringsAsFactors = F)
     eeSNPs_controls_gr <- GenerateGrangesObjecteQTL(input = eeSNPs_controls,
@@ -232,6 +244,7 @@ if(length(args) == 0){
     length(eeSNPs_controls_gr$snp_id) 
     rm(eeSNPs_controls, eeSNPs_controls_gr)
     print("Done with eeSNPs controls only")
+    
     # Clumped cases vs. controls
     eeSNPs_clumped <- fread(paste0(clump, "/01_pmb_cis-eQTL_exon_hits_cases_vs_controls_clumped.txt"), header = T, stringsAsFactors = F)
     eeSNPs_clumped_gr <- GenerateGrangesObjecteQTL(input = eeSNPs_clumped,
@@ -249,6 +262,7 @@ if(length(args) == 0){
     length(eeSNPs_cases_clumped_gr$snp_id) 
     rm(eeSNPs_cases_clumped, eeSNPs_cases_clumped_gr)
     print("Done with eeSNPs cases only clumped")
+    
     # Clumped controls only
     eeSNPs_controls_clumped <- fread(paste0(clump, "/03_pmb_cis-eQTL_exon_hits_controls_only_clumped.txt"), header = T, stringsAsFactors = F)
     eeSNPs_controls_clumped_gr <- GenerateGrangesObjecteQTL(input = eeSNPs_controls_clumped,
@@ -296,7 +310,7 @@ if(length(args) == 0){
     hg38_to_hg19 <- rtracklayer::import.chain("/storage/groups/ccm01/datasets/2019_GTEx_v8/hg38ToHg19.over.chain")
 
     # GTEx Whole Blood
-    gtex_wb <- data.table::fread("/storage/groups/ccm01/datasets/2019_GTEx_v8/GTEx_Analysis_v8_eQTL/Whole_Blood.v8.egenes.txt")
+    gtex_wb <- data.table::fread(paste0(gtex, "/GTEx_Analysis_v8_eQTL/Whole_Blood.v8.egenes.txt"))
     gtex_wb <- gtex_wb[gtex_wb$qval < 0.05, ] # filter for FDR < 0.05 (qvalue)
     gtex_wb_gr <- GenomicRanges::GRanges(seqnames = gtex_wb$chr,
                                          ranges = IRanges::IRanges(start = as.numeric(as.character(gtex_wb$variant_pos)), 
@@ -309,12 +323,13 @@ if(length(args) == 0){
     seqlevels(gtex_wb_gr_hg19, pruning.mode = "coarse") <- setdiff(seqlevels(gtex_wb_gr_hg19), c("X", "Y", "M"))
     saveRDS(gtex_wb_gr_hg19, paste0(outpath, "/GTEx_v8_Whole_Blood_hg19_eQTL_SNPs.rds"))
     rm(gtex_wb, gtex_wb_gr, gtex_wb_gr_hg19)
-
+    print("Done with GTEx whole blood eQTLs")
+    
     # GTEx Brain (all brain tissues)
     brains <- c("Brain_Amygdala.v8.egenes.txt", "Brain_Anterior_cingulate_cortex_BA24.v8.egenes.txt", "Brain_Caudate_basal_ganglia.v8.egenes.txt", "Brain_Cerebellar_Hemisphere.v8.egenes.txt", "Brain_Cerebellum.v8.egenes.txt", "Brain_Cortex.v8.egenes.txt", "Brain_Frontal_Cortex_BA9.v8.egenes.txt", "Brain_Hippocampus.v8.egenes.txt", "Brain_Hypothalamus.v8.egenes.txt", "Brain_Nucleus_accumbens_basal_ganglia.v8.egenes.txt", "Brain_Putamen_basal_ganglia.v8.egenes.txt", "Brain_Spinal_cord_cervical_c-1.v8.egenes.txt", "Brain_Substantia_nigra.v8.egenes.txt")
     gtex_brains <- data.frame()
     for (i in brains) {
-        filename <- paste0("/storage/groups/ccm01/datasets/2019_GTEx_v8/GTEx_Analysis_v8_eQTL/", i)
+        filename <- paste0(gtex, "/GTEx_Analysis_v8_eQTL/", i)
         data <- data.table::fread(filename)
         data <- data[data$qval < 0.05, ]  # filter for significant results
         gtex_brains <- rbind(gtex_brains, data) # merge different brain files together
@@ -331,10 +346,11 @@ if(length(args) == 0){
     seqlevels(gtex_brains_gr_hg19, pruning.mode = "coarse") <- setdiff(seqlevels(gtex_brains_gr_hg19), c("X", "Y", "M"))
     saveRDS(gtex_brains_gr_hg19, paste0(outpath, "/GTEx_v8_Brains_hg19_eQTL_SNPs.rds"))
     rm(brains, filename, data, i, gtex_brains, gtex_brains_gr, gtex_brains_gr_hg19)
-
+    print("Done with GTEx brain (all brain tissues) eQTLs")
+    
     ### splice QTL (sQTL) SNPs (seSNPs) ###
     # GTEx Whole Blood
-    gtex_wb <- data.table::fread("/storage/groups/ccm01/datasets/2019_GTEx_v8/GTEx_Analysis_v8_sQTL/Whole_Blood.v8.sgenes.txt")
+    gtex_wb <- data.table::fread(paste0(gtex, "/GTEx_Analysis_v8_sQTL/Whole_Blood.v8.sgenes.txt"))
     gtex_wb <- gtex_wb[gtex_wb$qval < 0.05, ] # filter for FDR < 0.05 (qvalue)
     gtex_wb_gr <- GenomicRanges::GRanges(seqnames = gtex_wb$chr,
                                          ranges = IRanges::IRanges(start = as.numeric(as.character(gtex_wb$variant_pos)),
@@ -347,12 +363,13 @@ if(length(args) == 0){
     seqlevels(gtex_wb_gr_hg19, pruning.mode = "coarse") <- setdiff(seqlevels(gtex_wb_gr_hg19), c("X", "Y", "M"))
     saveRDS(gtex_wb_gr_hg19, paste0(outpath, "/GTEx_v8_Whole_Blood_hg19_sQTL_SNPs.rds"))
     rm(gtex_wb, gtex_wb_gr, gtex_wb_gr_hg19)
+    print("Done with GTEx whole blood sQTLs")
 
     # GTEx Brain (all brain tissues)
     brains <- c("Brain_Amygdala.v8.sgenes.txt", "Brain_Anterior_cingulate_cortex_BA24.v8.sgenes.txt", "Brain_Caudate_basal_ganglia.v8.sgenes.txt", "Brain_Cerebellar_Hemisphere.v8.sgenes.txt", "Brain_Cerebellum.v8.sgenes.txt", "Brain_Cortex.v8.sgenes.txt", "Brain_Frontal_Cortex_BA9.v8.sgenes.txt", "Brain_Hippocampus.v8.sgenes.txt", "Brain_Hypothalamus.v8.sgenes.txt", "Brain_Nucleus_accumbens_basal_ganglia.v8.sgenes.txt", "Brain_Putamen_basal_ganglia.v8.sgenes.txt", "Brain_Spinal_cord_cervical_c-1.v8.sgenes.txt", "Brain_Substantia_nigra.v8.sgenes.txt")
     gtex_brains <- data.frame()
     for (i in brains) {
-        filename <- paste0("/storage/groups/ccm01/datasets/2019_GTEx_v8/GTEx_Analysis_v8_sQTL/", i)
+        filename <- paste0(gtex, "/GTEx_Analysis_v8_sQTL/", i)
         data <- data.table::fread(filename)
         data <- data[data$qval < 0.05, ]  # filter for significant results
         gtex_brains <- rbind(gtex_brains, data) # merge different brain files together
@@ -368,12 +385,13 @@ if(length(args) == 0){
     seqlevels(gtex_brains_gr_hg19, pruning.mode = "coarse") <- setdiff(seqlevels(gtex_brains_gr_hg19), c("X", "Y", "M"))
     saveRDS(gtex_brains_gr_hg19, paste0(outpath, "/GTEx_v8_Brains_hg19_sQTL_SNPs.rds"))
     rm(brains, filename, data, i, gtex_brains, gtex_brains_gr, gtex_brains_gr_hg19, hg38_to_hg19)
+    print("Done with GTEx brain (all brain tissues) eQTLs")
 
-
+    
     ####################
     ### Cortex meQTL ###
     ####################
-    cortex_meqtl <- fread("/storage/groups/ccm01/datasets/2019_cortex_meQTL/GSE74193_jaffe_onlineTable2_meQTLs_allPairs.csv")
+    cortex_meqtl <- fread(cortex)
     cortex_meqtl <- cortex_meqtl[cortex_meqtl$p < 0.05, ]
     cortex_meqtl_gr <- GRanges(seqnames = cortex_meqtl$snpChr, 
                                ranges = IRanges(start = as.numeric(as.character(cortex_meqtl$snpPos)), 
@@ -384,6 +402,7 @@ if(length(args) == 0){
     seqlevels(cortex_meqtl_gr, pruning.mode = "coarse") <- setdiff(seqlevels(cortex_meqtl_gr), c("X", "Y", "M"))
     saveRDS(cortex_meqtl_gr, paste0(outpath, "/Cortex_meQTL_SNPs.rds"))
     rm(cortex_meqtl, cortex_meqtl_gr)
+    print("Done with cortex meQTLs")
 
 
     ### VEP: Variant Effect Predictor
@@ -407,9 +426,10 @@ if(length(args) == 0){
     GenerateGrangesObject(ad, ofile = "GWAS_sumstats_AD-2019_p0.05.rds")
     rm(ad)
 
-    ### ADHD-2017 ###
-    adhd <- data.table::fread(paste0(gwas, "/ADHD-2017/adhd_jul2017"), header = T, stringsAsFactors = F, select = c("CHR", "BP", "SNP", "P"))
-    GenerateGrangesObject(adhd, ofile = "GWAS_sumstats_ADHD-2017_p0.05.rds")
+    ### ADHD-2019 ###
+    # data from 2017, but Paper published 2019
+    adhd <- data.table::fread(paste0(gwas, "/ADHD-2019/adhd_jul2017"), header = T, stringsAsFactors = F, select = c("CHR", "BP", "SNP", "P"))
+    GenerateGrangesObject(adhd, ofile = "GWAS_sumstats_ADHD-2019_p0.05.rds")
     rm(adhd)
 
     ### ALCDEP-2018 ###
@@ -425,38 +445,22 @@ if(length(args) == 0){
 
     ### ASD-2019 ###
     # data from 2017 but Paper published 2019, that is why we call it ASD-2019 not ASD-2017!
-    asd <- data.table::fread(paste0(gwas, "/ASD-2017/iPSYCH-PGC_ASD_Nov2017"), header = T, stringsAsFactors = F, select = c("CHR", "BP", "SNP", "P"))
+    asd <- data.table::fread(paste0(gwas, "/ASD-2019/iPSYCH-PGC_ASD_Nov2017"), header = T, stringsAsFactors = F, select = c("CHR", "BP", "SNP", "P"))
     GenerateGrangesObject(asd, ofile = "GWAS_sumstats_ASD-2019_p0.05.rds")
     rm(asd)
 
-    ### AUDIT-2018 ###
-    audit <- data.table::fread(paste0(gwas, "/AUDIT-2018/AUDIT_UKB_2018_AJP.txt"), header = T, stringsAsFactors = F, select = c("chr", "rsid", "p_T"))
-    audit <- audit[audit$p_T < 0.05, ]  # filter for p <= 0.05 (as otherwise it takes too long to change the SNP IDs)
-    # split into IDs without rs and with rs SNP ID (to get positions)
-    audit_chr_id <- audit[!(startsWith(audit$rsid, "rs")), ] 
-    audit_chr_id$BP <- sapply(audit_chr_id$rsid, function(x) strsplit(strsplit(x, ":")[[1]][2], "_")[[1]][1])
-    audit_chr_id <- audit_chr_id[, c("chr", "BP", "rsid", "p_T")]
-    colnames(audit_chr_id) <- c("CHR", "BP", "SNP", "P")
-    audit_rs_id <- audit[startsWith(audit$rsid, "rs"), ] 
-    # get positions for the rs IDs
-    rsids <- getBM(attributes = c("refsnp_id", "chrom_end"), 
-                   filters = "snp_filter",
-                   values = audit_rs_id$rsid,
-                   mart = snpmart,
-                   uniqueRows = TRUE)
-    # merge with AUDIT rs SNP IDs
-    audit_rs_id <- merge(audit_rs_id, rsids, by.x = "rsid", by.y = "refsnp_id", all.x = T)
-    audit_rs_id <- audit_rs_id[, c("chr", "chrom_end", "rsid", "p_T")]
-    colnames(audit_rs_id) <- c("CHR", "BP", "SNP", "P")
-    audit_rs_id$BP <- as.character(audit_rs_id$BP)
-    audit <- rbind(audit_chr_id, audit_rs_id)
-    audit <- audit[complete.cases(audit)] # remove SNPs without a position
-    GenerateGrangesObject(audit, ofile = "GWAS_sumstats_AUDIT-2018_p0.05.rds")
-    rm(audit, audit_chr_id, audit_rs_id, rsids)
+    ### AUDIT-2019 ###
+    # data from 2018, but paper published 2019
+    # positions were not available, so load the version including bp positions
+    audit <- data.table::fread(paste0(gwas, "/AUDIT-2019/AUDIT_UKB_2018_AJP_with_positions.txt"), header = T, stringsAsFactors = F, select = c("chr", "bp", "rsid", "p_T"))
+    colnames(audit) <- c("CHR", "BP", "SNP", "P")
+    GenerateGrangesObject(audit, ofile = "GWAS_sumstats_AUDIT-2019_p0.05.rds")
+    rm(audit)
 
-    ### BIP-2018 ###
-    bip <- data.table::fread(paste0(gwas, "/BIP-2018/daner_PGC_BIP32b_mds7a_0416a"), header = T, stringsAsFactors = F, select = c("CHR", "BP", "SNP", "P"))
-    GenerateGrangesObject(bip, ofile = "GWAS_sumstats_BIP-2018_p0.05.rds")
+    ### BIP-2019 ###
+    # data from 2018, but published 2019
+    bip <- data.table::fread(paste0(gwas, "/BIP-2019/daner_PGC_BIP32b_mds7a_0416a"), header = T, stringsAsFactors = F, select = c("CHR", "BP", "SNP", "P"))
+    GenerateGrangesObject(bip, ofile = "GWAS_sumstats_BIP-2019_p0.05.rds")
     rm(bip)
     
     ### BIPvsSCZ-2018 ###
@@ -469,10 +473,18 @@ if(length(args) == 0){
     GenerateGrangesObject(bip, ofile = "GWAS_sumstats_BIPSCZvsCONT-2018_p0.05.rds")
     rm(bip)
 
-    ### BMI-2015 ###
-    bmi <- data.table::fread(paste0(gwas, "/BMI-2015/ENGAGE1000G_BMI.txt"), header = T, stringsAsFactors = F, select = c("chromosome", "position", "SNP", "P"))
+    ### BMI-2015 (ENGAGE) ###
+    # add positions using HapMap II release 22 (done already)
+    bmi <- data.table::fread(paste0(gwas, "/BMI-2015_ENGAGE/ENGAGE1000G_BMI.txt"), header = T, stringsAsFactors = F, select = c("chromosome", "position", "SNP", "P"))
     colnames(bmi) <- c("CHR", "BP", "SNP", "P")
-    GenerateGrangesObject(bmi, ofile = "GWAS_sumstats_BMI-2015_p0.05.rds")
+    GenerateGrangesObject(bmi, ofile = "GWAS_sumstats_BMI-2015_ENGAGE_p0.05.rds")
+    rm(bmi)
+    
+    ### BMI-2015 (GIANT) ###
+    # add positions using HapMap II release 22 (done already)
+    bmi <- data.table::fread(paste0(gwas, "/BMI-2015_GIANT/SNP_gwas_mc_merge_nogc_with_locations.tbl.uniq"), header = T, stringsAsFactors = F, select = c("Chromosome", "Position", "SNP", "p"))
+    colnames(bmi) <- c("CHR", "BP", "SNP", "P")
+    GenerateGrangesObject(bmi, ofile = "GWAS_sumstats_BMI-2015_GIANT_p0.05.rds")
     rm(bmi)
 
     ### CAD-2017 ###
@@ -516,13 +528,13 @@ if(length(args) == 0){
     # uplift from hg18 to hg19 done already, just load the hg19 version
     height <- data.table::fread(paste0(gwas, "/Height-2014/GIANT_HEIGHT_Wood_et_al_2014_publicrelease_HapMapCeuFreq_hg19_with_locations.txt"), header = T, stringsAsFactors = F, select = c("Chromosome", "Position", "MarkerName", "p"))
     colnames(height) <- c("CHR", "BP", "SNP", "P")
-    GenerateGrangesObject(height, ofile = "GWAS_sumstats_Height-2014_p0.05.rds")
+    GenerateGrangesObject(height, ofile = "GWAS_sumstats_HE-2014_p0.05.rds")
     rm(height)
 
     ### Intelligence-2018 ###
     intelligence <- data.table::fread(paste0(gwas, "/Intelligence-2018/SavageJansen_2018_intelligence_metaanalysis.txt"), header = T, stringsAsFactors = F, select = c("CHR", "POS", "SNP", "P"))
     colnames(intelligence) <- c("CHR", "BP", "SNP", "P")
-    GenerateGrangesObject(intelligence, ofile = "GWAS_sumstats_Intelligence-2018_p0.05.rds")
+    GenerateGrangesObject(intelligence, ofile = "GWAS_sumstats_IN-2018_p0.05.rds")
     rm(intelligence)
 
     ### MDD1-2012 ###

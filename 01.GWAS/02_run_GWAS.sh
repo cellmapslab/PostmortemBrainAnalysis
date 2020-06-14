@@ -12,9 +12,9 @@ mkdir -p $outpath_gwas
 ###########################
 # 1. With Covariates
 # --logistic uses either linear (without control data) or logistic regression (with control data)
-$tools_path/PLINK/plink --bfile ${outpath_geno}/pmb_info06_all_chr_maf0.01_merged_samples_filtered --logistic hide-covar --freq --pheno /${outpath}/pheno.txt --allow-no-sex --covar /${outpath}/covar.txt --covar-name SEX,AGE,SUICIDE,TYPE_OF_DEATH,C1,C2,C3,C4 --out /${outpath_gwas}/pmb_info06_all_chr_maf0.01_merged_samples_filtered_GWAS_with_covar &>> ${outpath_gwas}/gwas_with_covariates.log
+$tools_path/PLINK/plink --bfile ${outpath_geno}/pmb_info06_all_chr_maf0.01_merged_samples_filtered --logistic hide-covar --freq --pheno /${outpath}/pheno.txt --allow-no-sex --covar /${outpath}/covar.txt --covar-name SEX,AGE,C1,C2,C3,C4 --out /${outpath_gwas}/pmb_info06_all_chr_maf0.01_merged_samples_filtered_GWAS_with_covar &>> ${outpath_gwas}/gwas_with_covariates.log
 
 # 2. Without Covariates
 # --assoc does not allow any covariates (ignores the --covar parameter, if set)
-$tools_path/PLINK/plink --bfile ${outpath_geno}/pmb_info06_all_chr_maf0.01_merged_samples_filtered --assoc --freq --pheno /${outpath}/pheno.txt --allow-no-sex --covar /${outpath}/covar.txt --covar-name SEX,AGE,SUICIDE,TYPE_OF_DEATH,C1,C2,C3,C4 --out /${outpath_gwas}/pmb_info06_all_chr_maf0.01_merged_samples_filtered_GWAS_without_covar &>> ${outpath_gwas}/gwas_without_covariates.log
+$tools_path/PLINK/plink --bfile ${outpath_geno}/pmb_info06_all_chr_maf0.01_merged_samples_filtered --assoc --freq --pheno /${outpath}/pheno.txt --allow-no-sex --covar /${outpath}/covar.txt --covar-name SEX,AGE,C1,C2,C3,C4 --out /${outpath_gwas}/pmb_info06_all_chr_maf0.01_merged_samples_filtered_GWAS_without_covar &>> ${outpath_gwas}/gwas_without_covariates.log
 

@@ -61,7 +61,7 @@ if(length(args) == 0){
   
   ### 3. Generate a file including all covariates for PRSice-2 and lassosum
   # get all important columns for the covariate file
-  covars <- pData[, c("FID", "IID", "Age", "Sex", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4")]
+  covars <- pData[, c("FID", "IID", "Age", "Sex", "C1", "C2", "C3", "C4")]
   covars[, ] <- lapply(covars[, ], as.character) # change all factors to character
   write.table(covars, file = output3, sep = "\t", quote = FALSE, row.names = FALSE)
 
@@ -81,21 +81,12 @@ if(length(args) == 0){
   ### 5. Generate a file including all covariates for LDpred 
   # categorical covariates need to be changed to continuous/numerical ones, do not include FID column and whitespace between columns instead of tabs
   # get all important columns for the covariate file
-  covars <- pData[, c("IID", "Age", "Sex", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4")]
+  covars <- pData[, c("IID", "Age", "Sex", "C1", "C2", "C3", "C4")]
   covars[, ] <- lapply(covars[, ], as.character) # change all factors to character
   
   # change sex from characters to numbers (M/Male = 1, F/Female = 2)
   covars[covars$Sex == "M", "Sex"] <- "1"
   covars[covars$Sex == "F", "Sex"] <- "2"
-  
-  # change suicide from characters to numbers (N/No = 1, Y/Yes = 2)
-  covars[covars$Suicide == "N", "Suicide"] <- "1"
-  covars[covars$Suicide == "Y", "Suicide"] <- "2"
-  
-  # change Type of Death from characters to numbers (Natural = 1, Non-violent = 2, Violent = 3) 
-  covars[covars$Type_of_Death == "Natural", "Type_of_Death"] <- "1"
-  covars[covars$Type_of_Death == "Non-violent", "Type_of_Death"] <- "2"
-  covars[covars$Type_of_Death == "Violent", "Type_of_Death"] <- "3"
    
   # save all important sample IIDs for filtering of the genotype data
   write.table(covars, file = output5, sep = " ", quote = FALSE, row.names = FALSE)
