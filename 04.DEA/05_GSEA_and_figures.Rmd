@@ -40,15 +40,15 @@ options(stringsAsFactors = T)
 # Load Packages
 
 Below you can find the list of packages that are required for all analysis steps. 
-
 ```{r}
-# genral packages
+# General packages
 library(qvalue)
 library(data.table)
 library(tidyr)
 library(rtracklayer)
 library(limma)
 library(plyr)
+library(dplyr)
 
 # Packages for pathway enrichment
 library(GSEABase)   # to load or generate gene set data
@@ -66,12 +66,13 @@ library(ggrepel)  # for volcanoplot
 library(pheatmap)
 library(grid)
 library(gridExtra)
+library(ggpubr)  # for ggbaloonplot
 ```
 
 
 # Paths
 
-Before we can start, we need to make sure that all necessary paths and folder names are saved. If the output folder does not exist yet, we will generate it using the systems (Red Hat Enterprise Linux operating system: Fedora 25) "mkdir" command.
+Before we can start, we need to make sure that all necessary paths and folder names are saved. If the output folder does not exist, we will generate it using the systems (Red Hat Enterprise Linux operating system: Fedora 25) "mkdir" command.
 ```{r}
 # path to the resulting RData files from the preprocessing step
 rdata_path = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_files"
@@ -577,7 +578,7 @@ We will generate a barplot of the number of hits, we get using the different cal
 
 We need to load all PRS transcript DEA hits and save only the number of found hits (FDR < 10% and FDR < 5%) into a table.
 ```{r, echo = F}
-prs_all <- c("ADHD-2019", "ASD-2019", "BIP-2019", "BMI-2015", "CAD-2017", "CDG1-2013", "CDG2-2018", "EA-2018", "HE-2014", "IN-2018", "MDD1-2012", "MDD2-2018", "MDD3-2019", "SCZ2-2014", "T2D-2017")
+prs_all <- c("ADHD-2019", "ASD-2019", "BIP-2019", "BMI-2015", "CAD-2017", "CDG1-2013", "CDG2-2019", "EA-2018", "HE-2014", "IN-2018", "MDD1-2012", "MDD2-2018", "MDD3-2019", "SCZ2-2014", "T2D-2017")
 prs_transcripts <- data.frame("PRS" = character(), "FDR_0.1" = numeric(), "FDR_0.05" = numeric())
 count = 1
 for (p in prs_all) {
@@ -860,13 +861,13 @@ We will generate a barplot of the number of hits, we get using the different cal
 
 We need to load all PRS exon DEA hits and save only the number of found hits (FDR < 10% and FDR < 5%) into a table.
 ```{r, echo = F}
-prs_all <- c("ADHD-2019", "ASD-2019", "BIP-2019", "BMI-2015", "CAD-2017", "CDG1-2013", "CDG2-2018", "EA-2018", "HE-2014", "IN-2018", "MDD1-2012", "MDD2-2018", "MDD3-2019", "SCZ2-2014", "T2D-2017")
+prs_all <- c("ADHD-2019", "ASD-2019", "BIP-2019", "BMI-2015", "CAD-2017", "CDG1-2013", "CDG2-2019", "EA-2018", "HE-2014", "IN-2018", "MDD1-2012", "MDD2-2018", "MDD3-2019", "SCZ2-2014", "T2D-2017")
 prs_exons <- data.frame("PRS" = character(), "FDR_0.1" = numeric(), "FDR_0.05" = numeric())
 count = 1
 for (p in prs_all) {
-  prs <- fread(paste0(results_path, "/3.5.", count, "_diff_expr_exons_for_", p, "_PRS_new_pvalue_and_fdr.csv"), select = c("Gene Symbol", "FDR estimate"), stringsAsFactors = F)
-  fdr10 <- length(unique(prs[prs$`FDR estimate` < 0.10, ]$`Gene Symbol`))
-  fdr5 <- length(unique(prs[prs$`FDR estimate` < 0.05, ]$`Gene Symbol`))
+  prs <- fread(paste0(results_path, "/3.5.", count, "_diff_expr_exons_for_", p, "_PRS_new_pvalue_and_fdr.csv"), select = c("Ensembl Gene ID", "Gene Symbol", "FDR estimate"), stringsAsFactors = F)
+  fdr10 <- length(unique(prs[prs$`FDR estimate` < 0.10, ]$`Ensembl Gene ID`))
+  fdr5 <- length(unique(prs[prs$`FDR estimate` < 0.05, ]$`Ensembl Gene ID`))
   new_row <- data.frame("PRS" = p, "FDR_0.1" = fdr10, "FDR_0.05" = fdr5)
   prs_exons <- rbind(prs_exons, new_row)
   count = count + 1
@@ -915,17 +916,20 @@ ggsave(plot = g, file = paste0(outpath, "/4_barplot_ALL_PRS_diff_expr_transcript
 g
 
 # Graph only with ADHD, ASD, BIP, CDG2, EA, MDD2, MDD3, SCZ, T2D
-prs_both <- prs_both[prs_both$PRS %in% c("ADHD-2019", "ASD-2019", "BIP-2019", "CDG2-2018", "EA-2018", "MDD2-2018", "MDD3-2019", "SCZ2-2014", "T2D-2017"), ]
-prs_both$PRS <- factor(prs_both$PRS, levels = c("ADHD-2019", "ASD-2019", "BIP-2019", "CDG2-2018", "MDD2-2018", "MDD3-2019", "SCZ2-2014", "EA-2018", "T2D-2017"))
+prs_both <- prs_both[prs_both$PRS %in% c("ADHD-2019", "ASD-2019", "BIP-2019", "CDG2-2019", "EA-2018", "MDD2-2018", "MDD3-2019", "SCZ2-2014", "T2D-2017"), ]
+prs_both$PRS <- factor(prs_both$PRS, levels = c("ADHD-2019", "ASD-2019", "BIP-2019", "CDG2-2019", "MDD2-2018", "MDD3-2019", "SCZ2-2014", "EA-2018", "T2D-2017"))
+prs_both$Label <- prs_both$FDR_0.1
+prs_both[prs_both$Type == "Transcript", "FDR_0.1"] <- prs_both[prs_both$Type == "Transcript", "FDR_0.1"] * 330
 g <- ggplot(prs_both, aes(x = PRS, y = FDR_0.1, fill = Type)) + 
   geom_bar(stat = "identity", position = position_dodge()) +
-  geom_text(aes(label = FDR_0.1), vjust = -0.25, position = position_dodge(0.9), size = 3.5) +
+  geom_text(aes(label = Label), vjust = -0.25, position = position_dodge(0.9), size = 3.5) +
   scale_fill_manual(values = brewer.pal(11, "RdBu")[c(9, 3)]) +
   theme_bw() +
   theme(legend.position = c(0.07, 0.88), legend.box.background = element_rect(colour = "grey"), legend.title = element_blank()) +
   theme(axis.text.x = element_text(angle = 60, hjust = 1, vjust = 1)) +
+  scale_y_continuous(sec.axis = sec_axis(~ . * 1 / 330, name = "Number of transcript eQTS")) +
   xlab("") +
-  ylab("Number of transcript/exon eQTS")
+  ylab("Number of exon eQTS")
 ggsave(plot = g, file = paste0(outpath, "/4_barplot_ADHD_ASD_BIP_CDG2_EA_MDD2_MDD3_SCZ2_T2D_PRS_diff_expr_transcripts_and_exons_for_PRS_new_pvalue_and_fdr.pdf"))
 g
 ```
@@ -982,60 +986,183 @@ GenerateForestPlot("DPP4")
 
 # Exon expression quantitative trait score (eeQTS)
 
-## Load data
-
-For gene HKDC1 (ENSG00000156510.11), which has two protein-coding transcripts, we have an eeQTS hit for BIP-2019, CDG2-2019 GWAS, MDD3-2019 and SCZ2-2014. With all, except BIP-2019 (exon ENSE00003249902.1, 6th exon in both transcripts), having a hit with exon ENSE00001096309.1, which is the second-last exon of the longest (18 exons) transcript of HKDC1. To plot the polygenic risk scores (PRS) for the four mentioned GWASs against gene expression we need to load the PRS first.
+For gene HKDC1 (ENSG00000156510.11), which has two protein-coding transcripts, we have an eeQTS hit for BIP-2019, CDG2-2019 GWAS, MDD3-2019 and SCZ2-2014. With all, except BIP-2019 (exon ENSE00003249902.1, 6th exon in both transcripts), having a hit with exon ENSE00001096309.1, which is the second-last exon of the longest (18 exons) transcript of HKDC1. To plot the polygenic risk scores (PRS) for the four mentioned GWASs against exon expression we need to load the PRS and merge them to the phenotype dataset. 
 ```{r, echo = F}
 # BIP-2019 PRS
 prs_bip <- GetPRS(paste0(prs_path, "/BIP-2019/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_BIP-2019_PRSice-2_PRS.all.score"))
 # CDG2-2018 PRS
-prs_cdg2 <- GetPRS(paste0(prs_path, "/CDG2-2018/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_CDG2-2018_PRSice-2_PRS.all.score"))
+prs_cdg2 <- GetPRS(paste0(prs_path, "/CDG2-2019/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_CDG2-2019_PRSice-2_PRS.all.score"))
 # MDD3-2019 PRS
 prs_mdd3 <- GetPRS(paste0(prs_path, "/MDD3-2019/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_MDD3-2019_PRSice-2_PRS.all.score"))
 # SCZ2-2014 PRS
 prs_scz2 <- GetPRS(paste0(prs_path, "/SCZ2-2014/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_SCZ2-2014_PRSice-2_PRS.all.score"))
-
 # Then, we add the four PRSs to pData of the gene expression dataset.
-pData(gene_summaries) <- plyr::join(pData(gene_summaries), as.data.frame(prs_bip))
-colnames(pData(gene_summaries))[length(pData(gene_summaries)[1,])] <- "PRS.BIP"
-pData(gene_summaries) <- plyr::join(pData(gene_summaries), as.data.frame(prs_cdg2))
-colnames(pData(gene_summaries))[length(pData(gene_summaries)[1,])] <- "PRS.CDG2"
-pData(gene_summaries) <- plyr::join(pData(gene_summaries), as.data.frame(prs_mdd3))
-colnames(pData(gene_summaries))[length(pData(gene_summaries)[1,])] <- "PRS.MDD3"
-pData(gene_summaries) <- plyr::join(pData(gene_summaries), as.data.frame(prs_scz2))
-colnames(pData(gene_summaries))[length(pData(gene_summaries)[1,])] <- "PRS.SCZ2"
-head(pData(gene_summaries))
+pData(exon_summaries) <- plyr::join(pData(exon_summaries), as.data.frame(prs_bip))
+colnames(pData(exon_summaries))[length(pData(exon_summaries)[1,])] <- "PRS.BIP"
+pData(exon_summaries) <- plyr::join(pData(exon_summaries), as.data.frame(prs_cdg2))
+colnames(pData(exon_summaries))[length(pData(exon_summaries)[1,])] <- "PRS.CDG2"
+pData(exon_summaries) <- plyr::join(pData(exon_summaries), as.data.frame(prs_mdd3))
+colnames(pData(exon_summaries))[length(pData(exon_summaries)[1,])] <- "PRS.MDD3"
+pData(exon_summaries) <- plyr::join(pData(exon_summaries), as.data.frame(prs_scz2))
+colnames(pData(exon_summaries))[length(pData(exon_summaries)[1,])] <- "PRS.SCZ2"
+pheno <- pData(exon_summaries)[, c("ShortName", "PRS.BIP", "PRS.CDG2", "PRS.MDD3", "PRS.SCZ2", "Dx", "Diagnosis")]
+pheno$Diagnosis <- factor(pheno$Diagnosis, levels = c("CTL", "BPD", "MDD", "SCZ"))
+head(pheno)
+```
+
+Then, we also need to load the residuals of the exon expression for each eQTS and save them all into a data frame. Here, we need to save exon ENSE00003249902 for the BIP-2019 eQTS and exon ENSE00001096309 for CDG2-2019, MDD3-2019 and SCZ2-2014 eQTS.
+```{r}
+# load BIP-2019 eQTS expression
+load(paste0(results_path, "/3.5.3_diff_expr_exons_for_BIP-2019_PRS_new_pvalue_and_fdr.RData"))
+prs <- res[rownames(res) == "ENSE00003249902.1", ]
+prs <- t(t(as.data.frame(prs)))
+colnames(prs) <- "ENSE00003249902_BIP"
+plot_data <- merge(pheno, prs, by.x = "ShortName", by.y = "row.names")
+# load CDG2-2019 eQTS expression
+load(paste0(results_path, "/3.5.7_diff_expr_exons_for_CDG2-2019_PRS_new_pvalue_and_fdr.RData"))
+prs <- res[rownames(res) == "ENSE00001096309.1", ]
+prs <- t(t(as.data.frame(prs)))
+colnames(prs) <- "ENSE00001096309_CDG"
+plot_data <- merge(plot_data, prs, by.x = "ShortName", by.y = "row.names")
+# load MDD3-2019 eQTS expression
+load(paste0(results_path, "/3.5.13_diff_expr_exons_for_MDD3-2019_PRS_new_pvalue_and_fdr.RData"))
+prs <- res[rownames(res) == "ENSE00001096309.1", ]
+prs <- t(t(as.data.frame(prs)))
+colnames(prs) <- "ENSE00001096309_MDD"
+plot_data <- merge(plot_data, prs, by.x = "ShortName", by.y = "row.names")
+# load SCZ2-2019 eQTS expression
+load(paste0(results_path, "/3.5.14_diff_expr_exons_for_SCZ2-2014_PRS_new_pvalue_and_fdr.RData"))
+prs <- res[rownames(res) == "ENSE00001096309.1", ]
+prs <- t(t(as.data.frame(prs)))
+colnames(prs) <- "ENSE00001096309_SCZ"
+plot_data <- merge(plot_data, prs, by.x = "ShortName", by.y = "row.names")
 ```
 
 ## Scatterplot
 
-Now, we can generate scatterplots, where each of the four PRSs is plotted against the gene expression. 
-```{r, echo = F}
-# first, we need to get the data into the right format for ggplot
-gene <- as.data.frame(exprs(gene_summaries)["ENSG00000156510.11",])
-colnames(gene) <- "gene"
-prs <- pData(gene_summaries)[, c("ShortName", "PRS.BIP", "PRS.CDG2", "PRS.MDD3", "PRS.SCZ2")]
-plot_data <- merge(prs, gene, by.x = "ShortName", by.y = "row.names")
-# BIP-2019 vs gene expression
-g1 <- ggplot(plot_data, aes(x = gene, y = PRS.BIP)) + geom_point() + xlab("Gene expression") + ylab("BIP-2019 PRS") + ggtitle("Scatterplot BIP-2019 PRS vs. gene expression")
-g2 <- ggplot(plot_data, aes(x = gene, y = PRS.CDG2)) + geom_point() + xlab("Gene expression") + ylab("CDG2-2019 PRS") + ggtitle("Scatterplot CDG2-2019 PRS vs. gene expression")
-g3 <- ggplot(plot_data, aes(x = gene, y = PRS.MDD3)) + geom_point() + xlab("Gene expression") + ylab("MDD3-2019 PRS") + ggtitle("Scatterplot MDD3-2019 PRS vs. gene expression")
-g4 <- ggplot(plot_data, aes(x = gene, y = PRS.SCZ2)) + geom_point() + xlab("Gene expression") + ylab("SCZ2-2014 PRS") + ggtitle("Scatterplot SCZ2-2014 PRS vs. gene expression")
+Now, we can generate scatterplots, where each of the four PRSs is plotted against the correpsonding residuals of the exon expression. 
+```{r}
+# 1. Coloring Dx (CASE vs. CTL)
+g1 <- ggplot(plot_data, aes(x = ENSE00003249902_BIP, y = PRS.BIP, col = Dx)) + geom_point() + xlab("Exon expression (residuals)") + ylab("Polygenic risk score") + ggtitle("BIP-2019 PRS vs. ENSE00003249902 expression")  + geom_smooth(method = "lm", se = F) + scale_color_manual(values = brewer.pal(11, "RdBu")[c(9, 3)], name = "Diagnosis", labels = c("Controls", "Cases")) + theme_bw()
+g2 <- ggplot(plot_data, aes(x = ENSE00001096309_CDG, y = PRS.CDG2, col = Dx)) + geom_point() + xlab("Exon expression (residuals)") + ylab("Polygenic risk score") + ggtitle("CDG-2019 PRS vs. ENSE00001096309 expression")  + geom_smooth(method = "lm", se = F) + scale_color_manual(values = brewer.pal(11, "RdBu")[c(9, 3)], name = "Diagnosis", labels = c("Controls", "Cases")) + theme_bw()
+g3 <- ggplot(plot_data, aes(x = ENSE00001096309_MDD, y = PRS.MDD3, col = Dx)) + geom_point() + xlab("Exon expression (residuals)") + ylab("Polygenic risk score") + ggtitle("MDD-2019 PRS vs. ENSE00001096309 expression")  + geom_smooth(method = "lm", se = F) + scale_color_manual(values = brewer.pal(11, "RdBu")[c(9, 3)], name = "Diagnosis", labels = c("Controls", "Cases")) + theme_bw()
+g4 <- ggplot(plot_data, aes(x = ENSE00001096309_SCZ, y = PRS.SCZ2, col = Dx)) + geom_point() + xlab("Exon expression (residuals)") + ylab("Polygenic risk score") + ggtitle("SCZ-2014 PRS vs. ENSE00001096309 expression")  + geom_smooth(method = "lm", se = F) + scale_color_manual(values = brewer.pal(11, "RdBu")[c(9, 3)], name = "Diagnosis", labels = c("Controls", "Cases")) + theme_bw()
 all <- grid.arrange(g1, g2, g3, g4, nrow = 2)
 all
-ggsave(all, file = paste0(outpath, "/4_scatterplot_BIP_CDG2_MDD3_SCZ2_PRS_vs_gene_expression.pdf"))
+ggsave(all, file = paste0(outpath, "/4.1_scatterplot_BIP_CDG2_MDD3_SCZ2_PRS_vs_exon_expression_Dx_colored.pdf"), width = 10, height = 5)
+# 2. Coloring Diagnosis (SCZ vs. BIP vs. MDD vs. CTL)
+g1 <- ggplot(plot_data, aes(x = ENSE00003249902_BIP, y = PRS.BIP, col = Diagnosis)) + geom_point() + xlab("Exon expression (residuals)") + ylab("Polygenic risk score") + ggtitle("BIP-2019 PRS vs. ENSE00003249902 expression")  + geom_smooth(method = "lm", se = F) + scale_color_manual(values = brewer.pal(11, "RdBu")[c(9, 2, 3, 4)], labels = c("CTL", "BPD", "MDD", "SCZ")) + theme_bw()
+g2 <- ggplot(plot_data, aes(x = ENSE00001096309_CDG, y = PRS.CDG2, col = Diagnosis)) + geom_point() + xlab("Exon expression (residuals)") + ylab("Polygenic risk score") + ggtitle("CDG-2019 PRS vs. ENSE00001096309 expression")  + geom_smooth(method = "lm", se = F) + scale_color_manual(values = brewer.pal(11, "RdBu")[c(9, 2, 3, 4)], labels = c("CTL", "BPD", "MDD", "SCZ")) + theme_bw()
+g3 <- ggplot(plot_data, aes(x = ENSE00001096309_MDD, y = PRS.MDD3, col = Diagnosis)) + geom_point() + xlab("Exon expression (residuals)") + ylab("Polygenic risk score") + ggtitle("MDD-2019 PRS vs. ENSE00001096309 expression")  + geom_smooth(method = "lm", se = F) + scale_color_manual(values = brewer.pal(11, "RdBu")[c(9, 2, 3, 4)], labels = c("CTL", "BPD", "MDD", "SCZ")) + theme_bw()
+g4 <- ggplot(plot_data, aes(x = ENSE00001096309_SCZ, y = PRS.SCZ2, col = Diagnosis)) + geom_point() + xlab("Exon expression (residuals)") + ylab("Polygenic risk score") + ggtitle("SCZ-2014 PRS vs. ENSE00001096309 expression")  + geom_smooth(method = "lm", se = F) + scale_color_manual(values = brewer.pal(11, "RdBu")[c(9, 2, 3, 4)], labels = c("CTL", "BPD", "MDD", "SCZ")) + theme_bw()
+all <- grid.arrange(g1, g2, g3, g4, nrow = 2)
+all
+ggsave(all, file = paste0(outpath, "/4.2_scatterplot_BIP_CDG2_MDD3_SCZ2_PRS_vs_exon_expression_Diagnosis_colored.pdf"), width = 10, height = 5)
 ```
 
-And, we can plot all four PRS in one scatterplot:
+## FUMA
+
+### Load data
+
+First, we will load the gene set enrichment analysis datasets (we will only load the exon eQTS results) and reduce it to the KEGG pathways. We will also save all hit gene sets into a list, so we know for which gene sets we need to filter all datasets.
 ```{r, echo = F}
-# first, we need to get the data into the right format for ggplot
-prs <- reshape2::melt(prs, id.vars = "ShortName")
-plot_data <- merge(prs, gene, by.x = "ShortName", by.y = "row.names")
-
-# generate scatterplot
-ggplot(plot_data, aes(x = gene, y = value, color = variable)) + geom_point()
-ggsave(file = paste0(outpath, "/4_scatterplot_BIP_CDG2_MDD3_SCZ2_PRS_vs_gene_expression_all_in_one.pdf"))
+# FUMA results
+hit_gene_sets <- list()
+asd_eqts <- fread(paste0(fuma_path, "/4.4_exon_eQTS_results/ASD-2019/GS.txt"))
+asd_eqts$GeneRatio <- asd_eqts$N_overlap / asd_eqts$N_genes
+asd_eqts <- asd_eqts[asd_eqts$Category == "4_kegg_entrez_no_disease_pathways.txt" & asd_eqts$adjP < 0.05, c("GeneSet", "GeneRatio", "adjP")]
+hit_gene_sets <- asd_eqts$GeneSet
+cdg_eqts <- fread(paste0(fuma_path, "/4.4_exon_eQTS_results/CDG-2019/GS.txt"))
+cdg_eqts$GeneRatio <- cdg_eqts$N_overlap / cdg_eqts$N_genes
+cdg_eqts <- cdg_eqts[cdg_eqts$Category == "4_kegg_entrez_no_disease_pathways.txt" & cdg_eqts$adjP < 0.05, c("GeneSet", "GeneRatio", "adjP")]
+hit_gene_sets <- c(hit_gene_sets, cdg_eqts$GeneSet)
+mdd_eqts <- fread(paste0(fuma_path, "/4.4_exon_eQTS_results/MDD-2019/GS.txt"))
+mdd_eqts$GeneRatio <- mdd_eqts$N_overlap / mdd_eqts$N_genes
+mdd_eqts <- mdd_eqts[mdd_eqts$Category == "4_kegg_entrez_no_disease_pathways.txt" & mdd_eqts$adjP < 0.05, c("GeneSet", "GeneRatio", "adjP")]
+hit_gene_sets <- c(hit_gene_sets, mdd_eqts$GeneSet)
+scz_eqts <- fread(paste0(fuma_path, "/4.4_exon_eQTS_results/SCZ-2014/GS.txt"))
+scz_eqts$GeneRatio <- scz_eqts$N_overlap / scz_eqts$N_genes
+scz_eqts <- scz_eqts[scz_eqts$Category == "4_kegg_entrez_no_disease_pathways.txt" & scz_eqts$adjP < 0.05, c("GeneSet", "GeneRatio", "adjP")]
+hit_gene_sets <- c(hit_gene_sets, scz_eqts$GeneSet)
+aabms_eqts <- fread(paste0(fuma_path, "/4.4_exon_eQTS_results/AABMS/GS.txt"))
+aabms_eqts$GeneRatio <- aabms_eqts$N_overlap / aabms_eqts$N_genes
+aabms_eqts <- aabms_eqts[aabms_eqts$Category == "4_kegg_entrez_no_disease_pathways.txt" & aabms_eqts$adjP < 0.05, c("GeneSet", "GeneRatio", "adjP")]
+hit_gene_sets <- c(hit_gene_sets, aabms_eqts$GeneSet)
+abms_eqts <- fread(paste0(fuma_path, "/4.4_exon_eQTS_results/ABMS/GS.txt"))
+abms_eqts$GeneRatio <- abms_eqts$N_overlap / abms_eqts$N_genes
+abms_eqts <- abms_eqts[abms_eqts$Category == "4_kegg_entrez_no_disease_pathways.txt" & abms_eqts$adjP < 0.05, c("GeneSet", "GeneRatio", "adjP")]
+hit_gene_sets <- c(hit_gene_sets, abms_eqts$GeneSet)
+bms_eqts <- fread(paste0(fuma_path, "/4.4_exon_eQTS_results/BMS/GS.txt"))
+bms_eqts$GeneRatio <- bms_eqts$N_overlap / bms_eqts$N_genes
+bms_eqts <- bms_eqts[bms_eqts$Category == "4_kegg_entrez_no_disease_pathways.txt" & bms_eqts$adjP < 0.05, c("GeneSet", "GeneRatio", "adjP")]
+hit_gene_sets <- c(hit_gene_sets, bms_eqts$GeneSet)
+length(unique(hit_gene_sets))
 ```
+
+Now, we can generate the dataset for the plot using all gene sets that had a hit in at least one eQTS. We will set the p-value to 1 if no p-value for a gene set was given. 
+```{r}
+plot_data <- as.data.frame(hit_gene_sets)
+colnames(plot_data) <- "GeneSet"
+# get ASD hits
+plot_data <- merge(plot_data, asd_eqts[, c("GeneSet", "adjP")], by = "GeneSet", all.x = T)
+colnames(plot_data) <- c("GeneSet", "ASD")
+# get CDG hits
+plot_data <- merge(plot_data, cdg_eqts[, c("GeneSet", "adjP")], by = "GeneSet", all.x = T)
+colnames(plot_data) <- c("GeneSet", "ASD", "CDG")
+# get MDD hits
+plot_data <- merge(plot_data, mdd_eqts[, c("GeneSet", "adjP")], by = "GeneSet", all.x = T)
+colnames(plot_data) <- c("GeneSet", "ASD", "CDG", "MDD")
+# get SCZ hits
+plot_data <- merge(plot_data, scz_eqts[, c("GeneSet", "adjP")], by = "GeneSet", all.x = T)
+colnames(plot_data) <- c("GeneSet", "ASD", "CDG", "MDD", "SCZ")
+# get AABMS hits
+plot_data <- merge(plot_data, aabms_eqts[, c("GeneSet", "adjP")], by = "GeneSet", all.x = T)
+colnames(plot_data) <- c("GeneSet", "ASD", "CDG", "MDD", "SCZ", "AABMS")
+# get ABMS hits
+plot_data <- merge(plot_data, abms_eqts[, c("GeneSet", "adjP")], by = "GeneSet", all.x = T)
+colnames(plot_data) <- c("GeneSet", "ASD", "CDG", "MDD", "SCZ", "AABMS", "ABMS")
+plot_data <- reshape2::melt(data = plot_data, id.vars = "GeneSet")
+
+### get gene ratios
+grs <- as.data.frame(hit_gene_sets)
+colnames(grs) <- "GeneSet"
+# get ASD hits
+grs <- merge(grs, asd_eqts[, c("GeneSet", "GeneRatio")], by = "GeneSet", all.x = T)
+colnames(grs) <- c("GeneSet", "ASD")
+# get CDG hits
+grs <- merge(grs, cdg_eqts[, c("GeneSet", "GeneRatio")], by = "GeneSet", all.x = T)
+colnames(grs) <- c("GeneSet", "ASD", "CDG")
+# get MDD hits
+grs <- merge(grs, mdd_eqts[, c("GeneSet", "GeneRatio")], by = "GeneSet", all.x = T)
+colnames(grs) <- c("GeneSet", "ASD", "GR_CDG", "MDD")
+# get SCZ hits
+grs <- merge(grs, scz_eqts[, c("GeneSet", "GeneRatio")], by = "GeneSet", all.x = T)
+colnames(grs) <- c("GeneSet", "ASD", "CDG", "MDD", "SCZ")
+# get AABMS hits
+grs <- merge(grs, aabms_eqts[, c("GeneSet", "GeneRatio")], by = "GeneSet", all.x = T)
+colnames(grs) <- c("GeneSet", "ASD", "CDG", "MDD", "SCZ", "AABMS")
+# get ABMS hits
+grs <- merge(grs, abms_eqts[, c("GeneSet", "GeneRatio")], by = "GeneSet", all.x = T)
+colnames(grs) <- c("GeneSet", "ASD", "CDG", "MDD", "SCZ", "AABMS", "ABMS")
+grs <- reshape2::melt(data = grs, id.vars = "GeneSet")
+
+plot_data <- merge(plot_data, grs, by = c("GeneSet", "variable"))
+colnames(plot_data) <- c("GeneSet", "eQTS", "adjP", "GeneRatio")
+plot_data$log_adjP <- -log(plot_data$adjP)
+plot_data <- plot_data[!(duplicated(plot_data)), ]
+```
+
+### Balloonplot
+
+Generate a balloonplot including the results of the enriched (FDR <= 0.05) KEGG gene sets. 
+```{r, echo = F}
+ggballoonplot(plot_data, x = "eQTS", y = "GeneSet", fill = "log_adjP", size = "GeneRatio", ggtheme = theme_bw(), legend.title = "-log10(adjP)", size.range = c(1, 6), color = "lightgray") +
+              scale_fill_viridis_c(option = "C", direction = 1)
+ggsave(file = paste0(outpath, "/4.2_balloonplot_exon_eQTS_FUMA_KEGG.pdf"), width = 6, height = 17)
+# delete unnecessary data
+rm(aabms_eqts, abms_eqts, asd_eqts, cdg_eqts, mdd_eqts, scz_eqts, grs, hit_gene_sets, plot_data)
+```
+
 
 # Age DEGenes
 
@@ -1379,30 +1506,57 @@ rm(gDEGenes_c2, tDEGenes_c2, eDEGenes_c2)
 
 ### Load data
 
-First, we will load the dataset for the tissue enrichment analysis.
+First, we will load the dataset for the tissue enrichment analysis for the eDEGenes (no results for tDEGenes).
 ```{r, echo = F}
-# FUMA tDEGene results
-tDEGenes_fuma_gtex <- fread(paste0(fuma_path, "/4.2_tDEGenes_result/gtex_v8_ts_DEG.txt"), select = c("Category", "GeneSet", "p", "adjP"))
-tDEGenes_fuma_gtex$log_adjP <- -log10(tDEGenes_fuma_gtex$adjP)
-
 # FUMA eDEGene results
-eDEGenes_fuma_gtex <- fread(paste0(fuma_path,"/4.3_eDEGenes_result/gtex_v8_ts_DEG.txt"), select = c("Category", "GeneSet", "p", "adjP"))
+eDEGenes_fuma_gtex <- fread(paste0(fuma_path,"/4.3_eDEGenes_result/gtex_v8_ts_DEG.txt"))
 eDEGenes_fuma_gtex <- eDEGenes_fuma_gtex[eDEGenes_fuma_gtex$adjP < 0.05, ]
 eDEGenes_fuma_gtex$log_adjP <- -log10(eDEGenes_fuma_gtex$adjP)
 eDEGenes_fuma_gtex <- eDEGenes_fuma_gtex[eDEGenes_fuma_gtex$Category == "DEG.twoside", ]
 eDEGenes_fuma_gtex <- eDEGenes_fuma_gtex[order(eDEGenes_fuma_gtex$GeneSet, decreasing = T), ]
+eDEGenes_fuma_gtex <- separate_rows(eDEGenes_fuma_gtex, genes, sep = ":")
+```
 
-# merge tDEGenes and eDEGenes
-tDEGenes_fuma_gtex <- tDEGenes_fuma_gtex[tDEGenes_fuma_gtex$GeneSet %in% eDEGenes_fuma_gtex$GeneSet, ]
-tDEGenes_fuma_gtex$type <- "tDEGenes"
-eDEGenes_fuma_gtex$type <- "eDEGenes"
-fuma_gtex <- rbind(tDEGenes_fuma_gtex, eDEGenes_fuma_gtex)
+As we also want to know, how many genes are up and down-regulated, we also need to load the eDEGene results from the differential expression analysis:
+```{r}
+load(paste0(results_path, "/3.4_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.RData"))
+top_hits <- top_hits[top_hits$`FDR estimate` < 0.1, c("Ensembl Gene ID", "Gene Symbol", "LogFC")]
+top_hits$Reg <- ifelse(top_hits$LogFC < 0, "Down", "Up")
+top_hits$`Ensembl Gene ID` <- sapply(top_hits$`Ensembl Gene ID`, function(x) strsplit(x, "\\.")[[1]][1])
+```
+
+Now, we can calculate how many of the genes were up-/down-regulated and add it to the dataset. Then, we will transform the data into a ggplot readable format. 
+```{r}
+gtex_genes <- merge(eDEGenes_fuma_gtex, top_hits[, c("Ensembl Gene ID", "Reg")], by.x = "genes", by.y = "Ensembl Gene ID")
+gtex_genes <- aggregate(Reg ~ GeneSet, data = gtex_genes, FUN = function(x){table(x)})
+eDEGenes_fuma_gtex <- merge(eDEGenes_fuma_gtex, gtex_genes, by = "GeneSet")[, c("GeneSet", "N_overlap", "log_adjP", "Reg.Down", "Reg.Up")]
+eDEGenes_fuma_gtex <- eDEGenes_fuma_gtex[!duplicated(eDEGenes_fuma_gtex), ]
+# Now, we need the percentage of up/down regulated genes for log_adjP
+eDEGenes_fuma_gtex$Reg.Down <- (eDEGenes_fuma_gtex$log_adjP / eDEGenes_fuma_gtex$N_overlap) * eDEGenes_fuma_gtex$Reg.Down
+eDEGenes_fuma_gtex$Reg.Up <- (eDEGenes_fuma_gtex$log_adjP / eDEGenes_fuma_gtex$N_overlap) * eDEGenes_fuma_gtex$Reg.Up
+# And we need to form the data into ggplot format
+eDEGenes_fuma_gtex_reg <- melt(data = eDEGenes_fuma_gtex, id.vars = "GeneSet", measure.vars = c("Reg.Down", "Reg.Up"))
 ```
 
 ### Barplot
 
-Generate a barplot including the results of the down-regulated tDEGenes and eDEGenes. 
+Generate a barplot including the results of the up- and down-regulated eDEGenes (no results for tDEGenes). 
 ```{r, echo = F}
+eDEGenes_fuma_gtex_reg$GeneSet <- factor(as.factor(eDEGenes_fuma_gtex_reg$GeneSet), levels = c("Uterus", "Testis", "Pituitary", "Ovary", "Nerve_Tibial", "Muscle_Skeletal", "Lung", "Liver", "Kidney_Cortex", "Esophagus_Muscularis", "Esophagus_Gastroesophageal_Junction", "Colon_Sigmoid", "Breast_Mammary_Tissue", "Brain_Substantia_nigra", "Brain_Spinal_cord_cervical_c-1", "Brain_Putamen_basal_ganglia", "Brain_Nucleus_accumbens_basal_ganglia", "Brain_Hypothalamus", "Brain_Hippocampus", "Brain_Frontal_Cortex_BA9", "Brain_Cortex", "Brain_Cerebellum", "Brain_Cerebellar_Hemisphere", "Brain_Caudate_basal_ganglia", "Brain_Anterior_cingulate_cortex_BA24", "Brain_Amygdala", "Artery_Tibial", "Adrenal_Gland", "Adipose_Visceral_Omentum", "Adipose_Subcutaneous"))
+g <- ggplot(eDEGenes_fuma_gtex_reg, aes(fill = variable, y = value, x = GeneSet)) +
+    geom_bar(stat = "identity") +
+    coord_flip() +
+    theme_minimal() +
+    scale_fill_manual(values = brewer.pal(11, "RdBu")[c(3, 9)], name = "", labels = c("Down-regulated", "Up-regulated")) +
+    ylab(bquote("-log"["10"]*"(adjP)")) +
+    xlab("") +
+    labs(fill = "", labels = c("A", "B")) +
+    ggtitle("eDEGenes: KEGG pathways") +
+    scale_y_continuous(expand = c(0.02, 0.01)) +
+    theme(axis.ticks = element_line(colour = NA), text = element_text(size = 22), panel.background = element_rect(fill = NA), panel.grid.major.x = element_line(colour = "grey"), panel.grid.minor.x = element_line(colour = "grey"), strip.background = element_rect(fill = NA))
+ggsave(plot = g, file = paste0(outpath, "/3.4_barplot_eDEGenes_FUMA_GTEx_v8_up_down_reg_genes.pdf"), width = 8, height = 8)
+g
+# barplot without up/downregulated genes colored
 g <- ggplot(eDEGenes_fuma_gtex, aes(y = log_adjP, x = reorder(GeneSet, order(GeneSet, decreasing = T)))) +
     geom_bar(stat = "identity") +
     coord_flip() +
@@ -1418,36 +1572,53 @@ g
 rm(tDEGenes_fuma_gtex, eDEGenes_fuma_gtex, fuma_gtex, g)
 ```
 
-## Gene set enrichment
+## Gene set enrichment (eDEGenes)
 
 ### Load data
 
 First, we will load the gene set enrichment analysis datasets (as we only had results for eDEGenes, we will load only this dataset ).
 ```{r, echo = F}
 # FUMA eDEGene results
-eDEGenes_fuma_msigdb <- fread(paste0(fuma_path, "/4.3_eDEGenes_result/GS.txt"), select = c("Category", "GeneSet", "p", "adjP", "genes"))
-eDEGenes_fuma_msigdb <- eDEGenes_fuma_msigdb[eDEGenes_fuma_msigdb$Category == "KEGG", ]
-eDEGenes_fuma_msigdb <- eDEGenes_fuma_msigdb[eDEGenes_fuma_msigdb$adjP < 0.05, ]
-eDEGenes_fuma_msigdb$log_adjP <- -log10(eDEGenes_fuma_msigdb$adjP)
+eDEGenes_fuma_kegg <- fread(paste0(fuma_path, "/4.3_eDEGenes_result/GS.txt"))
+eDEGenes_fuma_kegg <- eDEGenes_fuma_kegg[eDEGenes_fuma_kegg$Category == "4_kegg_entrez_no_disease_pathways.txt", ]
+eDEGenes_fuma_kegg <- eDEGenes_fuma_kegg[eDEGenes_fuma_kegg$adjP < 0.05, ]
+eDEGenes_fuma_kegg$log_adjP <- -log10(eDEGenes_fuma_kegg$adjP)
+# get only pathway name and all overlapping genes + separate genes
+kegg_genes <- eDEGenes_fuma_kegg[, c("GeneSet", "genes")]
+kegg_genes <- separate_rows(kegg_genes, genes, sep = ":")
+```
+
+Now, we can calculate how many of the genes were up/downregulated using the top hits loaded in the tissue enrichment and add it to the dataset. Then, we will transform the data into a ggplot readable format. 
+```{r}
+kegg_genes <- merge(kegg_genes, top_hits[, c("Gene Symbol", "Reg")], by.x = "genes", by.y = "Gene Symbol")
+kegg_genes <- aggregate(Reg ~ GeneSet, data = kegg_genes, FUN = function(x){table(x)})
+eDEGenes_fuma_kegg <- merge(eDEGenes_fuma_kegg, kegg_genes, by = "GeneSet")[, c("GeneSet", "N_overlap", "log_adjP", "Reg.Down", "Reg.Up")]
+# Now, we need the percentage of up/down regulated genes for log_adjP
+eDEGenes_fuma_kegg$Reg.Down <- (eDEGenes_fuma_kegg$log_adjP / eDEGenes_fuma_kegg$N_overlap) * eDEGenes_fuma_kegg$Reg.Down
+eDEGenes_fuma_kegg$Reg.Up <- (eDEGenes_fuma_kegg$log_adjP / eDEGenes_fuma_kegg$N_overlap) * eDEGenes_fuma_kegg$Reg.Up
+# And we need to form the data into ggplot format
+eDEGenes_fuma_kegg <- reshape2::melt(data = eDEGenes_fuma_kegg, id.vars = "GeneSet", measure.vars = c("Reg.Down", "Reg.Up"))
 ```
 
 ### Barplot
 
 Generate a barplot including the results of the enriched (FDR <= 0.05) KEGG gene sets. 
 ```{r, echo = F}
-g <- ggplot(eDEGenes_fuma_msigdb, aes(x = reorder(GeneSet, log_adjP), y = log_adjP)) +
-    geom_bar(stat = "identity") +
-    coord_flip() +
+eDEGenes_fuma_kegg$GeneSet <- factor(as.factor(eDEGenes_fuma_kegg$GeneSet), levels = c("Protein digestion and absorption", "Axon guidance", "PI3K-Akt signaling pathway", "Complement and coagulation cascades", "Regulation of actin cytoskeleton", "ECM-receptor interaction"))
+g <- ggplot(eDEGenes_fuma_kegg, aes(fill = variable, y = value, x = GeneSet)) + 
+    geom_bar(position = "stack", stat = "identity") +
+    coord_flip() + 
     theme_minimal() +
+    scale_fill_manual(values = brewer.pal(11, "RdBu")[c(3, 9)]) +
     ylab(bquote("-log"["10"]*"(FDR)")) +
     xlab("") +
-    ggtitle("eDEGenes") +
+    ggtitle("KEGG pathways (eDEGenes)") +
     scale_y_continuous(expand = c(0.02, 0.01)) +
     theme(axis.ticks = element_line(colour = NA), text = element_text(size = 14), panel.background = element_rect(fill = NA), panel.grid.major.x = element_line(colour = "grey"), panel.grid.minor.x = element_line(colour = "grey"), strip.background = element_rect(fill = NA))
-ggsave(plot = g, file = paste0(outpath, "/3.4_barplot_eDEGenes_FUMA_KEGG.pdf"), width = 8, height = 8)
+ggsave(plot = g, file = paste0(outpath, "/3.4_barplot_eDEGenes_FUMA_KEGG_up_down_reg_genes.pdf"), width = 8, height = 8)
 g
 # delete unnecessary data
-rm(eDEGenes_fuma_msigdb, eDEGenes_fuma_msigdb, g)
+rm(eDEGenes_fuma_kegg, kegg_genes, g)
 ```
 
 
@@ -1481,7 +1652,7 @@ eDEGenes <- eDEGenes[eDEGenes$`FDR estimate` < 0.1, c("Ensembl Exon ID", "Ensemb
 
 # get overlap of genes (based on Ensembl Gene IDs)
 print(paste0("Number of overlapping ", length(unique(tDEGenes$`Ensembl Gene ID`)), " tDEGenes (FDR < 0.1) and ", length(unique(eDEGenes$`Ensembl Gene ID`)), " eDEGenes (FDR < 0.1): ", length(intersect(tDEGenes$`Ensembl Gene ID`, eDEGenes$`Ensembl Gene ID`))))
-print(paste0("Number of overlapping ", length(unique(tDEGenes_fdr0.2$`Ensembl Gene ID`)), " tDEGenes (FDR < 0.2) and ", length(unique(eDEGenes$`Ensembl Gene ID`)), " eDEGenes (FDR < 0.1): ", length(intersect(tDEGenes_fdr0.2$`Ensembl Gene ID`, eDEGenes$`Ensembl Gene ID`)), " (only gene not overlapping: ", setdiff(tDEGenes_fdr0.2$`Ensembl Gene ID`, eDEGenes$`Ensembl Gene ID`), ", ", setdiff(tDEGenes_fdr0.2$`Gene Symbol`, eDEGenes$`Gene Symbol`), ")"))
+print(paste0("Number of overlapping ", length(unique(tDEGenes_fdr0.2$`Ensembl Gene ID`)), " tDEGenes (FDR < 0.2) and ", length(unique(eDEGenes$`Ensembl Gene ID`)), " eDEGenes (FDR < 0.1): ", length(intersect(tDEGenes_fdr0.2$`Ensembl Gene ID`, eDEGenes$`Ensembl Gene ID`)), " (only gene not overlapping: ", setdiff(tDEGenes_fdr0.2$`Ensembl Gene ID`, eDEGenes$`Ensembl Gene ID`), ", ", setdiff(tDEGenes_fdr0.2$`Ensembl Gene ID`, eDEGenes$`Ensembl Gene ID`), ")"))
 print(paste0("Number of overlapping ", length(unique(tDEGenes_fdr0.3$`Ensembl Gene ID`)), " tDEGenes (FDR < 0.3) and ", length(unique(eDEGenes$`Ensembl Gene ID`)), " eDEGenes (FDR < 0.1): ", length(intersect(tDEGenes_fdr0.3$`Ensembl Gene ID`, eDEGenes$`Ensembl Gene ID`))))
 print(paste0("Number of overlapping ", length(unique(tDEGenes_fdr0.3$`Ensembl Gene ID`)), " tDEGenes (FDR < 0.3) and ", length(unique(eDEGenes_fdr0.2$`Ensembl Gene ID`)), " eDEGenes (FDR < 0.2): ", length(intersect(tDEGenes_fdr0.3$`Ensembl Gene ID`, eDEGenes_fdr0.2$`Ensembl Gene ID`))))
 print(paste0("Number of overlapping top ", length(unique(tDEGenes_top100$`Ensembl Gene ID`)), " tDEGenes and ", length(unique(eDEGenes$`Ensembl Gene ID`)), " eDEGenes (FDR < 0.1): ", length(intersect(tDEGenes_top100$`Ensembl Gene ID`, eDEGenes$`Ensembl Gene ID`))))

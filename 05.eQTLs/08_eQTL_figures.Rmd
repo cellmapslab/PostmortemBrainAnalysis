@@ -8,9 +8,9 @@ author:
     email: karolina.worf@helmholtz-muenchen.de
 header-includes:
   - \usepackage{float}
-  - \usepackage{graphicx, multicol}
 date: "`r doc_date()`"
-abstract: In this R markdown file, we will provide the plot generation of all eQTL results.
+graphics: yes
+abstract: In this R markdown file, we will provide the plot generation of all eQTL results. 
 output: 
     BiocStyle::pdf_document:
       toc: true
@@ -18,49 +18,70 @@ output:
 editor_options: 
   chunk_output_type: console
 vignette: >
-  %\VignetteIndexEntry{Quality Control of the Affymetrix Microarrays}
+  %\VignetteIndexEntry{eQTL Figure Generation}
   %\VignetteEncoding{UTF-8}
   %\VignetteEngine{knitr::rmarkdown}
 ---
 
-```{r knitrOptions, include = F}
+```{r global_options, include = FALSE}
 library(BiocStyle)
 require(knitr)
+knitr::opts_chunk$set(warning = F, echo = T, message = F, cache = T, cache.lazy = F)
 options(stringsAsFactors = T)
-opts_chunk$set(echo = TRUE,
-               fig.pos = "H",
-               dpi = 300,
-               warning = FALSE, 
-               message = FALSE, 
-               cache = TRUE, 
-               cache.lazy = FALSE)
 ```
 
 <p>
 **R version**: `r R.version.string`
 <br />
-**Bioconductor version**: `r BiocInstaller::biocVersion()`
+**Bioconductor version**: `r BiocManager::version()`
 </p>
 
 
 # Load Packages
 
+Below you can find the list of packages that are required for all analysis steps. 
 ```{r}
+# Packages for data transformation
+library(data.table)
+library(tidyr)  # to separate IDs
+#library(rtracklayer)
+#library(reshape2)
+#library(oligo)
+#library(dplyr)
+#library(rvcheck)
+
+# Color palettes
 library(viridis)
+library(RColorBrewer)
+
+# Packages for plotting
+library(VennDiagram)
 library(UpSetR)
 library(ggplot2)
-library(data.table)
-library(rtracklayer)
-library(reshape2)
-library(VennDiagram)
-library(oligo)
-library(dplyr)
-library(rvcheck)
-library(ggplotify)
-library(venneuler)
-library(ggforce)
-library(tidyr)  # to separate IDs
+library(ggpubr)  # for balloonplots
+#library(ggplotify)
+#library(ggforce)
 ```
+
+
+# Paths
+
+Before we can start, we need to make sure that all necessary paths and folder names are saved. If the output folder does not exist, we will generate it using the systems (Red Hat Enterprise Linux operating system: Fedora 25) "mkdir" command.
+```{r}
+# path to the eQTL result tables
+results_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/04_result_tables"
+# path to the clumped eQTL result tables
+clumping_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/05_clumping/03_result_tables"
+# path to differentially expression analysis (DEA) hits
+dea_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_DEA_results"
+# path to fuma pathway results
+fuma_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/07_FUMA"
+# path to store the output into
+outpath <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/09_figures"
+# generate ouput path if not existing already
+system(paste0("mkdir -p ", outpath))
+```
+
 
 # Load data
 
@@ -68,130 +89,206 @@ library(tidyr)  # to separate IDs
 
 First, we will load all cis-eQTL datasets (already filtered for FDR < 0.05).
 ```{r}
-# cases and controls cis-eQTLs genes
-cis_genes_all <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/old/05_result_tables/pmb_cis-eQTL_gene_hits_cases_vs_controls.txt", header = T, stringsAsFactors = F)
-dim(cis_genes_all)
+# Gene cis-eQTL cases and controls
+eqtls_gene <- fread(paste0(results_path, "/01_pmb_cis-eQTL_gene_hits_cases_vs_controls.txt"), header = T, stringsAsFactors = F)
+# Gene cis-eQTL cases only
+eqtls_gene_cases <- fread(paste0(results_path, "/02_pmb_cis-eQTL_gene_hits_cases_only.txt"), header = T, stringsAsFactors = F)
 
-# cases and controls cis-eQTLs transcripts
-cis_transcripts_all <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/old/05_result_tables/pmb_cis-eQTL_transcript_hits_cases_vs_controls.txt", header = T, stringsAsFactors = F)
-dim(cis_transcripts_all)
+# Transcript cis-eQTL cases and controls
+eqtls_transcript <- fread(paste0(results_path, "/01_pmb_cis-eQTL_transcript_hits_cases_vs_controls.txt"), header = T, stringsAsFactors = F)
+# Transcript cis-eQTL cases only
+eqtls_transcript_cases <- fread(paste0(results_path, "/02_pmb_cis-eQTL_transcript_hits_cases_only.txt"), header = T, stringsAsFactors = F)
 
-# cases and controls cis-eQTLs exons
-cis_exons_all <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/old/05_result_tables/pmb_cis-eQTL_exon_hits_cases_vs_controls.txt", header = T, stringsAsFactors = F)
-dim(cis_exons_all)
+# Exon cis-eQTL cases and controls
+eqtls_exon <- fread(paste0(results_path, "/01_pmb_cis-eQTL_exon_hits_cases_vs_controls.txt"), header = T, stringsAsFactors = F)
+# Exon cis-eQTL cases only
+eqtls_exon_cases <- fread(paste0(results_path, "/02_pmb_cis-eQTL_exon_hits_cases_only.txt"), header = T, stringsAsFactors = F)
+```
+Then, we will check the number of found eQTLs and unique gene names in all datasets.
 
-# only cases cis-eQTLs genes
-cis_genes_cases <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/old/05_result_tables/pmb_cis-eQTL_gene_hits_cases_only.txt", header = T, stringsAsFactors = F)
-dim(cis_genes_cases)
+| | Genes ALL | Genes CASES only | Transcripts ALL | Transcripts CASES only | Exons ALL | Exons CASES only |
+|------|------|------|------|------|------|------|
+| cis-eQTLs | `r length(eqtls_gene$SNP)` | `r length(eqtls_gene_cases$SNP)` | `r length(eqtls_transcript$SNP)` | `r length(eqtls_transcript_cases$SNP)` | `r length(eqtls_exon$SNP)` | `r eqtls_exon_cases$SNP` |
+| unique gene IDs | `r length(unique(unlist(strsplit(eqtls_gene$"Ensembl Gene ID", "\\|"))))` | `r length(unique(unlist(strsplit(eqtls_gene_cases$"Ensembl Gene ID", "\\|"))))` | `r length(unique(unlist(strsplit(eqtls_transcript$"Ensembl Gene ID", "\\|"))))` | `r length(unique(unlist(strsplit(eqtls_transcript_cases$"Ensembl Gene ID", "\\|"))))` | `r length(unique(unlist(strsplit(eqtls_exon$"Ensembl Gene ID", "\\|"))))` | `r length(unique(unlist(strsplit(eqtls_exon_cases$"Ensembl Gene ID", "\\|"))))` |
+| unique transcript IDs | - | - | `r length(unique(unlist(strsplit(eqtls_transcript$"Ensembl Transcript ID", "\\|"))))` | `r length(unique(unlist(strsplit(eqtls_transcript_cases$"Ensembl Transcript ID", "\\|"))))` | `r length(unique(unlist(strsplit(eqtls_exon$"Ensembl Transcript ID", "\\|"))))` | `r length(unique(unlist(strsplit(eqtls_exon_cases$"Ensembl Transcript ID", "\\|"))))` |
+| unique exon IDs | - | - | - | - | `r length(unique(unlist(strsplit(eqtls_exon$"Ensembl Transcript ID", "\\|"))))` | `r length(unique(unlist(strsplit(eqtls_exon_cases$"Ensembl Transcript ID", "\\|"))))` |
+| unique SNP IDs  | `r length(unique(eqtls_gene$SNP))` | `r length(unique(eqtls_gene_cases$SNP))` | `r length(unique(eqtls_transcript$SNP))` | `r length(unique(eqtls_transcript_cases$SNP))` | `r length(unique(eqtls_exon$SNP))` |`r length(unique(eqtls_exon_cases$SNP))` |
 
-# only cases cis-eQTLs transcripts
-cis_transcripts_cases <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/old/05_result_tables/pmb_cis-eQTL_transcript_hits_cases_only.txt", header = T, stringsAsFactors = F)
-dim(cis_transcripts_cases)
+## Load clumped eQTL hits
 
-# only cases cis-eQTLs exons
-cis_exons_cases <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/old/05_result_tables/pmb_cis-eQTL_exon_hits_cases_only.txt", header = T, stringsAsFactors = F)
-dim(cis_exons_cases)
+Then, we will load all clumped cis-eQTL datasets (already filtered for FDR < 0.05).
+```{r}
+# Gene cis-eQTL cases and controls
+eqtls_gene_clumped <- fread(paste0(clumping_path, "/01_pmb_cis-eQTL_gene_hits_cases_vs_controls_clumped.txt"), header = T, stringsAsFactors = F)
+# Gene cis-eQTL cases only
+eqtls_gene_cases_clumped <- fread(paste0(clumping_path, "/02_pmb_cis-eQTL_gene_hits_cases_only_clumped.txt"), header = T, stringsAsFactors = F)
+
+# Transcript cis-eQTL cases and controls
+eqtls_transcript_clumped <- fread(paste0(clumping_path, "/01_pmb_cis-eQTL_transcript_hits_cases_vs_controls_clumped.txt"), header = T, stringsAsFactors = F)
+# Transcript cis-eQTL cases only
+eqtls_transcript_cases_clumped <- fread(paste0(clumping_path, "/02_pmb_cis-eQTL_transcript_hits_cases_only_clumped.txt"), header = T, stringsAsFactors = F)
+
+# Exon cis-eQTL cases and controls
+eqtls_exon_clumped <- fread(paste0(clumping_path, "/01_pmb_cis-eQTL_exon_hits_cases_vs_controls_clumped.txt"), header = T, stringsAsFactors = F)
+# Exon cis-eQTL cases only
+eqtls_exon_cases_clumped <- fread(paste0(clumping_path, "/02_pmb_cis-eQTL_exon_hits_cases_only_clumped.txt"), header = T, stringsAsFactors = F)
 ```
 Then, we will check the number of found eQTLs and unique gene names in all datasets.
 
 |           | Genes ALL | Genes CASES only | Transcripts ALL | Transcripts CASES only | Exons ALL | Exons CASES only |
 |-----------|-----------|------------------|-----------------|------------------------|-----------|------------------|
-| cis-eQTLs | `r length(cis_genes_all$FDR)` | `r length(cis_genes_cases$FDR)` | `r length(cis_transcripts_all$FDR)` | `r length(cis_transcripts_cases$FDR)` | `r length(cis_exons_all$FDR)` | `r length(cis_exons_cases$FDR)` |
-| unique gene IDs | `r length(unique(cis_genes_all$Gene))` | `r length(unique(cis_genes_cases$Gene))` | `r length(unique(cis_transcripts_all$Transcript))` | `r length(unique(cis_transcripts_cases$Transcript))` | `r length(unique(cis_exons_all$Exon))` | `r length(unique(cis_exons_cases$Exon))` |
-| unique SNP IDs  | `r length(unique(cis_genes_all$SNP))` | `r length(unique(cis_genes_cases$SNP))` | `r length(unique(cis_transcripts_all$SNP))` | `r length(unique(cis_transcripts_cases$SNP))` | `r length(unique(cis_exons_all$SNP))` |`r length(unique(cis_exons_cases$SNP))` |
+| cis-eQTLs | `r length(eqtls_gene_clumped$SNP)` | `r length(eqtls_gene_cases_clumped$SNP)` | `r length(eqtls_transcript_clumped$SNP)` | `r length(eqtls_transcript_cases_clumped$SNP)` | `r length(eqtls_exon_clumped$SNP)` | `r eqtls_exon_cases_clumped$SNP` |
+| unique gene IDs | `r length(unique(unlist(strsplit(eqtls_gene_clumped$"Ensembl Gene ID", "\\|"))))` | `r length(unique(unlist(strsplit(eqtls_gene_cases_clumped$"Ensembl Gene ID", "\\|"))))` | `r length(unique(unlist(strsplit(eqtls_transcript_clumped$"Ensembl Gene ID", "\\|"))))` | `r length(unique(unlist(strsplit(eqtls_transcript_cases_clumped$"Ensembl Gene ID", "\\|"))))` | `r length(unique(unlist(strsplit(eqtls_exon_clumped$"Ensembl Gene ID", "\\|"))))` | `r length(unique(unlist(strsplit(eqtls_exon_cases_clumped$"Ensembl Gene ID", "\\|"))))` |
+| unique transcript IDs | - | - | `r length(unique(unlist(strsplit(eqtls_transcript_clumped$"Ensembl Transcript ID", "\\|"))))` | `r length(unique(unlist(strsplit(eqtls_transcript_cases_clumped$"Ensembl Transcript ID", "\\|"))))` | `r length(unique(unlist(strsplit(eqtls_exon_clumped$"Ensembl Transcript ID", "\\|"))))` | `r length(unique(unlist(strsplit(eqtls_exon_cases_clumped$"Ensembl Transcript ID", "\\|"))))` |
+| unique exon IDs | - | - | - | - | `r length(unique(unlist(strsplit(eqtls_exon_clumped$"Ensembl Transcript ID", "\\|"))))` | `r length(unique(unlist(strsplit(eqtls_exon_cases_clumped$"Ensembl Transcript ID", "\\|"))))` |
+| unique SNP IDs  | `r length(unique(eqtls_gene_clumped$SNP))` | `r length(unique(eqtls_gene_cases_clumped$SNP))` | `r length(unique(eqtls_transcript_clumped$SNP))` | `r length(unique(eqtls_transcript_cases_clumped$SNP))` | `r length(unique(eqtls_exon_clumped$SNP))` |`r length(unique(eqtls_exon_cases_clumped$SNP))` |
 
 ## Load DEGene hits
 
-Load tDEGenes (6 hits) and eDEGenes (2223 hits). 
+Load tDEGenes (6 hits) and eDEGenes (2,223 hits). 
 ```{r}
 # tDEGenes
-tDEGenes <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_DEA_results/2.4_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.csv", data.table = F, stringsAsFactors = F)
+tDEGenes <- fread(paste0( dea_path, "/2.4_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.csv"), data.table = F, stringsAsFactors = F)
 tDEGenes <- tDEGenes[tDEGenes$`FDR estimate` < 0.1, ]
 
 # eDEGenes
-eDEGenes <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_DEA_results/3.4_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.csv", data.table = F, stringsAsFactors = F)
+eDEGenes <- fread(paste0(dea_path, "/3.4_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.csv"), data.table = F, stringsAsFactors = F)
 eDEGenes <- eDEGenes[eDEGenes$`FDR estimate` < 0.1, ]
 ```
 
-# Figures
 
-## VENN diagrams
+# VENN diagrams
 
-### SNP level
+## SNP level
 
-First we will generate the VENN diagram for the cases and control (all) dataset. 
-```{r}
+First we will generate the VENN diagram for the cases and control datasets. 
+```{r, include = F, eval = F, echo = F}
 genes_all <- unique(eqtls_gene$SNP)
 transcripts_all <- unique(eqtls_transcript$SNP)
 exons_all <- unique(eqtls_exon$SNP)
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/1.1_VENN_eSNPs_cases_vs_controls.pdf")
+pdf(paste0(outpath, "/1_VENN_diagram_eSNPs_cases_vs_controls.pdf"))
 grid.newpage()
-overrideTriple=T
-draw.triple.venn(area1 = length(genes_all), area2 = length(transcripts_all), area3 = length(exons_all), n12 = length(intersect(genes_all, transcripts_all)), n23 = length(intersect(transcripts_all, exons_all)), n13 = length(intersect(genes_all, exons_all)), euler.d = F, scaled = F, n123 = length(intersect(genes_all, intersect(transcripts_all, exons_all))),  category = c(paste("Gene eSNPs", length(genes_all), sep = "\n"), paste("Transcript eSNPs", length(transcripts_all), sep = "\n"), paste("Exon eSNPs", length(exons_all), sep = "\n")), lty = "blank", fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
+overrideTriple = T
+draw.triple.venn(area1 = length(genes_all), area2 = length(transcripts_all), 
+                 area3 = length(exons_all), euler.d = F, scaled = F, lty = "blank",  
+                 n12 = length(intersect(genes_all, transcripts_all)), 
+                 n23 = length(intersect(transcripts_all, exons_all)), 
+                 n13 = length(intersect(genes_all, exons_all)), 
+                 n123 = length(intersect(genes_all, intersect(transcripts_all, exons_all))),
+                 category = c(paste("geSNPs", length(genes_all), sep = "\n"), 
+                              paste("teSNPs", length(transcripts_all), sep = "\n"), 
+                              paste("eeSNPs", length(exons_all), sep = "\n")),
+                 fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), 
+                          rgb(red = 66, green = 146, blue = 198, maxColorValue = 255),
+                          rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
 dev.off()
 ```
 
 Now, we generate the VENN diagram for the case only dataset.
-```{r}
+```{r, include = F, eval = F, echo = F}
 genes_cases_only <- eqtls_gene_cases$SNP
 transcripts_cases_only <- eqtls_transcript_cases$SNP
 exons_cases_only <- eqtls_exon_cases$SNP
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/1.1_VENN_eSNPs_cases_only.pdf")
+pdf(paste0(outpath, "/1_VENN_diagram_eSNPs_cases_only.pdf"))
 grid.newpage()
-overrideTriple=T
-draw.triple.venn(area1 = length(genes_cases_only), area2 = length(transcripts_cases_only), area3 = length(exons_cases_only), n12 = length(intersect(genes_cases_only, transcripts_cases_only)), n23 = length(intersect(transcripts_cases_only, exons_cases_only)), n13 = length(intersect(genes_cases_only, exons_cases_only)), euler.d = F, scaled = F, n123 = length(intersect(genes_cases_only, intersect(transcripts_cases_only, exons_cases_only))),  category = c(paste("Gene eSNPs", length(genes_cases_only), sep = "\n"), paste("Transcript eSNPs", length(transcripts_cases_only), sep = "\n"), paste("Exon eSNPs", length(exons_cases_only), sep = "\n")), lty = "blank", fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
+overrideTriple <- T
+draw.triple.venn(area1 = length(genes_cases_only), area2 = length(transcripts_cases_only), 
+                 area3 = length(exons_cases_only), euler.d = F, scaled = F, lty = "blank",
+                 n12 = length(intersect(genes_cases_only, transcripts_cases_only)), 
+                 n23 = length(intersect(transcripts_cases_only, exons_cases_only)), 
+                 n13 = length(intersect(genes_cases_only, exons_cases_only)), 
+                 n123 = length(intersect(genes_cases_only, intersect(transcripts_cases_only, exons_cases_only))), 
+                 category = c(paste("geSNPs", length(genes_cases_only), sep = "\n"), 
+                              paste("teSNPs", length(transcripts_cases_only), sep = "\n"), 
+                              paste("eeSNPs", length(exons_cases_only), sep = "\n")), 
+                 fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), 
+                          rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), 
+                          rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
 dev.off()
 ```
 
 And again for cases & control dataset but with clumped SNPs.
-```{r}
-ipath <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/RData/"
-geGenes_clumped <- readRDS(paste0(ipath,"pmb_gene_hits_cases_vs_controls_cis_eQTL_SNPs_clumped.rds"))
-teGenes_clumped <- readRDS(paste0(ipath,"pmb_transcript_hits_cases_vs_controls_cis_eQTL_SNPs_clumped.rds"))
-eeGenes_clumped <- readRDS(paste0(ipath,"pmb_exon_hits_cases_vs_controls_cis_eQTL_SNPs_clumped.rds"))
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/1.1_VENN_eSNPs_cases_vs_controls_clumped.pdf")
+```{r, include = F, eval = F, echo = F}
+genes_clumped <- eqtls_gene_clumped$SNP
+transcripts_clumped <- eqtls_transcript_clumped$SNP
+exons_clumped <- eqtls_exon_clumped$SNP
+pdf(paste0(outpath, "/1_VENN_diagram_eSNPs_cases_vs_controls_clumped.pdf"))
 grid.newpage()
 overrideTriple <- T
-draw.triple.venn(area1 = length(geGenes_clumped), area2 = length(teGenes_clumped), area3 = length(eeGenes_clumped), n12 = length(intersect(geGenes_clumped, teGenes_clumped)), n23 = length(intersect(teGenes_clumped, eeGenes_clumped)), n13 = length(intersect(geGenes_clumped, eeGenes_clumped)), n123 = length(intersect(geGenes_clumped, intersect(teGenes_clumped, eeGenes_clumped))), euler.d = F, scaled = F, category = c(paste("Gene eSNPs", length(geGenes_clumped), sep = "\n"), paste("Transcript eSNPs", length(teGenes_clumped), sep = "\n"), paste("Exon eSNPs", length(eeGenes_clumped), sep = "\n")), lty = "blank", fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
+draw.triple.venn(area1 = length(genes_clumped), area2 = length(transcripts_clumped), 
+                 area3 = length(exons_clumped), euler.d = F, scaled = F, lty = "blank", 
+                 n12 = length(intersect(genes_clumped, transcripts_clumped)), 
+                 n23 = length(intersect(transcripts_clumped, exons_clumped)), 
+                 n13 = length(intersect(genes_clumped, exons_clumped)), 
+                 n123 = length(intersect(genes_clumped, intersect(transcripts_clumped, exons_clumped))), 
+                 category = c(paste("geSNPs", length(genes_clumped), sep = "\n"), 
+                              paste("teSNPs", length(transcripts_clumped), sep = "\n"), 
+                              paste("eeSNPs", length(exons_clumped), sep = "\n")), 
+                 fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), 
+                          rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), 
+                          rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
 dev.off()
 ```
 
-### Gene level
+## Gene level
 
 First, generate the VENN for the cases and controls (all) dataset.
-```{r}
-genes_all = unique(eqtls_gene$Gene_symbol)
-transcripts_all = unique(eqtls_transcript$Gene_symbol)
-exons_all = unique(eqtls_exon$Gene_symbol)
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/1.1_VENN_eGenes_cases_vs_controls.pdf")
+```{r, include = F, eval = F, echo = F}
+genes_all <- unique(eqtls_gene$`Ensembl Gene ID`)
+transcripts_all <- unique(eqtls_transcript$`Ensembl Gene ID`)
+exons_all <- unique(eqtls_exon$`Ensembl Gene ID`)
+pdf(paste0(outpath, "/1_VENN_diagram_eGenes_cases_vs_controls.pdf"))
 grid.newpage()
 overrideTriple <- T
-draw.triple.venn(area1 = length(genes_all), area2 = length(transcripts_all), area3 = length(exons_all), n12 = length(intersect(genes_all, transcripts_all)), n23 = length(intersect(transcripts_all, exons_all)), n13 = length(intersect(genes_all, exons_all)), n123 = length(intersect(genes_all, intersect(transcripts_all, exons_all))), euler.d = F, scaled = F, category = c(paste("Gene eGenes", length(genes_all), sep = "\n"), paste("Transcript eGenes", length(transcripts_all), sep = "\n"), paste("Exon eGenes", length(exons_all), sep = "\n")), lty = "blank", fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
+draw.triple.venn(area1 = length(genes_all), area2 = length(transcripts_all), 
+                 area3 = length(exons_all), euler.d = F, scaled = F, lty = "blank", 
+                 n12 = length(intersect(genes_all, transcripts_all)), 
+                 n23 = length(intersect(transcripts_all, exons_all)), 
+                 n13 = length(intersect(genes_all, exons_all)), 
+                 n123 = length(intersect(genes_all, intersect(transcripts_all, exons_all))), 
+                 category = c(paste("geGenes", length(genes_all), sep = "\n"), 
+                              paste("teGenes", length(transcripts_all), sep = "\n"), 
+                              paste("eeGenes", length(exons_all), sep = "\n")), 
+                 fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), 
+                          rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), 
+                          rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
 dev.off()
 ```
 
 Now, we generate the VENN diagram for the case only dataset.
-```{r}
+```{r, include = F, eval = F, echo = F}
 genes_cases_only = eqtls_gene_cases$Gene_symbol
 transcripts_cases_only = eqtls_transcript_cases$Gene_symbol
 exons_cases_only = eqtls_exon_cases$Gene_symbol
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/1.1_VENN_eGenes_cases_only.pdf")
+pdf(paste0(outpath, "/1_VENN_diagram_eGenes_cases_only.pdf"))
 grid.newpage()
 overrideTriple <- T
-draw.triple.venn(area1 = length(genes_cases_only), area2 = length(transcripts_cases_only), area3 = length(exons_cases_only), n12 = length(intersect(genes_cases_only, transcripts_cases_only)), n23 = length(intersect(transcripts_cases_only, exons_cases_only)), n13 = length(intersect(genes_cases_only, exons_cases_only)), n123 = length(intersect(genes_cases_only, intersect(transcripts_cases_only, exons_cases_only))), euler.d = F, scaled = F, category = c(paste("Gene eGenes", length(genes_cases_only), sep = "\n"), paste("Transcript eGenes", length(transcripts_cases_only), sep = "\n"), paste("Exon eGenes", length(exons_cases_only), sep = "\n")), lty = "blank", fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
+draw.triple.venn(area1 = length(genes_cases_only), area2 = length(transcripts_cases_only), 
+                 area3 = length(exons_cases_only), euler.d = F, scaled = F, lty = "blank", 
+                 n12 = length(intersect(genes_cases_only, transcripts_cases_only)), 
+                 n23 = length(intersect(transcripts_cases_only, exons_cases_only)), 
+                 n13 = length(intersect(genes_cases_only, exons_cases_only)), 
+                 n123 = length(intersect(genes_cases_only, intersect(transcripts_cases_only, exons_cases_only))), 
+                 category = c(paste("geGenes", length(genes_cases_only), sep = "\n"), 
+                              paste("teGenes", length(transcripts_cases_only), sep = "\n"), 
+                              paste("eeGenes", length(exons_cases_only), sep = "\n")), 
+                 fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), 
+                          rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), 
+                          rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
 dev.off()
 ```
 
-## Upset plots
 
-### SNP level
+# Upset plots
+
+## SNP level
 
 Upset plots (like VENN) to compare the datasets with each other:
-```{r}
-eqtls.snps <- list(genes_all = eqtls_gene$SNP, genes_cases_only = eqtls_gene_cases$SNP, transcripts_all = eqtls_transcript$SNP, transcripts_cases_only = eqtls_transcript_cases$SNP, exons_all = eqtls_exon$SNP, exons_cases_only = eqtls_exon_cases$SNP)
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/1.2_upset_plot_cis_eqtls_snps.pdf", width = 20, height = 7, onefile = F)
-upset(fromList(eqtls.snps), 
-      sets = c("exons_all", "transcripts_all", "genes_all", "exons_cases_only", "transcripts_cases_only", "genes_cases_only"), 
+```{r, include = F, eval = F, echo = F}
+eqtl_snps <- list(geSNPs = eqtls_gene$SNP, geSNPs_cases = eqtls_gene_cases$SNP, teSNPs = eqtls_transcript$SNP, teSNPs_cases = eqtls_transcript_cases$SNP, eeSNPs = eqtls_exon$SNP, eeSNPs_cases = eqtls_exon_cases$SNP)
+pdf(paste0(outpath, "/1_Upset_plot_cis_eqtl_snps.pdf"), width = 20, height = 7, onefile = F)
+upset(fromList(eqtl_snps), 
+      sets = c("eeSNPs", "teSNPs", "geSNPs", "eeSNPs_cases", "teSNPs_cases", "geSNPs_cases"),
       nsets = 6, 
       nintersects = 50, 
       mainbar.y.label = "# SNP's", 
@@ -201,13 +298,13 @@ upset(fromList(eqtls.snps),
 dev.off()
 ```
 
-### Gene level
+## Gene level
 
-```{r}
-eqtls_genes <- list(genes_all = eqtls_gene$Gene_symbol, transcripts_all = eqtls_transcript$Gene_symbol, exons_all = eqtls_exon$Gene_symbol, transcript_DEGenes = degenes_transcript, exon_DEGenes = degenes_exon)
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/1.2_upset_plot_cis_eqtls_gene_level_plus_DE_hits.pdf", width = 20, height = 7, onefile = F)
+```{r, include = F, eval = F, echo = F}
+eqtls_genes <- list(geGenes = eqtls_gene$`Ensembl Gene ID`, teGenes = eqtls_transcript$`Ensembl Gene ID`, eeGenes = eqtls_exon$`Ensembl Gene ID`, tDEGenes = tDEGenes, eDEGenes = eDEGenes)
+pdf(paste0(outpath, "/1_Upset_plot_cis_eqtl_genes_with_DE_hits.pdf"), width = 20, height = 7, onefile = F)
 upset(fromList(eqtls_genes), 
-      sets = c("exon_DEGenes", "transcript_DEGenes", "exons_all", "transcripts_all", "genes_all"), 
+      sets = c("eDEGenes", "tDEGenes", "eeGenes", "teGenes", "geGenes"), 
       nsets = 5, 
       nintersects = 60, 
       mainbar.y.label = "# genes", 
@@ -218,10 +315,10 @@ dev.off()
 ```
 
 
-## Combined boxplots of top exon eQTL
+# Combined boxplots of top exon eQTL
 
-Find top exon hit without gene hit => nr. 1 top hit with SNP rs505460 and exon ENSE00001231633.1 of gene NCALD
-```{r}
+Generate boxplot of gene, transcript and exon expression for one eQTL (SNP-gene pair). Top exon hit without a gene hit is SNP rs505460 with exon ENSE00001231633.1 of gene NCALD:
+```{r, include = F, eval = F, echo = F}
 # unoverlapping genes
 no.overlap <- setdiff(eqtls_exon$Gene_symbol, eqtls_gene$Gene_symbol)
 length(no.overlap) # 3490
@@ -292,7 +389,7 @@ dev.off()
 
 Calculate the distances between the SNPs and genes/transcripts/exons in the cis-eQTLs.
 
-```{r, results='hide'}
+```{r, include = F, eval = F, echo = F}
 ### GENE eQTL ALL ###
 # 1. separate SNP chromosome from position
 eqtls_gene$SNP_chr <- lapply(eqtls_gene$SNP_location, function(x) strsplit(x, ":")[[1]][1])
@@ -413,7 +510,6 @@ lines(density(dist.exon[dist.exon != 0 & dist.exon > -1000000 & dist.exon < 1000
 lines(density(dist.exon.cases[dist.exon.cases != 0]), col = viridis(6)[6])
 legend("topright", legend = c("genes all", "genes  cases only", "transcripts all", "transcripts cases only", "exons all", "exons cases only"), fill = viridis(6))
 dev.off()
-```
 
 |                          | Only SCZ | Only CTL | ALL | 
 |--------------------------|----------|----------|-----------|
@@ -424,9 +520,10 @@ dev.off()
 | max distance             | `r max(dist.scz)` | `r max(dist.ctl)` | `r max(dist.all)` | 
 | mean distance            | `r mean(dist.scz)` | `r mean(dist.ctl)` | `r mean(dist.all)` | 
 | median distance          | `r median(dist.scz)` | `r median(dist.ctl)` | `r median(dist.all)` |
+```
 
 
-```{r}
+```{r, include = F, eval = F, echo = F}
 eqtls_exon <- read.table("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_exon_hits_cases_vs_controls.txt", header = TRUE)
 eqtls_exon <- eqtls_exon[eqtls_exon$Gene_symbol == "NCALD", ]
 head(eqtls_exon)
@@ -443,7 +540,7 @@ genes <- GRanges(seqnames = eqtls_exon$Gene_location)
 
 The easy way using the qqman package:
 
-```{r}
+```{r, include = F, eval = F, echo = F}
 library(tidyr)
 library(qqman)
 # load gene eQTL hits
@@ -485,7 +582,7 @@ dev.off()
 
 Best hit is an eQTL with SNP ID rs151095999 and gene symbol ADGRG7. Now, we will plot the gene expression of this gene in the different alleles. 
 
-```{r}
+```{r, include = F, eval = F, echo = F}
 #plot the top 2
 system(paste0("/storage/groups/ccm01/tools/PLINK/plink --bfile /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/preprocessed_genotypes/1.2_merged_chr/pmb_info06_all_chr_maf0.05_merged_noDup_final --snps rs1133328 --recodeA --tab --out /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/eqtl-gex"))
 snp <- read.delim("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/eqtl-gex.raw",head=T)
@@ -517,7 +614,7 @@ dev.off()
 
 #### eQTLs vs. own GWAS
 
-```{r}
+```{r, include = F, eval = F, echo = F}
 
 # Load eQTLs
 load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results_old/01_pmb_SCZ_CTL_matrixEQTL.RData")
@@ -538,7 +635,7 @@ ggplot(gwas_eqtl_snps, aes(x = log_pvalue, y = log_P)) +
 
 #### eqTLs vs. SCZ GWAS
 
-```{r}
+```{r, include = F, eval = F, echo = F}
 # Load GWAS
 gwas_results <- fread("/storage/groups/ccm01/datasets/2018_GWAS_summary_statistics//SCZ2/scz2.snp.results.txt", header = T, stringsAsFactors = F, data.table = F, select = c("snpid", "p"))
 gwas_eqtl_snps <- merge(eqtls_gene, gwas_results, by.x = "snps", by.y = "snpid") # merge the two datasets (not overlapping SNPs will be removed from the dataset)
@@ -552,7 +649,7 @@ ggplot(gwas_eqtl_snps, aes(x = log_pvalue, y = log_p)) +
 
 ### eQTLs and GWAS
 
-```{r}
+```{r, include = F, eval = F, echo = F}
 # load SCZ2 GWAS
 gwas_scz <- fread("/storage/groups/ccm01/datasets/2018_GWAS_summary_statistics/SCZ2/scz2.snp.results.txt")
 gwas_scz <- gwas_scz[gwas_scz$p < 0.05, ]
@@ -611,9 +708,164 @@ sum(overlapsAny(eqtls_exon_gr, gwas_cd.gr))/(length(eqtls_exon_gr) / 100)
 ```
 
 
-# Session Info
+# FUMA: KEGG gene set enrichment
 
-```{r, eval = F}
-sessionInfo()
+## Load data
+
+First, we will load the gene set enrichment analysis datasets (as we only had results for teGenes and eeGenes, we will load only these datasets).
+```{r, include = F, eval = F, echo = F}
+hit_gene_sets <- list()  # get all unique gene set names of significantgene sets
+# FUMA geGene results
+geGenes_fuma <- fread(paste0(fuma_path, "/7.2_gene_eQTLs/GS.txt"))
+geGenes_fuma <- geGenes_fuma[geGenes_fuma$Category == "4_kegg_entrez_no_disease_pathways.txt", ]
+geGenes_fuma <- geGenes_fuma[geGenes_fuma$adjP < 0.05, ]
+print(paste0("Significant gene sets for geGenes (cases and controls): ", dim(geGenes_fuma)[[1]][1]))  # no significant enriched gene sets
+# FUMA geGene cases only results
+geGenes_cases_fuma <- fread(paste0(fuma_path, "/7.2_gene_eQTLs_cases/GS.txt"))
+geGenes_cases_fuma <- geGenes_cases_fuma[geGenes_cases_fuma$Category == "4_kegg_entrez_no_disease_pathways.txt", ]
+geGenes_cases_fuma <- geGenes_cases_fuma[geGenes_cases_fuma$adjP < 0.05, ]
+print(paste0("Significant gene sets for geGenes (cases only): ", dim(geGenes_fuma)[[1]][1]))  # no significant enriched gene sets
+
+# FUMA teGene results
+teGenes_fuma <- fread(paste0(fuma_path, "/7.3_transcript_eQTLs/GS.txt"))
+teGenes_fuma$GeneRatio <- teGenes_fuma$N_overlap / teGenes_fuma$N_genes
+teGenes_fuma <- teGenes_fuma[teGenes_fuma$Category == "4_kegg_entrez_no_disease_pathways.txt" & teGenes_fuma$adjP < 0.05, c("GeneSet", "GeneRatio", "adjP")]
+teGenes_fuma$log_adjP <- -log10(teGenes_fuma$adjP)
+print(paste0("Significant gene sets for teGenes (cases and controls): ", dim(teGenes_fuma)[[1]][1]))  # no significant enriched gene sets
+hit_gene_sets <- c(hit_gene_sets, teGenes_fuma$GeneSet)
+# FUMA teGene cases only results
+teGenes_cases_fuma <- fread(paste0(fuma_path, "/7.3_transcript_eQTLs_cases/GS.txt"))
+teGenes_cases_fuma$GeneRatio <- teGenes_cases_fuma$N_overlap / teGenes_cases_fuma$N_genes
+teGenes_cases_fuma <- teGenes_cases_fuma[teGenes_cases_fuma$Category == "4_kegg_entrez_no_disease_pathways.txt" & teGenes_cases_fuma$adjP < 0.05, c("GeneSet", "GeneRatio", "adjP")]
+teGenes_cases_fuma <- teGenes_cases_fuma[teGenes_cases_fuma$adjP < 0.05, ]
+teGenes_cases_fuma$log_adjP <- -log10(teGenes_cases_fuma$adjP)
+print(paste0("Significant gene sets for teGenes (cases only): ", dim(teGenes_cases_fuma)[[1]][1]))  # no significant enriched gene sets
+hit_gene_sets <- c(hit_gene_sets, teGenes_fuma$GeneSet)
+
+# FUMA teGene results
+eeGenes_fuma <- fread(paste0(fuma_path, "/7.4_exon_eQTLs/GS.txt"))
+# get only pathway name and all overlapping genes + separate genes for the barplot
+kegg_genes <- eeGenes_fuma[eeGenes_fuma$Category == "4_kegg_entrez_no_disease_pathways.txt" & eeGenes_fuma$adjP < 0.05, c("GeneSet", "N_overlap", "genes")]
+kegg_genes <- separate_rows(kegg_genes, genes, sep = ":")
+eeGenes_fuma$GeneRatio <- eeGenes_fuma$N_overlap / eeGenes_fuma$N_genes
+eeGenes_fuma <- eeGenes_fuma[eeGenes_fuma$Category == "4_kegg_entrez_no_disease_pathways.txt" & eeGenes_fuma$adjP < 0.05, c("GeneSet", "GeneRatio", "adjP")]
+eeGenes_fuma <- eeGenes_fuma[eeGenes_fuma$adjP < 0.05, ]
+eeGenes_fuma$log_adjP <- -log10(eeGenes_fuma$adjP)
+print(paste0("Significant gene sets for teGenes (cases and controls): ", dim(eeGenes_fuma)[[1]][1]))  # no significant enriched gene sets
+hit_gene_sets <- c(hit_gene_sets, eeGenes_fuma$GeneSet)
+# FUMA teGene cases only results
+eeGenes_cases_fuma <- fread(paste0(fuma_path, "/7.4_exon_eQTLs_cases/GS.txt"))
+eeGenes_cases_fuma$GeneRatio <- eeGenes_cases_fuma$N_overlap / eeGenes_cases_fuma$N_genes
+eeGenes_cases_fuma <- eeGenes_cases_fuma[eeGenes_cases_fuma$Category == "4_kegg_entrez_no_disease_pathways.txt" & eeGenes_cases_fuma$adjP < 0.05, c("GeneSet", "GeneRatio", "adjP")]
+eeGenes_cases_fuma <- eeGenes_cases_fuma[eeGenes_cases_fuma$adjP < 0.05, ]
+eeGenes_cases_fuma$log_adjP <- -log10(eeGenes_cases_fuma$adjP)
+print(paste0("Significant gene sets for teGenes (cases only): ", dim(eeGenes_cases_fuma)[[1]][1]))  # no significant enriched gene sets
+hit_gene_sets <- c(hit_gene_sets, eeGenes_cases_fuma$GeneSet)
+length(unique(hit_gene_sets))
 ```
 
+Load exon diff expr data. 
+```{r, include = F, eval = F, echo = F}
+load(paste0(dea_path, "/3.4_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.RData"))
+top_hits <- top_hits[, c("Ensembl Gene ID", "Gene Symbol", "LogFC")]
+top_hits$Reg <- ifelse(top_hits$LogFC < 0, "Down", "Up")
+top_hits$`Ensembl Gene ID` <- sapply(top_hits$`Ensembl Gene ID`, function(x) strsplit(x, "\\.")[[1]][1])
+```
+
+Now, we can calculate how many of the genes were up/downregulated using the top hits loaded in the gene set enrichment and add it to the dataset. Then, we will transform the data into a ggplot readable format. 
+```{r, include = F, eval = F, echo = F}
+kegg_genes <- data.frame(merge(kegg_genes, top_hits[, c("Gene Symbol", "Reg")], by.x = "genes", by.y = "Gene Symbol", all.x = T))
+kegg_genes <- aggregate(Reg ~ GeneSet + N_overlap, data = as.data.frame(kegg_genes), FUN = function(x){table(x)})
+eeGenes_fuma_kegg <- merge(eeGenes_fuma, kegg_genes, by = "GeneSet")[, c("GeneSet", "N_overlap", "log_adjP", "Reg.Down", "Reg.Up")]
+# Now, we need the percentage of up/down regulated genes for log_adjP
+eeGenes_fuma_kegg$Reg.Down <- (eeGenes_fuma_kegg$log_adjP / eeGenes_fuma_kegg$N_overlap) * eeGenes_fuma_kegg$Reg.Down
+eeGenes_fuma_kegg$Reg.Up <- (eeGenes_fuma_kegg$log_adjP / eeGenes_fuma_kegg$N_overlap) * eeGenes_fuma_kegg$Reg.Up
+# And we need to form the data into ggplot format
+eeGenes_fuma_kegg <- melt(data = eeGenes_fuma_kegg, id.vars = "GeneSet", measure.vars = c("Reg.Down", "Reg.Up"))
+```
+
+## Barplot
+
+Generate a barplot including the results of the enriched (FDR <= 0.05) KEGG gene sets. 
+```{r, include = F, eval = F, echo = F}
+# barplot without up/downregulated genes colored
+g <- ggplot(eeGenes_fuma_kegg, aes(y = value, x = reorder(GeneSet, order(GeneSet, decreasing = T)), fill = variable)) +
+    geom_bar(stat = "identity") +
+    coord_flip() +
+    theme_minimal() +
+    scale_fill_manual(values = brewer.pal(11, "RdBu")[c(3, 9)], name = "", labels = c("Down-regulated", "Up-regulated")) +
+    ylab(bquote("-log"["10"]*"(adjP)")) +
+    xlab("") +
+    ggtitle("eeGenes: KEGG pathways") +
+    scale_y_continuous(expand = c(0.02, 0.01)) +
+    theme(axis.ticks = element_line(colour = NA), text = element_text(size = 22), panel.background = element_rect(fill = NA), panel.grid.major.x = element_line(colour = "grey"), panel.grid.minor.x = element_line(colour = "grey"), strip.background = element_rect(fill = NA))
+ggsave(plot = g, file = paste0(outpath, "/3_barplot_eeGenes_FUMA_KEGG_up_down_reg_genes.pdf"), width = 11, height = 12)
+g
+dev.off()
+rm(eeGenes_fuma_kegg, kegg_genes, top_hits, design, fit, g)
+```
+
+## Balloonplot
+
+Now, we can generate the dataset for the plot using all gene sets that had a hit in at least one eGene set (teGenes or eeGenes for cases & controls or cases only). We will set the p-value to NA if no p-value for a gene set was given. 
+```{r, include = F, eval = F, echo = F}
+plot_data <- as.data.frame(unique(unlist(hit_gene_sets)))
+colnames(plot_data) <- "GeneSet"
+# get teGene cases and controls hits
+plot_data <- merge(plot_data, teGenes_fuma[, c("GeneSet", "adjP")], by = "GeneSet", all.x = T)
+colnames(plot_data) <- c("GeneSet", "teGene_cc")
+# get teGene cases only hits
+plot_data <- merge(plot_data, teGenes_cases_fuma[, c("GeneSet", "adjP")], by = "GeneSet", all.x = T)
+colnames(plot_data) <- c("GeneSet", "teGenes_cc", "teGenes_co")
+# get eeGene cases and controls hits
+plot_data <- merge(plot_data, eeGenes_fuma[, c("GeneSet", "adjP")], by = "GeneSet", all.x = T)
+colnames(plot_data) <- c("GeneSet", "teGenes_cc", "teGenes_co", "eeGenes_cc")
+# get eeGene cases only hits
+plot_data <- merge(plot_data, eeGenes_cases_fuma[, c("GeneSet", "adjP")], by = "GeneSet", all.x = T)
+colnames(plot_data) <- c("GeneSet", "teGenes_cc", "teGenes_co", "eeGenes_cc", "eeGenes_co")
+plot_data <- reshape2::melt(data = plot_data, id.vars = "GeneSet")
+
+### get gene ratios
+grs <- as.data.frame(unique(unlist(hit_gene_sets)))
+colnames(grs) <- "GeneSet"
+# get teGene cases and controls hits
+grs <- merge(grs, teGenes_fuma[, c("GeneSet", "GeneRatio")], by = "GeneSet", all.x = T)
+colnames(grs) <- c("GeneSet", "teGene_cc")
+# get teGene cases only hits
+grs <- merge(grs, teGenes_cases_fuma[, c("GeneSet", "GeneRatio")], by = "GeneSet", all.x = T)
+colnames(grs) <- c("GeneSet", "teGenes_cc", "teGenes_co")
+# get eeGene cases and controls hits
+grs <- merge(grs, eeGenes_fuma[, c("GeneSet", "GeneRatio")], by = "GeneSet", all.x = T)
+colnames(grs) <- c("GeneSet", "teGenes_cc", "teGenes_co", "eeGenes_cc")
+# get eeGene cases only hits
+grs <- merge(grs, eeGenes_cases_fuma[, c("GeneSet", "GeneRatio")], by = "GeneSet", all.x = T)
+colnames(grs) <- c("GeneSet", "teGenes_cc", "teGenes_co", "eeGenes_cc", "eeGenes_co")
+grs <- reshape2::melt(data = grs, id.vars = "GeneSet")
+
+plot_data <- merge(plot_data, grs, by = c("GeneSet", "variable"))
+colnames(plot_data) <- c("GeneSet", "eeGenes", "adjP", "GeneRatio")
+plot_data$log_adjP <- -log(plot_data$adjP)
+plot_data <- plot_data[!(duplicated(plot_data)), ]
+```
+
+Then, we will generate a ggballoonplot including the results of the enriched (FDR < 0.05) KEGG gene sets for teGenes of cases and controls, the teGenes of cases only, the eeGenes of cases and controls and the eeGenes of cases only.
+```{r, include = F, eval = F, echo = F}
+g <- ggballoonplot(plot_data, x = "eeGenes", y = "GeneSet", fill = "log_adjP", size = "GeneRatio", ggtheme = theme_bw(), legend.title = "-log10(adjP)", size.range = c(1, 6), color = "lightgray") +
+              scale_fill_viridis_c(option = "C", direction = 1)
+ggsave(plot = g, file = paste0(outpath, "/3_balloonplot_eeGenes_FUMA_KEGG.pdf"), width = 5, height = 12)
+g
+dev.off()
+# delete unnecessary data
+rm(plot_data, geGenes_fuma, geGenes_cases_fuma, teGenes_fuma, teGenes_cases_fuma, eeGenes_fuma, eeGenes_cases_fuma, grs, hit_gene_sets)
+```
+
+```{r}
+rm(results_path, clumping_path, dea_path, fuma_path, outpath, tDEGenes, eDEGenes, eqtls_gene, eqtls_gene_cases, eqtls_gene_clumped, eqtls_gene_cases_clumped, eqtls_transcript, eqtls_transcript_cases, eqtls_transcript_clumped, eqtls_transcript_cases_clumped, eqtls_exon, eqtls_exon_cases, eqtls_exon_clumped, eqtls_exon_cases_clumped)
+```
+
+
+# Session Info
+
+```{r}
+sessionInfo()
+```

@@ -55,6 +55,8 @@ if(length(args) == 0){
     GenerateGrangesObject <- function(input, ofile){
         # filter for p-value (P) < 0.05
         input <- input[input$P < 0.05, ]
+        # remove all rows including NA in any column
+        input <- input[complete.cases(input), ]
         # generate GRanges object
         input_gr <- GenomicRanges::GRanges(seqnames = input$CHR,
                                            ranges = IRanges::IRanges(start = as.numeric(as.character(input$BP)),
@@ -325,6 +327,22 @@ if(length(args) == 0){
     rm(gtex_wb, gtex_wb_gr, gtex_wb_gr_hg19)
     print("Done with GTEx whole blood eQTLs")
     
+    # GTEx Brain Prefrontal Cortex BA9
+    gtex_ba9 <- data.table::fread(paste0(gtex, "/GTEx_Analysis_v8_eQTL/Brain_Frontal_Cortex_BA9.v8.egenes.txt"))
+    gtex_ba9 <- gtex_ba9[gtex_ba9$qval < 0.05, ] # filter for FDR < 0.05 (qvalue)
+    gtex_ba9_gr <- GenomicRanges::GRanges(seqnames = gtex_ba9$chr,
+                                         ranges = IRanges::IRanges(start = as.numeric(as.character(gtex_ba9$variant_pos)), 
+                                                                   end = as.numeric(as.character(gtex_ba9$variant_pos))),
+                                         snp_id = gtex_ba9$rs_id_dbSNP151_GRCh38p7)  # generate GRanges object only with chr, position and rs SNP ID
+    GenomeInfoDb::seqlevelsStyle(gtex_ba9_gr) <- "UCSC"  # UCSC needed for the lift over
+    gtex_ba9_gr_hg19 <- unlist(rtracklayer::liftOver(gtex_ba9_gr, hg38_to_hg19))  # lift over from GRCh38 to GRCh37 (hg19)
+    gtex_ba9_gr_hg19 <- gtex_ba9_gr_hg19[!duplicated(gtex_ba9_gr_hg19)]  # no duplicated rows found: 12,292 => 11,785 SNPs
+    GenomeInfoDb::seqlevelsStyle(gtex_ba9_gr_hg19) <- "NCBI"
+    seqlevels(gtex_ba9_gr_hg19, pruning.mode = "coarse") <- setdiff(seqlevels(gtex_ba9_gr_hg19), c("X", "Y", "M"))
+    saveRDS(gtex_ba9_gr_hg19, paste0(outpath, "/GTEx_v8_Brain_Frontal_Cortex_BA9_hg19_eQTL_SNPs.rds"))
+    rm(gtex_ba9, gtex_ba9_gr, gtex_ba9_gr_hg19)
+    print("Done with GTEx brain frontal cortex BA9 eQTLs")
+    
     # GTEx Brain (all brain tissues)
     brains <- c("Brain_Amygdala.v8.egenes.txt", "Brain_Anterior_cingulate_cortex_BA24.v8.egenes.txt", "Brain_Caudate_basal_ganglia.v8.egenes.txt", "Brain_Cerebellar_Hemisphere.v8.egenes.txt", "Brain_Cerebellum.v8.egenes.txt", "Brain_Cortex.v8.egenes.txt", "Brain_Frontal_Cortex_BA9.v8.egenes.txt", "Brain_Hippocampus.v8.egenes.txt", "Brain_Hypothalamus.v8.egenes.txt", "Brain_Nucleus_accumbens_basal_ganglia.v8.egenes.txt", "Brain_Putamen_basal_ganglia.v8.egenes.txt", "Brain_Spinal_cord_cervical_c-1.v8.egenes.txt", "Brain_Substantia_nigra.v8.egenes.txt")
     gtex_brains <- data.frame()
@@ -364,6 +382,22 @@ if(length(args) == 0){
     saveRDS(gtex_wb_gr_hg19, paste0(outpath, "/GTEx_v8_Whole_Blood_hg19_sQTL_SNPs.rds"))
     rm(gtex_wb, gtex_wb_gr, gtex_wb_gr_hg19)
     print("Done with GTEx whole blood sQTLs")
+    
+    # GTEx Brain Prefrontal Cortex BA9
+    gtex_ba9 <- data.table::fread(paste0(gtex, "/GTEx_Analysis_v8_sQTL/Brain_Frontal_Cortex_BA9.v8.sgenes.txt"))
+    gtex_ba9 <- gtex_ba9[gtex_ba9$qval < 0.05, ] # filter for FDR < 0.05 (qvalue)
+    gtex_ba9_gr <- GenomicRanges::GRanges(seqnames = gtex_ba9$chr,
+                                         ranges = IRanges::IRanges(start = as.numeric(as.character(gtex_ba9$variant_pos)),
+                                                                   end = as.numeric(as.character(gtex_ba9$variant_pos))),
+                                         snp_id = gtex_ba9$rs_id_dbSNP151_GRCh38p7)  # generate GRanges object only with chr, position and rs SNP ID
+    GenomeInfoDb::seqlevelsStyle(gtex_ba9_gr) <- "UCSC"  # UCSC needed for the lift over
+    gtex_ba9_gr_hg19 <- unlist(rtracklayer::liftOver(gtex_ba9_gr, hg38_to_hg19))  # lift over from GRCh38 to GRCh37 (hg19): 3,013 => 3,004
+    gtex_ba9_gr_hg19 <- gtex_ba9_gr_hg19[!duplicated(gtex_ba9_gr_hg19)]  # no duplicated rows found: 3,004 => 2,837 SNPs
+    GenomeInfoDb::seqlevelsStyle(gtex_ba9_gr_hg19) <- "NCBI"
+    seqlevels(gtex_ba9_gr_hg19, pruning.mode = "coarse") <- setdiff(seqlevels(gtex_ba9_gr_hg19), c("X", "Y", "M"))
+    saveRDS(gtex_ba9_gr_hg19, paste0(outpath, "/GTEx_v8_Brain_Frontal_Cortex_BA9_hg19_sQTL_SNPs.rds"))
+    rm(gtex_ba9, gtex_ba9_gr, gtex_ba9_gr_hg19)
+    print("Done with GTEx brain frontal cortex BA9 sQTLs")
 
     # GTEx Brain (all brain tissues)
     brains <- c("Brain_Amygdala.v8.sgenes.txt", "Brain_Anterior_cingulate_cortex_BA24.v8.sgenes.txt", "Brain_Caudate_basal_ganglia.v8.sgenes.txt", "Brain_Cerebellar_Hemisphere.v8.sgenes.txt", "Brain_Cerebellum.v8.sgenes.txt", "Brain_Cortex.v8.sgenes.txt", "Brain_Frontal_Cortex_BA9.v8.sgenes.txt", "Brain_Hippocampus.v8.sgenes.txt", "Brain_Hypothalamus.v8.sgenes.txt", "Brain_Nucleus_accumbens_basal_ganglia.v8.sgenes.txt", "Brain_Putamen_basal_ganglia.v8.sgenes.txt", "Brain_Spinal_cord_cervical_c-1.v8.sgenes.txt", "Brain_Substantia_nigra.v8.sgenes.txt")
@@ -474,7 +508,6 @@ if(length(args) == 0){
     rm(bip)
 
     ### BMI-2015 (ENGAGE) ###
-    # add positions using HapMap II release 22 (done already)
     bmi <- data.table::fread(paste0(gwas, "/BMI-2015_ENGAGE/ENGAGE1000G_BMI.txt"), header = T, stringsAsFactors = F, select = c("chromosome", "position", "SNP", "P"))
     colnames(bmi) <- c("CHR", "BP", "SNP", "P")
     GenerateGrangesObject(bmi, ofile = "GWAS_sumstats_BMI-2015_ENGAGE_p0.05.rds")
@@ -485,6 +518,18 @@ if(length(args) == 0){
     bmi <- data.table::fread(paste0(gwas, "/BMI-2015_GIANT/SNP_gwas_mc_merge_nogc_with_locations.tbl.uniq"), header = T, stringsAsFactors = F, select = c("Chromosome", "Position", "SNP", "p"))
     colnames(bmi) <- c("CHR", "BP", "SNP", "P")
     GenerateGrangesObject(bmi, ofile = "GWAS_sumstats_BMI-2015_GIANT_p0.05.rds")
+    rm(bmi)
+    
+    ### BMI-2018 (GIANT) ###
+    bmi <- data.table::fread(paste0(gwas, "/BMI-2018/Meta-analysis_Locke_et_al+UKBiobank_2018_UPDATED.txt"), header = T, stringsAsFactors = F, select = c("CHR", "POS", "SNP", "P"))
+    colnames(bmi) <- c("CHR", "BP", "SNP", "P")
+    GenerateGrangesObject(bmi, ofile = "GWAS_sumstats_BMI-2018_p0.05.rds")
+    rm(bmi)
+    
+    ### BMI-2019 (GIANT) ###
+    bmi <- data.table::fread(paste0(gwas, "/BMI-2019/Bmi.giant-ukbb.meta-analysis.combined.23May2018.HapMap2_only.txt"), header = T, stringsAsFactors = F, select = c("CHR", "POS", "SNP", "P"))
+    colnames(bmi) <- c("CHR", "BP", "SNP", "P")
+    GenerateGrangesObject(bmi, ofile = "GWAS_sumstats_BMI-2019_p0.05.rds")
     rm(bmi)
 
     ### CAD-2017 ###

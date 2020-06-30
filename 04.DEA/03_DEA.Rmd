@@ -124,7 +124,7 @@ GenerateResultTableGene <- function(fit, variable, file){
   top_hits <- topTable(fit, confint = 0.95, coef = variable, adjust = "BH", number = Inf)
   print(top_hits[1:2, ])
   print(paste0("log2FC range: ", round(min(top_hits$logFC), 2), " until ", round(max(top_hits$logFC), 2)))
-  colnames(top_hits) <- c("Ensembl Gene ID", "Location", "Gene Symbol", "LogFC", "95% Confidence Interval, lower bound", "95% Confidence Interval, upper bound", "Average Expression", "T-statistic", "P-value", "FDR estimate", "Beta coefficient")
+  colnames(top_hits) <- c("Ensembl Gene ID", "Location", "Gene Symbol", "LogFC", "95% Confidence Interval, lower bound", "95% Confidence Interval, upper bound", "Average Expression", "T-statistic", "P-value", "FDR estimate", "Log-odds Ratio")
   top_hits <- unique(separate_rows(top_hits, `Ensembl Gene ID`, sep = "\\|"))
   top_hits <- unique(separate_rows(top_hits, `Gene Symbol`, sep = "\\|"))
   write.table(top_hits, file = paste0(outpath, "/", file), sep = "\t", row.names = F)
@@ -134,7 +134,7 @@ GenerateResultTableTranscript <- function(fit, variable, file){
   top_hits <- topTable(fit, confint = 0.95, coef = variable, adjust = "BH", number = Inf)
   print(top_hits[1:2, ])
   print(paste0("log2FC range: ", round(min(top_hits$logFC), 2), " until ", round(max(top_hits$logFC), 2)))
-  colnames(top_hits) <- c("Ensembl Transcript ID", "Location", "Ensembl Gene ID", "Gene Symbol", "LogFC", "95% Confidence Interval, lower bound", "95% Confidence Interval, upper bound", "Average Expression", "T-statistic", "P-value", "FDR estimate", "Beta coefficient")
+  colnames(top_hits) <- c("Ensembl Transcript ID", "Location", "Ensembl Gene ID", "Gene Symbol", "LogFC", "95% Confidence Interval, lower bound", "95% Confidence Interval, upper bound", "Average Expression", "T-statistic", "P-value", "FDR estimate", "Log-odds Ratio")
   top_hits <- unique(separate_rows(top_hits, `Ensembl Gene ID`, sep = "\\|"))
   top_hits <- unique(separate_rows(top_hits, `Gene Symbol`, sep = "\\|"))
   write.table(top_hits, file = paste0(outpath, "/", file), sep = "\t", row.names = F)
@@ -144,7 +144,7 @@ GenerateResultTableExon <- function(fit, variable, file){
   top_hits <- topTable(fit, confint = 0.95, coef = variable, adjust = "BH", number = Inf)
   print(top_hits[1:2, ])
   print(paste0("log2FC range: ", round(min(top_hits$logFC), 2), " until ", round(max(top_hits$logFC), 2)))
-  colnames(top_hits) <- c("Ensembl Exon ID", "Location", "Ensembl Transcript ID", "Ensembl Gene ID", "Gene Symbol", "LogFC", "95% Confidence Interval, lower bound", "95% Confidence Interval, upper bound", "Average Expression", "T-statistic", "P-value", "FDR estimate", "Beta coefficient")
+  colnames(top_hits) <- c("Ensembl Exon ID", "Location", "Ensembl Transcript ID", "Ensembl Gene ID", "Gene Symbol", "LogFC", "95% Confidence Interval, lower bound", "95% Confidence Interval, upper bound", "Average Expression", "T-statistic", "P-value", "FDR estimate", "Log-odds Ratio")
   top_hits <- unique(separate_rows(top_hits, `Ensembl Gene ID`, sep = "\\|"))
   top_hits <- unique(separate_rows(top_hits, `Gene Symbol`, sep = "\\|"))
   write.table(top_hits, file = paste0(outpath, "/", file), sep = "\t", row.names = F)
@@ -156,7 +156,7 @@ GetExprWithSmallestP <- function(input, summaries){
   res <- fread(paste0(outpath, "/", input), header = T, stringsAsFactors = F)
   # get the rows with the lowest P-value per gene ID
   min_pval <- res[ , .SD[which.min(`P-value`)], by = `Ensembl Gene ID`]
-  # get all transcript IDs with lowest P-value per gene ID
+  # get all transcript/exon IDs with lowest P-value per gene ID
   index <- which(rownames(exprs(summaries)) %in% as.character(c(min_pval[, 2])[[1]]))
   # reduce transcript/exon_summaries to these transcripts/exons
   summaries <- summaries[c(index), ]
@@ -190,7 +190,7 @@ pData <- pData(gene_summaries)
 
 ## Polygenic risk scores
 
-Then, we load the polygenic risk scores generated with PRSice-2 on the attention deficite hyperactivity disorder (ADHD-2019), autism spectrum disorders (ASD-2019), bipolar disorder (BIP-2019), body mass index (BMI-2015), cross-disorder (CDG1-2013, CDG2-2018), educational attainment (EA-2018), body height (HE-2014), intelligence (IN-2018), major depression disorder (MDD1-2012, MDD2-2018, MDD3-2019) and schizophrenia (SCZ2-2014) GWAS summary statistic files. We will NOT use the best threshold, but a threshold of 0.01 on all GWAS summary statistic files.
+Then, we load the polygenic risk scores generated with PRSice-2 on the attention deficite hyperactivity disorder (ADHD-2019), autism spectrum disorders (ASD-2019), bipolar disorder (BIP-2019), body mass index (BMI-2015), cross-disorder (CDG1-2013, CDG2-2019), educational attainment (EA-2018), body height (HE-2014), intelligence (IN-2018), major depression disorder (MDD1-2012, MDD2-2018, MDD3-2019) and schizophrenia (SCZ2-2014) GWAS summary statistic files. We will NOT use the best threshold, but a threshold of 0.01 on all GWAS summary statistic files.
 ```{r, echo = F}
 # ADHD-2019 PRS
 prs_adhd <- GetPRS(paste0(prs_path, "/ADHD-2019/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_ADHD-2019_PRSice-2_PRS.all.score"))
@@ -208,8 +208,8 @@ prs_bmi19 <- GetPRS(paste0(prs_path, "/BMI-2019/pmb_info06_all_chr_maf0.01_IDs_c
 prs_cad <- GetPRS(paste0(prs_path, "/CAD-2017/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_CAD-2017_PRSice-2_PRS.all.score"))
 # CDG1-2013 PRS
 prs_cdg1 <- GetPRS(paste0(prs_path, "/CDG1-2013/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_CDG1-2013_PRSice-2_PRS.all.score"))
-# CDG2-2018 PRS
-prs_cdg2 <- GetPRS(paste0(prs_path, "/CDG2-2018/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_CDG2-2018_PRSice-2_PRS.all.score"))
+# CDG2-2019 PRS
+prs_cdg2 <- GetPRS(paste0(prs_path, "/CDG2-2019/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_CDG2-2019_PRSice-2_PRS.all.score"))
 # EA-2018 PRS
 prs_ea <- GetPRS(paste0(prs_path, "/EA-2018/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_EA-2018_PRSice-2_PRS.all.score"))
 prs_he <- GetPRS(paste0(prs_path, "/Height-2014/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_Height-2014_PRSice-2_PRS.all.score"))
@@ -229,35 +229,35 @@ prs_t2d <- GetPRS(paste0(prs_path, "/T2D-2017/pmb_info06_all_chr_maf0.01_IDs_cha
 
 All loaded PRS are added to the phenotype (pData) information. We use join to preserve the order of rows and add the row_names at the end of all joining procedures back to the phenotype dataset.
 ```{r, echo = F}
-pData <- join(pData, prs_adhd)
+pData <- plyr::join(pData, prs_adhd)
 colnames(pData)[length(pData[1,])] <- "PRS.ADHD"
-pData <- join(pData, prs_asd)
+pData <- plyr::join(pData, prs_asd)
 colnames(pData)[length(pData[1,])] <- "PRS.ASD"
-pData <- join(pData, prs_bip)
+pData <- plyr::join(pData, prs_bip)
 colnames(pData)[length(pData[1,])] <- "PRS.BIP"
-pData <- join(pData, prs_bmi)
+pData <- plyr::join(pData, prs_bmi)
 colnames(pData)[length(pData[1,])] <- "PRS.BMI"
-pData <- join(pData, prs_cad)
+pData <- plyr::join(pData, prs_cad)
 colnames(pData)[length(pData[1,])] <- "PRS.CAD"
-pData <- join(pData, prs_cdg1)
+pData <- plyr::join(pData, prs_cdg1)
 colnames(pData)[length(pData[1,])] <- "PRS.CDG1"
-pData <- join(pData, prs_cdg2)
+pData <- plyr::join(pData, prs_cdg2)
 colnames(pData)[length(pData[1,])] <- "PRS.CDG2"
-pData <- join(pData, prs_ea)
+pData <- plyr::join(pData, prs_ea)
 colnames(pData)[length(pData[1,])] <- "PRS.EA"
-pData <- join(pData, prs_he)
+pData <- plyr::join(pData, prs_he)
 colnames(pData)[length(pData[1,])] <- "PRS.HE"
-pData <- join(pData, prs_in)
+pData <- plyr::join(pData, prs_in)
 colnames(pData)[length(pData[1,])] <- "PRS.IN"
-pData <- join(pData, prs_mdd1)
+pData <- plyr::join(pData, prs_mdd1)
 colnames(pData)[length(pData[1,])] <- "PRS.MDD1"
-pData <- join(pData, prs_mdd2)
+pData <- plyr::join(pData, prs_mdd2)
 colnames(pData)[length(pData[1,])] <- "PRS.MDD2"
-pData <- join(pData, prs_mdd3)
+pData <- plyr::join(pData, prs_mdd3)
 colnames(pData)[length(pData[1,])] <- "PRS.MDD3"
-pData <- join(pData, prs_scz2)
+pData <- plyr::join(pData, prs_scz2)
 colnames(pData)[length(pData[1,])] <- "PRS.SCZ2"
-pData <- join(pData, prs_t2d)
+pData <- plyr::join(pData, prs_t2d)
 colnames(pData)[length(pData[1,])] <- "PRS.T2D"
 row.names(pData) <- pData$ShortName
 # check if the order of the samples in pData is still the same as in the expression data
@@ -317,7 +317,7 @@ We can find `r length(unique(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Ge
 
 ### PRS with normal model (eQTS)
 
-Now, we use the polygenic risk scores based on GWAS summary statistics instead of the diagnosis as input. As the PRS is a continuous (numeric) covariate and diagnosis is a categorical (CASE/CTL) covariate the fold change/log2 fold change (logFC) can not be calculated correctly, therefore, generating volcano plots does not make sense for PRS based differentially expressed analyses (DEA). We will use the PRSs based on the GWAS of following disorders: ADHD-2019, ASD-2019, BIP-2019, BMI-2015, CAD-2017, CDG1-2013, CDG2-2018, EA-2018, HE-2014, IN-2018, MDD1-2012, MDD2-2018, MDD3-2019, SCZ2-2014 and T2D-2017. As we combine genotype results with expression, this is also called expression quantitative trait score (eQTS).
+Now, we use the polygenic risk scores based on GWAS summary statistics instead of the diagnosis as input. As the PRS is a continuous (numeric) covariate and diagnosis is a categorical (CASE/CTL) covariate the fold change/log2 fold change (logFC) can not be calculated correctly, therefore, generating volcano plots does not make sense for PRS based differentially expressed analyses (DEA). We will use the PRSs based on the GWAS of following disorders: ADHD-2019, ASD-2019, BIP-2019, BMI-2015, CAD-2017, CDG1-2013, CDG2-2019, EA-2018, HE-2014, IN-2018, MDD1-2012, MDD2-2018, MDD3-2019, SCZ2-2014 and T2D-2017. As we combine genotype results with expression, this is also called expression quantitative trait score (eQTS).
 
 **ADHD-2019 PRS**
 ```{r, echo = F}
@@ -397,18 +397,18 @@ rm(design, fit)
 ```
 We can find `r length(unique(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for the CDG1-2013 PRS.
 
-**CDG2-2018 PRS**
+**CDG2-2019 PRS**
 ```{r, echo = F}
 # generate design matrix
 design <- model.matrix(~ PRS.CDG2 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 # differential expression analysis (limma)
 fit <- RunLimma(design, gene_summaries)
 # generate result table
-top_hits <- GenerateResultTableGene(fit, variable = "PRS.CDG2", file =  "1.3.7_diff_expr_genes_for_CDG2-2018_PRS.csv")
+top_hits <- GenerateResultTableGene(fit, variable = "PRS.CDG2", file =  "1.3.7_diff_expr_genes_for_CDG2-2019_PRS.csv")
 # remove data, to reduce errors based on wrong data outputs
 rm(design, fit)
 ```
-We can find `r length(unique(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for the CDG2-2018 PRS.
+We can find `r length(unique(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for the CDG2-2019 PRS.
 
 **EA-2018 PRS**
 ```{r, echo = F}
@@ -553,7 +553,7 @@ No (`r length(unique(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"])
 
 ### PRS with normal model
 
-Here, we will generate the differential expression on all loaded PRS based on the normal model, including ADHD-2019, ASD-2019, BIP-2019, BMI-2015, CAD-2017, CDG1-2013, CDG2-2018, EA-2018, HE-2014, IN-2018, MDD1-2012, MDD2-2018, MDD3-2019, SCZ2-2014 and T2D-2017.
+Here, we will generate the differential expression on all loaded PRS based on the normal model, including ADHD-2019, ASD-2019, BIP-2019, BMI-2015, CAD-2017, CDG1-2013, CDG2-2019, EA-2018, HE-2014, IN-2018, MDD1-2012, MDD2-2018, MDD3-2019, SCZ2-2014 and T2D-2017.
 
 **ADHD-2019 PRS**
 ```{r, echo = F}
@@ -633,18 +633,18 @@ rm(design, fit)
 ```
 We can find `r length(unique(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for the CDG1-2013 PRS.
 
-**CDG2-2018 PRS**
+**CDG2-2019 PRS**
 ```{r, echo = F}
 # generate design matrix
 design <- model.matrix(~ PRS.CDG2 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 # differential expression analysis (limma)
 fit <- RunLimma(design, transcript_summaries)
 # generate result table
-top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.CDG2", file =  "2.3.7_diff_expr_transcripts_for_CDG2-2018_PRS.csv")
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.CDG2", file =  "2.3.7_diff_expr_transcripts_for_CDG2-2019_PRS.csv")
 # remove unnecessary data
 rm(design, fit)
 ```
-We can find `r length(unique(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for the CDG2-2018 PRS.
+We can find `r length(unique(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for the CDG2-2019 PRS.
 
 **EA-2018 PRS**
 ```{r, echo = F}
@@ -885,21 +885,21 @@ rm(transcript_summaries_new, design, fit)
 ```
 We can find `r length(unique(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for FDR < 10% (hits for FDR < 5%: `r length(unique(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"]))`) for the CDG1-2013 PRS.
 
-**CDG2-2018 PRS**
+**CDG2-2019 PRS**
 ```{r, echo = F}
 # reduce expression set
-transcript_summaries_new <- GetExprWithSmallestP(input = "2.3.7_diff_expr_transcripts_for_CDG2-2018_PRS.csv", transcript_summaries)
+transcript_summaries_new <- GetExprWithSmallestP(input = "2.3.7_diff_expr_transcripts_for_CDG2-2019_PRS.csv", transcript_summaries)
 dim(transcript_summaries_new)
 # generate design matrix
 design <- model.matrix(~ PRS.CDG2 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 # differential expression analysis (limma)
 fit <- RunLimma(design, transcript_summaries_new)
 # generate result table
-top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.CDG2", file =  "2.5.7_diff_expr_transcripts_for_CDG2-2018_PRS_new_pvalue_and_fdr.csv")
+top_hits <- GenerateResultTableTranscript(fit, variable = "PRS.CDG2", file =  "2.5.7_diff_expr_transcripts_for_CDG2-2019_PRS_new_pvalue_and_fdr.csv")
 # remove unnecessary data
 rm(transcript_summaries_new, design, fit)
 ```
-We can find `r length(unique(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for FDR < 10% (hits for FDR < 5%: `r length(unique(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"]))`) for the CDG2-2018 PRS.
+We can find `r length(unique(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for FDR < 10% (hits for FDR < 5%: `r length(unique(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"]))`) for the CDG2-2019 PRS.
 
 **EA-2018 PRS**
 ```{r, echo = F}
@@ -1148,18 +1148,18 @@ rm(design, fit)
 ```
 We can find `r length(unique(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for the CDG1-2013 PRS.
 
-**CDG2-2018 PRS**
+**CDG2-2019 PRS**
 ```{r, echo = F}
-# generate design matrix for CDG2-2018 PRS
+# generate design matrix for CDG2-2019 PRS
 design <- model.matrix(~ PRS.CDG2 + Sex + Age + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 # differential expression analysis (limma)
 fit <- RunLimma(design, exon_summaries)
 # generate result table
-top_hits <- GenerateResultTableExon(fit, variable = "PRS.CDG2", file =  "3.3.7_diff_expr_exons_for_CDG2-2018_PRS.csv")
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.CDG2", file =  "3.3.7_diff_expr_exons_for_CDG2-2019_PRS.csv")
 # remove unnecessary data
 rm(design, fit)
 ```
-We can find `r length(unique(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for the CDG2-2018 PRS.
+We can find `r length(unique(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for the CDG2-2019 PRS.
 
 **EA-2018 PRS**
 ```{r, echo = F}
@@ -1330,7 +1330,11 @@ exon_summaries_new <- GetExprWithSmallestP(input = "3.3.3_diff_expr_exons_for_BI
 dim(exon_summaries_new)
 design <- model.matrix(~ PRS.BIP + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 fit <- RunLimma(design, exon_summaries_new)
+# get residuals
+res <- residuals.MArrayLM(fit, exprs(exon_summaries_new))
 top_hits <- GenerateResultTableExon(fit, variable = "PRS.BIP", file =  "3.5.3_diff_expr_exons_for_BIP-2019_PRS_new_pvalue_and_fdr.csv")
+# save data into an RData file (for figure generation)
+save(design, fit, top_hits, res, file = paste0(outpath, "/3.5.3_diff_expr_exons_for_BIP-2019_PRS_new_pvalue_and_fdr.RData"))
 rm(exon_summaries_new, design, fit)
 ```
 We can find `r length(unique(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for FDR < 10% (hits for FDR < 5%: `r length(unique(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"]))`) for the BIP-2019 PRS. Here are the 10 first top gene symbols: `r top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"]`
@@ -1368,16 +1372,18 @@ rm(exon_summaries_new, design, fit)
 ```
 We can find `r length(unique(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for FDR < 10% (hits for FDR < 5%: `r length(unique(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"]))`) for the CDG1-2013 PRS. Here are the 10 first top gene symbols: `r top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"][1:10]`
 
-**CDG2-2018 PRS**
+**CDG2-2019 PRS**
 ```{r, echo = F}
-exon_summaries_new <- GetExprWithSmallestP(input = "3.3.7_diff_expr_exons_for_CDG2-2018_PRS.csv", exon_summaries)
+exon_summaries_new <- GetExprWithSmallestP(input = "3.3.7_diff_expr_exons_for_CDG2-2019_PRS.csv", exon_summaries)
 dim(exon_summaries_new)
 design <- model.matrix(~ PRS.CDG2 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 fit <- RunLimma(design, exon_summaries_new)
-top_hits <- GenerateResultTableExon(fit, variable = "PRS.CDG2", file =  "3.5.7_diff_expr_exons_for_CDG2-2018_PRS_new_pvalue_and_fdr.csv")
+res <- residuals.MArrayLM(fit, exprs(exon_summaries_new))
+top_hits <- GenerateResultTableExon(fit, variable = "PRS.CDG2", file =  "3.5.7_diff_expr_exons_for_CDG2-2019_PRS_new_pvalue_and_fdr.csv")
+save(design, fit, top_hits, res, file = paste0(outpath, "/3.5.7_diff_expr_exons_for_CDG2-2019_PRS_new_pvalue_and_fdr.RData"))
 rm(exon_summaries_new, design, fit)
 ```
-We can find `r length(unique(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for FDR < 10% (hits for FDR < 5%: `r length(unique(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"]))`) for the CDG2-2018 PRS. Here are the 10 first top gene symbols: `r top_hits[top_hits$"FDR estimate" < 0.05, "Gene Symbol"][1:10]`
+We can find `r length(unique(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for FDR < 10% (hits for FDR < 5%: `r length(unique(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"]))`) for the CDG2-2019 PRS. Here are the 10 first top gene symbols: `r top_hits[top_hits$"FDR estimate" < 0.05, "Gene Symbol"][1:10]`
 
 **EA-2018 PRS**
 ```{r, echo = F}
@@ -1440,7 +1446,9 @@ exon_summaries_new <- GetExprWithSmallestP(input = "3.3.13_diff_expr_exons_for_M
 dim(exon_summaries_new)
 design <- model.matrix(~ PRS.MDD3 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 fit <- RunLimma(design, exon_summaries_new)
+res <- residuals.MArrayLM(fit, exprs(exon_summaries_new))
 top_hits <- GenerateResultTableExon(fit, variable = "PRS.MDD3", file =  "3.5.13_diff_expr_exons_for_MDD3-2019_PRS_new_pvalue_and_fdr.csv")
+save(design, fit, top_hits, res, file = paste0(outpath, "/3.5.13_diff_expr_exons_for_MDD3-2019_PRS_new_pvalue_and_fdr.RData"))
 rm(exon_summaries_new, design, fit)
 ```
 We can find `r length(unique(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for FDR < 10% (hits for FDR < 5%: `r length(unique(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"]))`) for the MDD3-2019 PRS. Here are the 10 first top gene symbols: `r top_hits[top_hits$"FDR estimate" < 0.05, "Gene Symbol"][1:10]`
@@ -1451,7 +1459,9 @@ exon_summaries_new <- GetExprWithSmallestP(input = "3.3.14_diff_expr_exons_for_S
 dim(exon_summaries_new)
 design <- model.matrix(~ PRS.SCZ2 + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 fit <- RunLimma(design, exon_summaries_new)
+res <- residuals.MArrayLM(fit, exprs(exon_summaries_new))
 top_hits <- GenerateResultTableExon(fit, variable = "PRS.SCZ2", file =  "3.5.14_diff_expr_exons_for_SCZ2-2014_PRS_new_pvalue_and_fdr.csv")
+save(design, fit, top_hits, res, file = paste0(outpath, "/3.5.14_diff_expr_exons_for_SCZ2-2014_PRS_new_pvalue_and_fdr.RData"))
 rm(exon_summaries_new, design, fit)
 ```
 We can find `r length(unique(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for FDR < 10% (hits for FDR < 5%: `r length(unique(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"]))`) for the SCZ2-2014 PRS. Here are the 10 first top gene symbols: `r top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"][1:10]`

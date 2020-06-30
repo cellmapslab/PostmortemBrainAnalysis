@@ -18,4 +18,4 @@ tools_path="/storage/groups/ccm01/tools"
 #${tools_path}/PLINK/plink --bfile ${geno} --freq --out ${mafpath}/pmb_info06_all_chr_maf0.05_merged_noDup_maf_information
 
 # generate GRanges objects needed for the functional annotation
-Rscript ${script_path}/05_generate_GRanges_objects.R frq=\"${frq}\" geno=\"${geno}\" eqtls=\"${eqtl_path}\" clump=\"${clump_path}\" cmc=\"${cmc_path}\" gtex=\"${gtex_path}\" cortex=\"${cortex}\" gwas=\"${gwas_path}\" outpath=\"${out_path}\" &>> ${out_path}/generate_GRanges_objects.log
+Rscript ${script_path}/05_generate_GRanges_objects.R frq=\"${frq}\" geno=\"${geno}\" eqtls=\"${eqtl_path}\" clump=\"${clump_path}\" cmc=\"${cmc_path}\" gtex=\"${gtex_path}\" cortex=\"${cortex}\" gwas=\"${gwas_path}\" outpath=\"${out_path}\" &> ${out_path}/generate_GRanges_objects.log

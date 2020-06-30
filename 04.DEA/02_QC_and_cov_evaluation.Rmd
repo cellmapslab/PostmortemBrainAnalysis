@@ -62,7 +62,7 @@ We will also generate several .RData files for the different steps, as some of t
 Below you can find the list of packages required by the workflow. 
 ```{r}
 # add installed packages from home path to the library search path
-.libPaths("/home/icb/karolina.worf/R/x86_64-pc-linux-gnu-library/3.6/")
+#.libPaths("/home/icb/karolina.worf/R/x86_64-pc-linux-gnu-library/3.6/")
 
 # Quality control packages 
 ### TODO: install arrayQualityMetrics! Problem: dependency "jpeg" R-package can not be installed, gcc error: can not install/reinstall gcc without sudo rights... tried everything, without sudo no chance to install gcc as it always depends on libraries that are also not installable :(
@@ -77,7 +77,7 @@ library(devtools)
 library(reshape2)
 library(limma)
 library(sva)
-library(variancePartition) # for correlation calculation
+library(variancePartition) # for correlation calculation & variance explained
 library(tidyr)
 library(data.table)
 
@@ -183,6 +183,15 @@ GenerateSampleToSampleHeatmap <- function(data, name, file){
            legend_labels = (c("small distance", "large distance")),
            main = paste0("Clustering sample-to-sample distances of ", name))
   return(p)
+}
+
+#' Calculate the standard error for a vector
+#' 
+#' @param x      vector for which the standard error should be calculated
+#' @return       standard error
+SE <- function(x) {
+  se <- sd(x) / sqrt(length(x))
+  return(se)
 }
 ```
 
@@ -643,6 +652,85 @@ corrplot(corr, method = "color", type = "upper", tl.col = "black", cl.lim = c(0,
 dev.off()
 rm(pheno_new, model, corr)
 ```
+
+## Variance explained plot
+
+We will use the variancePartition package from Bioconductor, which provides a general framework for understanding drivers of variation in gene expression in experiments with complex designs. We will compare the three different genetic levels (gene, transcript and exon) for the different covariates (age, sex, pH, PMI, RIN, RIN2, diagnosis, suicide, type of death and the four ancestry dimensions C1-C4).
+
+First, we need to load the expression data for gene, transcript and exon-level. 
+```{r}
+# load gene expression and save expression data
+load(paste0(rdata_path, "/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData"))
+gene_expression <- exprs(gene_summaries)
+# load gene expression and save expression data
+load(paste0(rdata_path, "/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_transcript_summaries_annotated.RData"))
+transcript_expression <- exprs(transcript_summaries)
+# load gene expression and save expression data
+load(paste0(rdata_path, "/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_exon_summaries_annotated.RData"))
+exon_expression <- exprs(exon_summaries)
+rm(gene_summaries, transcript_summaries, exon_summaries)
+```
+
+Then, we can fit a model, extract and plot results.
+```{r}
+form <- ~ Age + pH + PMI + (1|Dx) + RIN + RIN2 + (1|Sex) + (1|Suicide) + (1|Type_of_Death) + C1 + C2 + C3 + C4
+info <- pheno[, c("ShortName", "Age", "pH", "PMI", "Dx", "RIN", "RIN2", "Sex", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4")]
+# for the variance Partition the covairates need to be in the same scale 
+# so we calculate Z-scores for all continuous/numerical covariates
+info$Age <- (info$Age - mean(info$Age)) / sd(info$Age)
+info$pH <- (info$pH - mean(info$pH)) / sd(info$pH)
+info$PMI <- (info$PMI - mean(info$PMI)) / sd(info$PMI)
+info$RIN <- (info$RIN - mean(info$RIN)) / sd(info$RIN)
+info$RIN2 <- (info$RIN2 - mean(info$RIN2)) / sd(info$RIN2)
+info$C1 <- (info$C1 - mean(info$C1)) / sd(info$C1)
+info$C2 <- (info$C2 - mean(info$C2)) / sd(info$C2)
+info$C3 <- (info$C3 - mean(info$C3)) / sd(info$C3)
+info$C4 <- (info$C4 - mean(info$C4)) / sd(info$C4)
+# Fit model and extract results
+var_par_gene <- fitExtractVarPartModel(gene_expression, form,  info)
+var_par_transcript <- fitExtractVarPartModel(transcript_expression, form,  info)
+var_par_exon <- fitExtractVarPartModel(exon_expression, form,  info)
+# get mean and standard error
+vp_gene <- as.data.frame(cbind(colMeans(var_par_gene), apply(var_par_gene, 2, SE)))
+colnames(vp_gene) <- c("Mean", "SE")
+vp_gene$Type <- "Gene"
+vp_gene$Name <- row.names(vp_gene)
+vp_transcript <- as.data.frame(cbind(colMeans(var_par_transcript), apply(var_par_transcript, 2, SE)))
+colnames(vp_transcript) <- c("Mean", "SE")
+vp_transcript$Type <- "Transcript"
+vp_transcript$Name <- row.names(vp_transcript)
+vp_exon <- as.data.frame(cbind(colMeans(var_par_exon), apply(var_par_exon, 2, SE)))
+colnames(vp_exon) <- c("Mean", "SE")
+vp_exon$Type <- "Exon"
+vp_exon$Name <- row.names(vp_exon)
+vp <- rbind(vp_gene, vp_transcript, vp_exon)
+vp$Name <- factor(as.factor(vp$Name), levels = c("Residuals", "RIN2", "RIN", "Type_of_Death", "Age", "Dx", "Suicide", "pH", "Sex", "C2", "PMI", "C4", "C1", "C3"))
+vp$Type <- as.factor(vp$Type)
+vp$Type <- factor(vp$Type, levels = c("Gene", "Transcript", "Exon"))
+# barplot with residuals
+g <- ggplot(vp, aes(x = Name, y = Mean * 100, fill = Type)) +
+    geom_bar(stat = "identity", position = position_dodge()) +
+    scale_fill_manual(values = brewer.pal(11, "RdBu")[c(9, 4, 3)]) +
+    geom_errorbar(aes(x = Name, ymin = (Mean - SE) * 100, ymax = (Mean + SE) * 100), position = position_dodge(width = 0.9), width = 0.4) +
+    theme_bw(base_size = 20) +
+    xlab("") +
+    ylab("Variance explained (%)")+
+  theme(axis.text.x = element_text(angle = 60, hjust = 1, vjust = 1))
+g
+ggsave(plot = g, file = paste0(outpath, "/1_barplot_variance_explained_with_residuals.pdf"))
+# barplot without residuals
+g <- ggplot(vp[vp$Name != "Residuals", ], aes(x = Name, y = Mean * 100, fill = Type)) +
+    geom_bar(stat = "identity", position = position_dodge()) +
+    scale_fill_manual(values = brewer.pal(11, "RdBu")[c(9, 4, 3)]) +
+    geom_errorbar(aes(x = Name, ymin = (Mean - SE) * 100, ymax = (Mean + SE) * 100), position = position_dodge(width = 0.9), width = 0.4) +
+    theme_bw(base_size = 15) +
+    xlab("") +
+    ylab("Variance explained (%)")+
+  theme(axis.text.x = element_text(angle = 60, hjust = 1, vjust = 1))
+g
+ggsave(plot = g, file = paste0(outpath, "/1_barplot_variance_explained_without_residuals.pdf"))
+```
+
 
 ## Ancestry dimension plots
 
@@ -1279,7 +1367,7 @@ rm(pca_age, pca_ph, pca_pmi, pca_rin, pca_rin2, pca_c1, pca_c2, pca_c3, pca_c4, 
 ## Heatmap of sample to sample distances
 
 ```{r, echo = F}
-GenerateSampleToSampleHeatmap(data = gene_summaries, name = "gene summarized data", file = "5_pca_gene_summarized_data_sample_to_sample_distances.pdf")
+GenerateSampleToSampleHeatmap(data = gene_summaries, name = "gene summarized data", file = "5_pheatmap_gene_summarized_data_sample_to_sample_distances.pdf")
 dev.off()
 rm(gene_summaries, pheno)
 ```
@@ -1380,7 +1468,7 @@ rm(pca_age, pca_ph, pca_pmi, pca_rin, pca_rin2, pca_c1, pca_c2, pca_c3, pca_c4, 
 ## Heatmap of sample to sample distances
 
 ```{r, echo = F}
-GenerateSampleToSampleHeatmap(data = transcript_summaries, name = "transcript summarized data", file = "6_pca_transcript_summarized_data_sample_to_sample_distances.pdf")
+GenerateSampleToSampleHeatmap(data = transcript_summaries, name = "transcript summarized data", file = "6_pheatmap_transcript_summarized_data_sample_to_sample_distances.pdf")
 dev.off()
 rm(transcript_summaries, pheno)
 ```
@@ -1481,7 +1569,7 @@ rm(pca_age, pca_ph, pca_pmi, pca_rin, pca_rin2, pca_c1, pca_c2, pca_c3, pca_c4, 
 ## Heatmap of sample to sample distances
 
 ```{r, echo = F}
-GenerateSampleToSampleHeatmap(data = exon_summaries, name = "exon summarized data", file = "7_pca_exon_summarized_data_sample_to_sample_distances.pdf")
+GenerateSampleToSampleHeatmap(data = exon_summaries, name = "exon summarized data", file = "7_pheatmap_exon_summarized_data_sample_to_sample_distances.pdf")
 dev.off()
 rm(exon_summaries, pheno)
 ```
@@ -1502,54 +1590,22 @@ Here, we will check, if the covariates are significantly changing the gene expre
 
 ## Load Microarray Data
 
-First, we will load the RMA normalized, batch corrected, gene-level summarized and annotated dataset with its the corresponding phenotype dataset.
+First, we will load the RMA normalized and batch corrected dataset with the corresponding phenotype dataset.
 ```{r}
 # Import RMA corrected and annotated Affymetrix Microarray Data
 load(paste0(rdata_path, "/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData"))
 dim(gene_summaries)
-```
-
-As it is important, that the phenotype dataset and the microarray expressions have an identical order of the sample names, we will now check if this is true.
-```{r}
-# check if pData and gene_summaries_final are identical
+# check if pData and gene_summaries are identical
 pdata <- pData(gene_summaries)
 identical(as.character(pdata$ShortName), colnames(exprs(gene_summaries)))
 ```
 
-### Principal Variance Component Analysis (PVCA)
-
-Principal Variance Component Analysis is a screening tool to determine which sources of variability (biological, technical or other) are most prominent in a given microarray data set and should be included as covariates in the model. This step takes a long time to calculate as PVCA is not made for a large number of covariates.
-```{r, echo = F, include = F, eval = F}
-# get the neccessary phenoData
-pdata <- pdata[, c("Age", "Sex", "Dx", "pH", "PMI", "RIN", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "SV1")]
-pdata[, "Age"] <- cut(pdata[, "Age"], breaks = c(15, 30, 45, 60, 75, 90))
-pdata[, "pH"] <- cut(pdata[, "pH"], breaks = c(min(pdata[, "pH"]), mean(pdata[, "pH"]), max(pdata[, "pH"])), labels = c("Mean_or_Below", "Above"))
-pdata[, "PMI"] <- cut(pdata[, "PMI"], breaks = c(5, 20, 35, 50, 65, 80))
-pdata[, "RIN"] <- cut(pdata[, "RIN"], breaks = c(min(pdata[, "RIN"]), mean(pdata[, "RIN"]), max(pdata[, "RIN"])), labels = c("Mean_or_Below", "Above"))
-edata <- ExpressionSet(assayData = as.matrix(exprs(gene_summaries)), phenoData = AnnotatedDataFrame(pdata), featureData = AnnotatedDataFrame(fData(gene_summaries)))
-# Set the covariates whose effect size on the data needs to be calculated
-cov_eff_var <- c("Age", "Sex", "Dx", "pH", "PMI", "RIN", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "SV1")
-# The PVCA Threshold Value (between 0 and 1) is the percentile value of the minimum amount of the variabilities that the selected principal components need to explain, here requiring 75% of the expression variance to be captured by the PCs
-pct_threshold <- 0.75 
-# Perform the PVCA analysis
-pvca_obj <- pvcaBatchAssess(edata, cov_eff_var, pct_threshold)
-pdf(file = paste0(outpath, "6_barplot_PVCA_cov_evaluation.pdf"))
-bp <- barplot(pvca_obj$dat,  xlab = "Effects", ylab = "Weighted average proportion variance",
-              ylim = c(0,1.1), col = brewer.pal(11, "RdBu")[9], las = 2, 
-              main = "PVCA estimation bar chart")
-axis(1, at = bp, labels = pvca_obj$label, xlab = "Effects", cex.axis = 0.5, las = 2)
-values = pvca_obj$dat
-new_values = round(values , 3)
-text(bp, pvca_obj$dat, labels = new_values, pos = 3, cex = 0.8)
-dev.off()
-```
-
 ### Using PCA
 
-First, we need to filter out phenotype data with missing values as well as unuseful columns in the phenotype data (e.g. MHRIID; Filename, ShortName, Batch and File) as these are just identifiers for mapping or already excluded (e.g. batch correction) from the dataset. Then, we will generate the design matrix including all covariates that we want to test. Therefore, we first need to convert all categorical covariates into factor and all continuous covariates into numerical class. We will also change all BPD and MDD diagnosis into AFF (as they did in Fromer et al.) and calculate the design matrix of all leftover covariates (see below).
+First, we need to filter out unuseful columns in the phenotype data (e.g. MHRIID; Filename, ShortName, Batch and File) as these are just identifiers for mapping or already excluded (e.g. batch correction) from the dataset. Then, we will generate the design matrix including all covariates that we want to test. Therefore, we first need to convert all categorical covariates into factor and all continuous covariates into numerical class. We will also change all BPD and MDD diagnosis into AFF (as they did in Fromer et al.) and calculate the design matrix of all leftover covariates (see below).
 ```{r, echo = F}
 # get only columns, we want to test for
-pdata_new <- pdata[, c("Age", "Sex", "Dx", "pH", "PMI", "RIN", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "SV1")]
+pdata_new <- pdata[, c("Age", "Sex", "Dx", "pH", "PMI", "RIN", "Suicide", "Type_of_Death", "C1", "C2", "C3", "C4")]
 # save categorical and continuous variable names
 classes <- sapply(pdata_new, class) # get type of columns
 categorical_cov = names(classes[classes == "factor"])
@@ -1560,7 +1616,7 @@ pdata_new$Dx <- factor(pdata_new$Dx, levels = c("CTL", "CASE"))
 contrast <- lapply(categorical_cov, function(x) {fac = pdata_new[, x]; return(contrasts(fac))})
 names(contrast) <- categorical_cov
 # generate design matrix
-design <- model.matrix(~ . + Age + Sex + Dx + pH + PMI + Suicide + RIN + Type_of_Death + C1 + C2 + C3 + C4 + C5 + C6 + C7 + C8 + C9 + C10 + SV1, pdata_new, contrasts.arg = contrast)
+design <- model.matrix(~ . + Age + Sex + Dx + pH + PMI + Suicide + RIN + Type_of_Death + C1 + C2 + C3 + C4, pdata_new, contrasts.arg = contrast)
 head(design)
 ```
 At the moment, we consider following covariates: `r paste(colnames(pdata_new), collapse = ", ")`
@@ -1584,10 +1640,8 @@ all_cor <- corr.test(sample_pc_vals, design, use = 'pairwise.complete.obs', meth
 cor_mat <- melt(all_cor$p, varnames = c("PC", "Covariate"))
 colnames(cor_mat)[colnames(cor_mat) == "value"] <- "pvalue"
 cor_mat$r <- melt(all_cor$r)$value # add r to data frame
-# Now calculate the fdr for all different covariates and check if they are significant (< 0.1) in ANY of the significant PC's
-fdr <- p.adjust(cor_mat$pvalue, method = "fdr")
-cor_mat$fdr <- fdr 
-significant <- fdr <= 0.1
+# Now we check if any of the covariates is significantly (p < 0.01) correlated to ANY of the highly varianced PC's
+significant <- cor_mat$pvalue < 0.01
 # get covariate names
 cov_names <- lapply(colnames(pdata_new), function(x) colnames(design)[grep(x, colnames(design))])
 names(cov_names) <- colnames(pdata_new)
@@ -1599,7 +1653,7 @@ Here, are all significant covariates from the design matrix: `r paste(significan
 
 Furthermore, we plot the significance of the correlations between the different covariates and significant PCs. We will also present the complete covariate list, which we will consider for our differential expression analysis.  
 ```{r, echo = F}
-cov_to_keep <- c("Age", "Sex", "PMI")
+cov_to_keep <- c("Age")
 # remove NA columns (Intercept)
 plot_cor = na.omit(cor_mat[1:nrow(cor_mat), ])
 plot_cor$PC = factor(plot_cor$PC, levels = rev(levels(plot_cor$PC)))
@@ -1615,7 +1669,7 @@ Following covariates should not be included: `r setdiff(colnames(pdata_new), cov
 
 ### Using BIC
 
-In the Common Mind Consortium publication (Fromer et al., Nature Neuroscience 2016) they used a second method to check for the importance of a covariate (with max. 2 df): they ask, how many genes have an improved Bayesian Information Criterion (BIC) score, also known as the Schwarz Criterion, compared to a linear regression model containing only the diagnosis as covariate. So, we will generate a design matrix only including the diagnosis (Dx) as covariate and a second design matrix including diagnosis + one other covariate (each covariate once). Then, we will use the selectModel function of the limma package with the criterion parameter set to bic and check, how many genes have an improved BIC score compared to the deisgn only using diagnosis as a covariate. 
+In the Common Mind Consortium publication (Fromer et al., Nature Neuroscience 2016) they used a second method to check for the importance of a covariate (with max. 2 df): they ask, how many genes have an improved Bayesian Information Criterion (BIC) score, also known as the Schwarz Criterion, compared to a linear regression model containing only the diagnosis as covariate. So, we will generate a design matrix only including the diagnosis (Dx) as covariate and a second design matrix including diagnosis + one other covariate (each covariate once). Then, we will use the selectModel function of the limma package with the criterion parameter set to bic and check, how many genes have an improved BIC score compared to the design only using diagnosis as a covariate. 
 ```{r}
 design <- model.matrix(~ Dx, pdata_new) # design using ONLY diagnosis as covariate
 # go through all other possible covariates in pdata_new
@@ -1623,7 +1677,7 @@ bics <- data.frame(matrix(NA, nrow = 1, ncol = 1))
 # go through all covariates
 for (cov in colnames(pdata_new)) {
   if (cov != "Dx") {
-    design2 <- model.matrix(~ Dx + get(cov), pdata_new) # design using diagnosis and one other covariate
+    design2 <- model.matrix(~ get(cov) + Dx, pdata_new) # design using diagnosis and one other covariate
     designlist <- list(design = design, design2 = design2)
     out <- selectModel(ExpressionSet(as.matrix(exprs(gene_summaries))), designlist = designlist, criterion = "bic")
     bics[cov] <- table(out$pref)[2][[1]] # get number of genes with improved BIC
@@ -1636,7 +1690,7 @@ bics$matrix.NA..nrow...1..ncol...1. <- NULL
 |----------------------|--------------|----|---------------------------|
 | Age at Death | Age | 1 | `r bics$Age` |
 | Gender | Sex | 1 | `r bics$Sex` |
-| pH | pH | 1 | `r bics$pH` |
+| Power of hydrogen | pH | 1 | `r bics$pH` |
 | Postmortem Interval | PMI | 1 | `r bics$PMI` |
 | Suicide | Suicide | 1 | `r bics$Suicide` |
 | RNA Integrity Number | RIN | 1 | `r bics$RIN` |

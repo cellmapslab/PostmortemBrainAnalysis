@@ -115,10 +115,10 @@ wait
 echo "Done CDG1-2013"
 
 ### CDG2-2018 ###
-mkdir -p ${outpath_prsice}/CDG2-2018  # generate output path if not existing already
-Rscript --slave ${script_path}/PRSice.R --prsice ${script_path}/PRSice_linux --base ${sumstats_path}/CDG2-2018.sumstats --target ${target} --ld ${ld_reference} --pheno ${phenotypes} --cov ${covariates} --cov-factor Sex --thread 3 --A1 REF --A2 ALT --stat BETA --pvalue PVAL --snp ID --binary-target F --print-snp --beta --pheno-col Dx --clump-kb 1000 --clump-r2 0.2 --score avg --all-score --out ${outpath_prsice}/CDG2-2018/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_CDG2-2018_PRSice-2_PRS &> ${outpath_prsice}/CDG2-2018/PRSice-2
+mkdir -p ${outpath_prsice}/CDG2-2019  # generate output path if not existing already
+Rscript --slave ${script_path}/PRSice.R --prsice ${script_path}/PRSice_linux --base ${sumstats_path}/CDG2-2018.sumstats --target ${target} --ld ${ld_reference} --pheno ${phenotypes} --cov ${covariates} --cov-factor Sex --thread 3 --A1 REF --A2 ALT --stat BETA --pvalue PVAL --snp ID --binary-target F --print-snp --beta --pheno-col Dx --clump-kb 1000 --clump-r2 0.2 --score avg --all-score --out ${outpath_prsice}/CDG2-2019/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_CDG2-2019_PRSice-2_PRS &> ${outpath_prsice}/CDG2-2019/PRSice-2
 wait
-echo "Done CDG2-2018"
+echo "Done CDG2-2019"
 
 ### EA-2018 (Educational attainment or IQ) ###
 mkdir -p ${outpath_prsice}/EA-2018  # generate output path if not existing already

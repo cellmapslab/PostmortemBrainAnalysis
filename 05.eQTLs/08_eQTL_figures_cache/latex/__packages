@@ -1,0 +1,14 @@
+base
+BiocStyle
+knitr
+data.table
+tidyr
+viridisLite
+viridis
+RColorBrewer
+futile.logger
+VennDiagram
+UpSetR
+ggplot2
+magrittr
+ggpubr

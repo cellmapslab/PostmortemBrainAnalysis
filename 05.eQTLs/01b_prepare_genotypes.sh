@@ -147,7 +147,7 @@ if [ $genotypes ] && [ $exclude ] && [ $include ] && [ $out_path ] && [ $tools_p
     # 1.6 Change the probabilities of the genotype file (three columns/numbers to one)
     gen_file="${removed_dups_out_path}/pmb_info06_all_chr_maf0.05_merged_noDup.gen.gz"
     sample_file="${removed_dups_out_path}/pmb_info06_all_chr_maf0.05_merged_noDup.sample"
-    Rscript ${scripts_path}/01c_change_probs.R geno=\"${gen_file}\" sample=\"${sample_file}\" ids=\"${include}\" output=\"${probs_changed_out_path}\" &>> ${probs_changed_out_path}/probs_changed.log
+    Rscript ${scripts_path}/01c_change_probs.R geno=\"${gen_file}\" sample=\"${sample_file}\" ids=\"${include}\" output=\"${probs_changed_out_path}\" &> ${probs_changed_out_path}/probs_changed.log
     cp ${sample_file} $probs_changed_out_path
     mv ${probs_changed_out_path}/*.sample pmb_info06_all_chr_maf0.05_merged_noDup_matrixEQTL_transformed.sample
     echo "6. Change probabilities done"

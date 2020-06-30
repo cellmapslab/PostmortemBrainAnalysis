@@ -41,12 +41,12 @@ bash ${script_path}/06a_LDpred.sh --genotypes ${target} --phenotypes ${phenotype
 wait
 echo "Done MDD3-2019"
 
-### CDG2-2018 ###
+### CDG2-2019 ###
 # N = 438,997 samples
-mkdir -p ${outpath_ldpred}/CDG2-2018  # generate output path if not existing already
-bash ${script_path}/06a_LDpred.sh --genotypes ${target} --phenotypes ${phenotypes} --covariates ${covariates} --cohort ${ld_reference} --sumstats ${sumstats_path}/CDG2-2018.sumstats --nums 438997 --rsid ID --ref REF --alt ALT --pos POS --chr CHROM --pval PVAL --eff BETA --beta yes --stderr SE --out ${outpath_ldpred}/CDG2-2018
+mkdir -p ${outpath_ldpred}/CDG2-2019  # generate output path if not existing already
+bash ${script_path}/06a_LDpred.sh --genotypes ${target} --phenotypes ${phenotypes} --covariates ${covariates} --cohort ${ld_reference} --sumstats ${sumstats_path}/CDG2-2019.sumstats --nums 438997 --rsid ID --ref REF --alt ALT --pos POS --chr CHROM --pval PVAL --eff BETA --beta yes --stderr SE --out ${outpath_ldpred}/CDG2-2019
 wait
-echo "Done CDG2-2018"
+echo "Done CDG2-2019"
 
 ### ADHD-2017 ###
 # 20,183 cases and 35,191 controls: N = 55,374 samples

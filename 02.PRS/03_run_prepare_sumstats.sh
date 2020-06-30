@@ -162,10 +162,10 @@ output_sumstats="${outpath_sumstats}/CDG1-2013.sumstats"
 awk 'NR==1 {$1=$1}; NR>1 {$1="chr"$2":"$3} 1' OFS="\t" ${sumstats} > ${output_sumstats}
 
 #################
-### CDG2-2018 ###
+### CDG2-2019 ###
 #################
 sumstats="${sum_stats_path}/CDG2-2019/pgc_cdg2_meta_no23andMe_oct2019_v2.txt.daner.txt"
-output_sumstats="${outpath_sumstats}/CDG2-2018.sumstats"
+output_sumstats="${outpath_sumstats}/CDG2-2019.sumstats"
 # Remove comment lines and change all SNP IDs in the GWAS summary statistic file to following example format: chr:pos, e.g. chr10:10001753 & leave first line untouched
 awk 'NR==1 {$1=$1}; NR>1 {$3="chr"$1":"$2} 1' OFS="\t" ${sumstats} > ${output_sumstats}
 

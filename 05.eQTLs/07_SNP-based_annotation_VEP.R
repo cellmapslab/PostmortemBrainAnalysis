@@ -14,11 +14,11 @@ suppressPackageStartupMessages({
 
 
 # function, to calculate the gene annotation to a public dataset, but with respect to the MAF bins
-# @param own Own cis-eQTL data set as GRanges object
-# @param public A public cis-eQTL data set as GRanges object
-# @param nperm Number of permutations (usually a 1000 times)
-# @param background All background genes coming from the gene expression (here: 14,048 unqiue genes)
-# @return vector including the number of overlapping SNPs (1 = overlap), the resampling p-value (2 = p_value) and the resampling odds ratio (3 = or)
+# @param own         Own cis-eQTL data set as GRanges object
+# @param public      A public cis-eQTL data set as GRanges object
+# @param nperm       Number of permutations (usually a 1000 times)
+# @param background  All background genes coming from the gene expression (here: 14,048 unqiue genes)
+# @return            Vector including the number of overlapping SNPs (1 = overlap), the resampling p-value (2 = p_value) and the resampling odds ratio (3 = or)
 AnnotatePublicData <- function(own, public, nperm, background){ 
   overlap <- sum(overlapsAny(own, public))  # number of overlaps between the two datasets
   background_bins <- lapply(1:11, function(x) background[background$bin == x])  # get all background SNPs in MAF bin 1 to 11
@@ -42,8 +42,7 @@ vepGR_hg19 <- readRDS("/storage/groups/ccm01/datasets/2019_VEP/VEP_hg19_collapse
 seqlevels(vepGR_hg19, pruning.mode = "coarse") <- setdiff(seqlevels(vepGR_hg19), c("X", "Y", "M"))
 
 ### LOAD eQTL results ###
-ipath <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/06_RData/"
-#ipath=""
+ipath <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/06_RData_files/"
 # cis-eQTLs of cases and controls (ALL) in genes, transcripts and exons
 eqtls_gene_gr <- readRDS(paste0(ipath, "pmb_gene_hits_cases_vs_controls_cis_eQTL_SNPs.rds"))
 eqtls_transcript_gr <- readRDS(paste0(ipath, "pmb_transcript_hits_cases_vs_controls_cis_eQTL_SNPs.rds"))

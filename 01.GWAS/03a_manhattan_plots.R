@@ -80,7 +80,8 @@ if(length(args) == 0){
               panel.grid.minor.x = element_blank(),
               axis.text = element_text(size = 30),
               axis.title = element_text(size = 36))
-    ggsave(paste0(output, "2.pdf"), width = 17, height = 7)
+    ggsave(paste0(output, "2.pdf"), width = 17, height = 7, dpi = "screen")
+    ggsave(paste0(output, "2.png"), width = 17, height = 7)
     rm(gwas_results, don, axisdf)
 
     print(sessionInfo())

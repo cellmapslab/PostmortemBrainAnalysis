@@ -24,7 +24,6 @@ Usage: bash 06a_LDpred.sh -g <path/to/target-geno-files> -t <path/to/phenotypes.
 -v  --covariates  path and file name of the covariates file
 -c  --cohort      path and file name prefix (without file ending) of the plnk formatted cohort genotype files (e.g. 03_updateMap_all_chr_merged_scz2_filtered)
 -s  --sumstats    path and file name of the GWAS summary statistics file (e.g. MDD2_2018_filtered.sumstats) 
--n  --nums        number of individuals (sample size) used to generate the GWAS summary statistics (e.g. 20,000 cases and 30,000 controls: N = 50,000)
 -r  --rsid        name of rs ID column in the GWAS summary statistics file
 -a1  --ref        name of reference allele (usually A1) column in the GWAS summary statistics file
 -a2  --alt        name of alternate allele (usually A2) column in the GWAS summary statistics file
@@ -47,10 +46,10 @@ phenotypes=  # path and file name of the phenotypes file
 covariates=  # path and file name of the covariates file
 cohort=  # path and file name prefix of the plink formatted cohort files
 sumstats=  # path and file name of the GWAS summary statistics file
-nums=  # sample size (number of individuals) used to calculate the GWAS summary statistics on
 rsid=  # name of rs ID column in the GWAS summary statistics file
 ref=  # name of reference allele (usually A1) column in the GWAS summary statistics file
 alt=  # name of alternate allele (usually A2)  column in the GWAS summary statistics file
+nums=  # sample size (number of samples used in the GWAS)
 pos=  # name of position (base pairs = bp) column in the GWAS summary statistics file
 chr=  # name of chromosome column in the GWAS summary statistics file
 pval=  # name of p-value column in the GWAS summary statistics file
@@ -87,11 +86,11 @@ while [ "$1" != "" ]; do
         -s | --sumstats )   shift
                             sumstats=$1
                             ;;
-        -n | --nums )       shift
-                            nums=$1
-                            ;;
         -r | --rsid )       shift
                             rsid=$1
+                            ;;
+        -n | --nums )       shift
+                            nums=$1
                             ;;
         -a1 | --ref )       shift
                             ref=$1
@@ -174,39 +173,39 @@ if [ $genotypes ] && [ $phenotypes ] && [ $covariates ] && [ $cohort ] && [ $sum
     # add info and effect sizes
     if [ $info ] && [ $ncol ] ; then
         if [[ "$beta" == "yes" ]] && [[ -n $se ]] ; then
-            ldpred coord --gf $cohort --ssf ${sumstats} --N ${nums} --rs ${rsid} --A1 ${ref} --A2 ${alt} --pos ${pos} --chr ${chr} --pval ${pval} --eff ${effect} --se ${se} --info ${info} --ncol ${ncol} --eff_type LINREG --maf 0 --vgf ${genotypes} --ssf-format CUSTOM --out ${coord_path}/${out_file_name}.coord_file &> ${coord_path}/coord_genotypes.log
+            ldpred coord --gf $cohort --ssf ${sumstats} --rs ${rsid} --N ${nums} --A1 ${ref} --A2 ${alt} --pos ${pos} --chr ${chr} --pval ${pval} --eff ${effect} --se ${se} --info ${info} --ncol ${ncol} --eff_type LINREG --maf 0 --vgf ${genotypes} --ssf-format CUSTOM --out ${coord_path}/${out_file_name}.coord_file &> ${coord_path}/coord_genotypes.log
         else
-            ldpred coord --gf $cohort --ssf ${sumstats} --N ${nums} --rs ${rsid} --A1 ${ref} --A2 ${alt} --pos ${pos} --chr ${chr} --pval ${pval} --eff ${effect} --info ${info} --ncol ${ncol} --eff_type OR --maf 0 --vgf ${genotypes} --ssf-format CUSTOM --out ${coord_path}/${out_file_name}.coord_file &> ${coord_path}/coord_genotypes.log
+            ldpred coord --gf $cohort --ssf ${sumstats} --rs ${rsid} --N ${nums} --A1 ${ref} --A2 ${alt} --pos ${pos} --chr ${chr} --pval ${pval} --eff ${effect} --info ${info} --ncol ${ncol} --eff_type OR --maf 0 --vgf ${genotypes} --ssf-format CUSTOM --out ${coord_path}/${out_file_name}.coord_file &> ${coord_path}/coord_genotypes.log
         fi
     # add info (no effect size/N given)
     elif [ $info ] ; then
         if [[ "$beta" == "yes" ]] && [[ -n $se ]] ; then
-            ldpred coord --gf $cohort --ssf ${sumstats} --N ${nums} --rs ${rsid} --A1 ${ref} --A2 ${alt} --pos ${pos} --chr ${chr} --pval ${pval} --eff ${effect} --se ${se} --info ${info} --eff_type LINREG --maf 0 --vgf ${genotypes} --ssf-format CUSTOM --out ${coord_path}/${out_file_name}.coord_file &> ${coord_path}/coord_genotypes.log
+            ldpred coord --gf $cohort --ssf ${sumstats} --rs ${rsid} --N ${nums} --A1 ${ref} --A2 ${alt} --pos ${pos} --chr ${chr} --pval ${pval} --eff ${effect} --se ${se} --info ${info} --eff_type LINREG --maf 0 --vgf ${genotypes} --ssf-format CUSTOM --out ${coord_path}/${out_file_name}.coord_file &> ${coord_path}/coord_genotypes.log
         else
-            ldpred coord --gf $cohort --ssf ${sumstats} --N ${nums} --rs ${rsid} --A1 ${ref} --A2 ${alt} --pos ${pos} --chr ${chr} --pval ${pval} --eff ${effect} --info ${info} --eff_type OR --maf 0 --vgf ${genotypes} --ssf-format CUSTOM --out ${coord_path}/${out_file_name}.coord_file &> ${coord_path}/coord_genotypes.log
+            ldpred coord --gf $cohort --ssf ${sumstats} --rs ${rsid} --N ${nums} --A1 ${ref} --A2 ${alt} --pos ${pos} --chr ${chr} --pval ${pval} --eff ${effect} --info ${info} --eff_type OR --maf 0 --vgf ${genotypes} --ssf-format CUSTOM --out ${coord_path}/${out_file_name}.coord_file &> ${coord_path}/coord_genotypes.log
         fi
     # run without info and effect size/N given
     else
         if [[ "$beta" == "yes" ]] && [[ -n $se ]] ; then
-            ldpred coord --gf $cohort --ssf ${sumstats} --N ${nums} --rs ${rsid} --A1 ${ref} --A2 ${alt} --pos ${pos} --chr ${chr} --pval ${pval} --eff ${effect} --se ${se} --eff_type LINREG --maf 0 --vgf ${genotypes} --ssf-format CUSTOM --out ${coord_path}/${out_file_name}.coord_file &> ${coord_path}/coord_genotypes.log
+            ldpred coord --gf $cohort --ssf ${sumstats} --rs ${rsid} --N ${nums} --A1 ${ref} --A2 ${alt} --pos ${pos} --chr ${chr} --pval ${pval} --eff ${effect} --se ${se} --eff_type LINREG --maf 0 --vgf ${genotypes} --ssf-format CUSTOM --out ${coord_path}/${out_file_name}.coord_file &> ${coord_path}/coord_genotypes.log
         else
-            ldpred coord --gf $cohort --ssf ${sumstats} --N ${nums} --rs ${rsid} --A1 ${ref} --A2 ${alt} --pos ${pos} --chr ${chr} --pval ${pval} --eff ${effect} --eff_type OR --maf 0 --vgf ${genotypes} --ssf-format CUSTOM --out ${coord_path}/${out_file_name}.coord_file &> ${coord_path}/coord_genotypes.log
+            ldpred coord --gf $cohort --ssf ${sumstats} --rs ${rsid} --N ${nums} --A1 ${ref} --A2 ${alt} --pos ${pos} --chr ${chr} --pval ${pval} --eff ${effect} --eff_type OR --maf 0 --vgf ${genotypes} --ssf-format CUSTOM --out ${coord_path}/${out_file_name}.coord_file &> ${coord_path}/coord_genotypes.log
         fi
     fi
     echo "coord done"  # --ssf-format $format
 
     # 2. Run LDpred: test for 1 0.9 0.8 0.7 0.6 0.5 0.4 0.3 0.2 0.1 0.03 0.01 0.003 0.001 (takes forever...)
     # number of samples N (--N ${nums}) in GWAS was removed as the author recommends not setting this parameter as it can lead to problems (e.g. large heritability)
-    ldpred gibbs --cf ${coord_path}/${out_file_name}.coord_file --ldr ${radius} --f 1 0.5 0.3 0.1 0.03 0.01 0.003 0.001 --ldf ${gibbs_path}/${out_file_name} --out ${gibbs_path}/${out_file_name} &> ${gibbs_path}/LDpred.log
-    echo "gibbs done"
+#    ldpred gibbs --cf ${coord_path}/${out_file_name}.coord_file --ldr ${radius} --f 1 0.5 0.3 0.1 0.03 0.01 0.003 0.001 --ldf ${gibbs_path}/${out_file_name} --out ${gibbs_path}/${out_file_name} &> ${gibbs_path}/LDpred.log
+#    echo "gibbs done"
 
     # 3. Run scoring (get score for each patient)
     # 3.1 Once without covariates
-    ldpred score --gf ${genotypes} --rf ${gibbs_path}/${out_file_name} --f 1 0.5 0.3 0.1 0.03 0.01 0.003 0.001 --pf ${phenotypes} --pf-format LSTANDARD --out ${out_path}/03_validate/${out_file_name}_PRS_without_cov &> ${out_path}/03_validate/validate.log
-    echo "score without covariates done"
+#    ldpred score --gf ${genotypes} --rf ${gibbs_path}/${out_file_name} --f 1 0.5 0.3 0.1 0.03 0.01 0.003 0.001 --pf ${phenotypes} --pf-format LSTANDARD --out ${out_path}/03_validate/${out_file_name}_PRS_without_cov &> ${out_path}/03_validate/validate.log
+#    echo "score without covariates done"
     # 3.2 Once with covariates
-    ldpred score --gf ${genotypes} --rf ${gibbs_path}/${out_file_name} --f 1 0.5 0.3 0.1 0.03 0.01 0.003 0.001 --pf ${phenotypes} --pf-format LSTANDARD --cov-file ${covariates} --out ${out_path}/03_validate/${out_file_name}_PRS_with_cov &> ${out_path}/03_validate/validate.log
-    echo "score with covariates done"
+#    ldpred score --gf ${genotypes} --rf ${gibbs_path}/${out_file_name} --f 1 0.5 0.3 0.1 0.03 0.01 0.003 0.001 --pf ${phenotypes} --pf-format LSTANDARD --cov-file ${covariates} --out ${out_path}/03_validate/${out_file_name}_PRS_with_cov &> ${out_path}/03_validate/validate.log
+#    echo "score with covariates done"
 
     # 4. run LDpred for pruning and thresholding (P+T)
 #    ldpred p+t --cf ${coord_path}/${out_file_name}.coord_file --ldr ${radius} --p 1 0.05 0.01 0.00000005 --out ${pt_path}/${out_file_name} &> ${pt_path}/LDpred_p+t.log

@@ -132,10 +132,10 @@ echo "Done CDG1-2013"
 
 ### CDG2-2018 ###
 # N = 438,997 samples
-mkdir -p ${outpath_lassosum}/CDG2-2018  # generate output path if not existing already
-Rscript --slave ${script_path}/05a_lassosum.R --base ${sumstats_path}/CDG2-2018.sumstats --target ${target} --ld ${ld_reference} --pheno ${phenotypes} --cov ${covariates} --A1 REF --A2 ALT --stat BETA --pvalue PVAL --chr CHROM --bp POS --size 438997 --beta yes --thread 3 --out ${outpath_lassosum}/CDG2-2018 --gwas CDG2-2018 &> ${outpath_lassosum}/CDG2-2018/Lassosum.log
+mkdir -p ${outpath_lassosum}/CDG2-2019  # generate output path if not existing already
+Rscript --slave ${script_path}/05a_lassosum.R --base ${sumstats_path}/CDG2-2019.sumstats --target ${target} --ld ${ld_reference} --pheno ${phenotypes} --cov ${covariates} --A1 REF --A2 ALT --stat BETA --pvalue PVAL --chr CHROM --bp POS --size 438997 --beta yes --thread 3 --out ${outpath_lassosum}/CDG2-2019 --gwas CDG2-2019 &> ${outpath_lassosum}/CDG2-2019/Lassosum.log
 wait
-echo "Done CDG2-2018"
+echo "Done CDG2-2019"
 
 ### EA-2018 (Educational attainment or IQ) ###
 # N = 766,345 samples

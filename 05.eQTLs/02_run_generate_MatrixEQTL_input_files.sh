@@ -10,5 +10,4 @@ mkdir -p $outpath
 script_path="/storage/groups/ccm01/code/PostmortemBrainAnalysis/05.eQTLs"
 
 # 1. Generate all input files necessary for matrixeqtl
-Rscript ${script_path}/02_generate_input_files.R bim=\"${bim}\" snps=\"${snps}\" gene=\"${gene_expr}\" transcript=\"${transcript_expr}\" exon=\"${exon_expr}\" outpath=\"${outpath}\" &>> ${outpath}/generate_input.log
-
+Rscript ${script_path}/02_generate_MatrixEQTL_input_files.R bim=\"${bim}\" snps=\"${snps}\" gene=\"${gene_expr}\" transcript=\"${transcript_expr}\" exon=\"${exon_expr}\" outpath=\"${outpath}\" &> ${outpath}/generate_MatrixEQTL_input.log
