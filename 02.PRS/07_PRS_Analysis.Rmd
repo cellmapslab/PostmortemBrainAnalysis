@@ -23,30 +23,23 @@ vignette: >
   %\VignetteEngine{knitr::rmarkdown}
 ---
 
-```{r knitrOptions, include = F}
-library(BiocStyle)
+```{r global_options, include = FALSE}
 require(knitr)
+knitr::opts_chunk$set(warning = F, echo = F, message = F, cache = T, cache.lazy = F)
 options(stringsAsFactors = T)
-opts_chunk$set(echo = TRUE,
-               fig.pos = "H",
-               dpi = 300,
-               warning = FALSE, 
-               message = FALSE, 
-               cache = TRUE, 
-               cache.lazy = FALSE)
 ```
 
 <p>
 **R version**: `r R.version.string`
 <br />
-**Bioconductor version**: `r BiocInstaller::biocVersion()`
+**Bioconductor version**: `r BiocManager::version()`
 </p>
 
 
 # Load Packages 
 
 Below you can find the list of packages required by the workflow. 
-```{r}
+```{r, echo = T}
 library(viridis) # for colorblind color palette
 library(data.table)
 library(ggplot2)
@@ -76,7 +69,7 @@ system(paste0("mkdir -p ", path, "/08_results"))
 # Functions
 
 As we have to do several analysis multiple times, we will put these into functions to reduce the lines of code. 
-```{r, echo = F}
+```{r}
 #' Uses a linear model to calculate p-values and R2 for Nagelkerke and Cox & Snell measures 
 #' from a data table
 #'
@@ -191,7 +184,7 @@ pData <- pData(gene_summaries)
 rm(gene_summaries)
 ```
 
-# Get the polygneic risk scores (PRS)
+# Get the polygenic risk scores (PRS)
 
 ```{r}
 ad_2019_prsice <- EvaluatePRS(gwas = "AD-2019")
@@ -251,7 +244,7 @@ prs_t2d <- data.frame(IID = t2d_2017_prsice$IID, PRS_T2D = t2d_2017_prsice$`0.01
 pData <- merge(pData, prs_t2d, by = "IID", all.x = T)
 # Calculate correlations using canCorPairs from the variancePartition package
 model <- ~ PRS_SCZ + PRS_MDD2 + PRS_MDD3 + PRS_BIP + PRS_CDG + PRS_ADHD + PRS_ASD + PRS_EA + PRS_T2D + Age + Sex + Dx + C1 + C2 + C3 + C4
-corr <- canCorPairs(model, pData_new)
+corr <- canCorPairs(model, pData)
 # change orw and column names
 colnames(corr) <- c("SCZ-2014", "MDD-2018", "MDD-2019", "BIP-2019", "CDG-2019", "ADHD-2019", "ASD-2019", "EA-2018", "T2D-2017", "Age", "Sex", "Diagnosis", "Ancestry Dim 1", "Ancestry Dim 2", "Ancestry Dim 3", "Ancestry Dim 4")
 rownames(corr) <- c("SCZ-2014", "MDD-2018", "MDD-2019", "BIP-2019", "CDG-2019", "ADHD-2019", "ASD-2019", "EA-2018", "T2D-2017", "Age", "Sex", "Diagnosis", "Ancestry Dim 1", "Ancestry Dim 2", "Ancestry Dim 3", "Ancestry Dim 4")
@@ -268,7 +261,6 @@ dev.off()
 ```{r}
 # heatmap for all PRS GWAS
 # save only IID and PRS columns
-#pData.new <- pData[, c("IID", "PRS_BIP", "PRS_SCZ", "PRS_MDD", "PRS_CD", "PRS_ADHD", "PRS_ASD", "PRS_EA", "PRS_BMI")]
 pData_new <- pData[, c("IID", "PRS_MDD2", "PRS_MDD3", "PRS_BIP", "PRS_SCZ", "PRS_CDG")]
 # set IIDs as rownames and remove IID column afterwards
 row.names(pData_new) <- pData_new$IID
@@ -292,14 +284,14 @@ p <- pheatmap(t(pData_new[, 2:length(pData_new)]), scale = "row", cluster_rows =
 dev.off()
 iid.order <- p$tree_col$order
 row_names <- as.character(pData_new[iid.order, "IID"])
-pData_new2 <- pData[, c("IID", "PRS_ADHD", "PRS_ASD", "PRS_EA", "PRS_T2D")]
+pData_new2 <- pData[, c("IID", "PRS_ADHD", "PRS_EA", "PRS_T2D")]
 row.names(pData_new2) <- as.character(pData_new2$IID)
 pData_new2$IID <- NULL
 pData_plot <- t(pData_new2[row_names, ])
 # generate heatmap
-pdf(paste0(path, "/07_figures/heatmap_PRS_ADHD_ASD_EA_T2D_GWAS.pdf"), width = 12, height = 9)
+pdf(paste0(path, "/07_figures/heatmap_PRS_ADHD_EA_T2D_GWAS.pdf"), width = 12, height = 9)
 pheatmap(pData_plot, scale = "row", cluster_rows = F, cluster_cols = F, font_size = 0.6, show_colnames = F, 
-         cex = 1.5, labels_row = c("ADHD-2019", "ASD-2019", "EA-2018", "T2D-2017"), color = colorRampPalette(rev(brewer.pal(n = 11, name = "RdBu")))(100))
+         cex = 1.5, labels_row = c("ADHD-2019", "EA-2018", "T2D-2017"), color = colorRampPalette(rev(brewer.pal(n = 11, name = "RdBu")))(100))
 dev.off()
 ```
 

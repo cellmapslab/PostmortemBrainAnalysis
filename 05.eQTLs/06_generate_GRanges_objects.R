@@ -15,6 +15,7 @@ library(GenomeInfoDb)
 library(rtracklayer)
 library(IRanges)
 library(arules)
+library(reshape2)
 library(biomaRt) # to get SNP positions
 
 # First read the arguments listed in the commandline, trailingOnly uses only the parameters after --args
@@ -22,7 +23,7 @@ args = (commandArgs(trailingOnly = TRUE))
 
 # go through the list of arguments
 if(length(args) == 0){
-    cat("\nScript to generate GRanges objects from the eQTL data as well as public datasets, such as CMC, GTEx, VEP, etc.\n\nYou can invoke the script as follows:\nRscript 05_generate_GRanges_objects.R inpath=\"/home/.../to/input-files\" frq=\"/home/.../to/maf.frq/\" geno=\"path/to/genotype-files\" eqtls=\"path/to/eqtl-files\" clump=\"path/to/clumping-files\" cmc=\"path/to/cmc-files\" gtex=\"path/to/gtes-files\" cortex=\"/home/.../cortex.file\" gwas=\"path/to/gwas-files\" outpath=\"path/to/store/output\" &>> generate_GRanges_objects.log \n\nCommandline parameters:\n\nfrq\t\tfrequency file including the maf values for all SNPs\ngeno\t\tpath and file name without ending of the SNP genotype files in PLINK format (.bim/.bed/.fam)\neqtls\t\tpath to eqtl result files\nclump\t\tpath to clumped eQTL result files\ncmc\t\tpath to CMC (Fromer et al.) eQTL and isoQTL files\ngtex\t\tpath to GTEx v8 eQTL and sQTL files\ncortex\t\tpath to Cortex meQTL files\ngwas\t\tpath to GWAS summary statistic files\noutpath\t\tpath to store all output files into\n\n")
+    cat("\nScript to generate GRanges objects from the eQTL data as well as public datasets, such as CMC, GTEx, VEP, etc.\n\nYou can invoke the script as follows:\nRscript 05_generate_GRanges_objects.R inpath=\"/home/.../to/input-files\" frq=\"/home/.../to/maf.frq/\" geno=\"path/to/genotype-files\" eqtls=\"path/to/eqtl-files\" clump=\"path/to/clumping-files\" cmc=\"path/to/cmc-files\" gtex=\"path/to/gtes-files\" cortex=\"/home/.../cortex.file\" vep=\"path/to/vep.file\" chromhmm=\"path/to/chromhmm-files\" gwas=\"path/to/gwas-files\" outpath=\"path/to/store/output\" &>> generate_GRanges_objects.log \n\nCommandline parameters:\n\nfrq\t\tfrequency file including the maf values for all SNPs\ngeno\t\tpath and file name without ending of the SNP genotype files in PLINK format (.bim/.bed/.fam)\neqtls\t\tpath to eqtl result files\nclump\t\tpath to clumped eQTL result files\ncmc\t\tpath to CMC (Fromer et al.) eQTL and isoQTL files\ngtex\t\tpath to GTEx v8 eQTL and sQTL files\ncortex\t\tpath to Cortex meQTL files\ngwas\t\tpath to GWAS summary statistic files\noutpath\t\tpath to store all output files into\n\n")
 } else {
     for(i in 1:length(args)){
         eval(parse(text = args[[i]]))
@@ -418,7 +419,7 @@ if(length(args) == 0){
     GenomeInfoDb::seqlevelsStyle(gtex_brains_gr_hg19) <- "NCBI"
     seqlevels(gtex_brains_gr_hg19, pruning.mode = "coarse") <- setdiff(seqlevels(gtex_brains_gr_hg19), c("X", "Y", "M"))
     saveRDS(gtex_brains_gr_hg19, paste0(outpath, "/GTEx_v8_Brains_hg19_sQTL_SNPs.rds"))
-    rm(brains, filename, data, i, gtex_brains, gtex_brains_gr, gtex_brains_gr_hg19, hg38_to_hg19)
+    rm(brains, filename, data, i, gtex_brains, gtex_brains_gr, gtex_brains_gr_hg19)
     print("Done with GTEx brain (all brain tissues) eQTLs")
 
     
@@ -438,20 +439,67 @@ if(length(args) == 0){
     rm(cortex_meqtl, cortex_meqtl_gr)
     print("Done with cortex meQTLs")
 
+    
+    ######################################
+    ### Variant Effect Predictor (VEP) ###
+    ######################################
+    vep_maf01 <- data.table::fread(vep, data.table = F)
+    vep_maf01$SNP.Position <- as.numeric(sapply(as.character(vep_maf01$SNP), function(x) unlist(strsplit(x, "_"))[2]))
+    vep_maf01$SNP.Chr <- as.character(sapply(as.character(vep_maf01$SNP), function(x) unlist(strsplit(x, "_"))[1]))
+    vep_melt <- melt(vep_maf01, id.vars = c("SNP", "SNP.Chr", "SNP.Position"))
+    vep_gr <- makeGRangesFromDataFrame(
+        data.frame(
+            chr = vep_melt$SNP.Chr, 
+            start = vep_melt$SNP.Position, 
+            end = vep_melt$SNP.Position, 
+            code = as.character(vep_melt$variable)), 
+        keep.extra.columns = TRUE) 
 
-    ### VEP: Variant Effect Predictor
-    #vep <- data.table::fread("WGS_Feature_overlap_collapsed_VEP_short_4torus.MAF01.txt", data.table = F)
-    #vep$SNP.Position <- as.numeric(sapply(as.character(vep$SNP),function(x)unlist(strsplit(x,"_"))[2]))
-    #vep$SNP.Chr <- as.character(sapply(as.character(vep$SNP),function(x)unlist(strsplit(x,"_"))[1]))
-    #vep_melt <- melt(vep, id.vars = c("SNP", "SNP.Chr", "SNP.Position"))
-    #vepGR <- makeGRangesFromDataFrame(data.frame(chr = vep_melt$SNP.Chr, start = vep_melt$SNP.Position, end = vep_melt$SNP.Position, code = as.character(vep_melt$variable)), keep.extra.columns = TRUE) 
-    ##lift down to hg19
-    #hg38ToHg19 <- import.chain("hg38ToHg19.over.chain")
-    #vepGR_hg19 <- unlist(liftOver(vepGR, hg38ToHg19))#10719405
-    #seqlevelsStyle(vepGR_hg19) <- "NCBI"
-    #saveRDS(vepGR_hg19, "VEP_hg19_collapsed_MAF01.rds")
+    # downlift from GRCh38 to GRCh37 (hg19)
+    vep_gr_hg19 <- unlist(rtracklayer::liftOver(vep_gr, hg38_to_hg19)) # 10,719,405
+    vep_gr_hg19 <- vep_gr_hg19[!duplicated(vep_gr_hg19)]  # remove duplicated rows
+    GenomeInfoDb::seqlevelsStyle(vep_gr_hg19) <- "NCBI"
+    seqlevels(vep_gr_hg19, pruning.mode = "coarse") <- setdiff(seqlevels(vep_gr_hg19), c("X", "Y", "M"))
+    saveRDS(vep_gr_hg19, paste0(outpath, "/VEP_hg19_collapsed_MAF01.rds"))
+    rm(vep_maf01, vep_melt, vep_gr, hg38_to_hg19, vep_gr_hg19)
+    print("Done with VEP")
+    
 
+    ################
+    ### ChromHMM ###
+    ################
+    # read data
+    hmm <- readRDS(paste0(chromhmm, "/chromHMM_all_states.Rds"))
+    # remove chromosome X, Y and M
+    seqlevels(hmm, pruning.mode = "coarse") <- setdiff(seqlevels(hmm), c("chrX", "chrY", "chrM"))
+    # load ChromHMM data information
+    hmm_info <- read.csv2(paste0(chromhmm, "/epigenomes.tsv"), header = T, stringsAsFactors = F, sep = "\t")
+    
+    # get ChromHMM blood data
+    # Blood has multiple  cell lines (filter for Group == "Blood & T-cell")
+    blood <- hmm_info[hmm_info$GROUP == "Blood & T-cell", "EID"]  # get IDs for all blood related ChromHMM data
+    hmm_blood <- hmm[hmm$code %in% blood, ]  # get blood data
+    seqlevelsStyle(hmm_blood) <- "NCBI"
+    saveRDS(hmm_blood, paste0(outpath, "/ChromHMM_Blood_and_T-cells.rds"))
+    rm(blood, hmm_blood)
+    print("Done with ChromHMM Blood & T-cells")
 
+    # get ChromHMM brain data
+    # Brain has multiple  cell lines (filter for Group == "Brain")
+    brain <- hmm_info[hmm_info$GROUP == "Brain", "EID"]  # get IDs for all brain related ChromHMM data
+    hmm_brain <- hmm[hmm$code %in% brain, ]  # get brain data
+    seqlevelsStyle(hmm_brain) <- "NCBI"
+    saveRDS(hmm_brain, paste0(outpath, "/ChromHMM_all_Brains.rds"))
+    rm(brain, hmm_brain) 
+    print("Done with ChromHMM all Brains")
+    
+    # get ChromHMM Brain DLPFC (Dorsolateral Prefrontal Cortex, EID = E073)
+    hmm_dlpfc <- hmm[hmm$code == "E073"]
+    seqlevelsStyle(hmm_dlpfc) <- "NCBI"
+    saveRDS(hmm_dlpfc, paste0(outpath, "/ChromHMM_Brain_Dorsolateral_Prefrontal_Cortex.rds"))
+    rm(hmm, hmm_info, hmm_dlpfc) 
+    print("Done with ChromHMM Brain DLPFC")
+    
     ###############################
     ### GWAS Summary Statistics ###
     ###############################

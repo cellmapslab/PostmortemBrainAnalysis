@@ -9,4 +9,4 @@ mkdir -p ${output_path}
 script_path="/storage/groups/ccm01/code/PostmortemBrainAnalysis/05.eQTLs"
 
 # 1. Generate all input files necessary for FUMA
-Rscript ${script_path}/06_generate_FUMA_input_files.R inpath=\"${input_path}\" dea=\"${dea_path}\" keggf=\"${kegg_file}\" outpath=\"${output_path}\" &> ${output_path}/generate_FUMA_input.log
+Rscript ${script_path}/07_generate_FUMA_input_files.R inpath=\"${input_path}\" dea=\"${dea_path}\" keggf=\"${kegg_file}\" outpath=\"${output_path}\" &> ${output_path}/generate_FUMA_input.log

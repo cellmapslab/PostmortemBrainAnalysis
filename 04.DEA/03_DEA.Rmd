@@ -72,11 +72,11 @@ library(plyr)
 Before we can start, we need to make sure that all necessary paths and folder names are saved. If the output folder does not exist yet, we will generate it using the systems (Red Hat Enterprise Linux operating system: Fedora 25) "mkdir" command. 
 ```{r}
 # path to the polygenic risk score (PRS) results
-prs_path="/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/04_PRSice-2"
+prs_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/04_PRSice-2"
 # path to the resulting RData files from the preprocessing step
-rdata_path="/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_files"
+rdata_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_files"
 # path to store all results into
-outpath = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_DEA_results"
+outpath <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_DEA_results"
 # generate output path if not existing yet
 system(paste0("mkdir -p ", outpath))
 ```
@@ -527,10 +527,12 @@ design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type
 fit <- RunLimma(design, transcript_summaries)
 # result table
 top_hits <- GenerateResultTableTranscript(fit, variable = "DxCASE", file =  "2.1_diff_expr_transcripts_for_diagnosis.csv")
+# get residuals
+res <- residuals.MArrayLM(fit, exprs(transcript_summaries))
 # save data into an RData file (for figure generation)
-save(design, fit, top_hits, file = paste0(outpath, "/2.1_diff_expr_transcripts_for_diagnosis.RData"))
+save(design, fit, top_hits, res, file = paste0(outpath, "/2.1_diff_expr_transcripts_for_diagnosis.RData"))
 # remove unnecessary data
-rm(fit, design)
+rm(fit, design, res)
 ```
 No (`r length(unique(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]))`) hits. Maybe a problem of the multiple testing correction as we have too many transcripts to correct for. We will test a new FDR correction model in the following section.
 
@@ -767,6 +769,8 @@ dim(transcript_summaries_new)
 design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 # differential expression analysis (limma)
 fit <- RunLimma(design, transcript_summaries_new)
+# get residuals
+res <- residuals.MArrayLM(fit, exprs(transcript_summaries_new))
 # result table
 top_hits <- GenerateResultTableTranscript(fit, variable = "DxCASE", file =  "2.4_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.csv")
 top_hits_age <- GenerateResultTableTranscript(fit, variable = "Age", file =  "2.4_diff_expr_transcripts_for_age_new_pvalue_and_fdr.csv")
@@ -775,7 +779,7 @@ top_hits_pmi <- GenerateResultTableTranscript(fit, variable = "PMI", file =  "2.
 top_hits_c2 <- GenerateResultTableTranscript(fit, variable = "C2", file =  "2.4_diff_expr_transcripts_for_c2_new_pvalue_and_fdr.csv")
 top_hits_c1 <- GenerateResultTableTranscript(fit, variable = "C1", file =  "2.4_diff_expr_transcripts_for_c1_new_pvalue_and_fdr.csv")
 # save data into an RData file (for figure generation)
-save(design, fit, top_hits, file = paste0(outpath, "/2.4_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.RData"))
+save(design, fit, top_hits, res, file = paste0(outpath, "/2.4_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.RData"))
 # remove unnecessary data
 rm(fit, design)
 ```
@@ -1042,10 +1046,12 @@ design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type
 fit <- RunLimma(design, exon_summaries)
 # result table
 top_hits <- GenerateResultTableExon(fit, variable = "DxCASE", file =  "3.1_diff_expr_exons_for_diagnosis.csv")
+# get residuals
+res <- residuals.MArrayLM(fit, exprs(exon_summaries))
 # save data into an RData file (for figure generation)
-save(design, fit, top_hits, file = paste0(outpath, "/3.1_diff_expr_exons_for_diagnosis.RData"))
+save(design, fit, top_hits, res, file = paste0(outpath, "/3.1_diff_expr_exons_for_diagnosis.RData"))
 # remove unnecessary data
-rm(fit, design)
+rm(fit, design, res)
 ```
 We can find `r length(unique(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for diagnosis. Maybe it is a multiple testing correction problem as we have a lot of exons (around 200,000). 
 
@@ -1281,6 +1287,8 @@ dim(exon_summaries_new)
 design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1, pData)
 # differential expression analysis (limma)
 fit <- RunLimma(design, exon_summaries_new)
+# get residuals
+res <- residuals.MArrayLM(fit, exprs(exon_summaries_new))
 # result table
 top_hits <- GenerateResultTableExon(fit, variable = "DxCASE", file =  "3.4_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.csv")
 top_hits_age <- GenerateResultTableExon(fit, variable = "Age", file =  "3.4_diff_expr_exons_for_age_new_pvalue_and_fdr.csv")
@@ -1289,7 +1297,7 @@ top_hits_pmi <- GenerateResultTableExon(fit, variable = "PMI", file =  "3.4_diff
 top_hits_c2 <- GenerateResultTableExon(fit, variable = "C2", file =  "3.4_diff_expr_exons_for_c2_new_pvalue_and_fdr.csv")
 top_hits_c1 <- GenerateResultTableExon(fit, variable = "C1", file =  "3.4_diff_expr_exons_for_c1_new_pvalue_and_fdr.csv")
 # save data into an RData file (for figure generation)
-save(design, fit, top_hits, file = paste0(outpath, "/3.4_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.RData"))
+save(design, fit, top_hits, res, file = paste0(outpath, "/3.4_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.RData"))
 # remove unnecessary data
 rm(fit, design)
 ```

@@ -1634,13 +1634,14 @@ colnames(sample_pc_vals) = paste(colnames(sample_pc_vals), " (", pve[1:npca], "%
 ```
 `r paste(colnames(sample_pc_vals), sep = ", ")`
 
-Now, we will calculate the correlation of the covariances to the PCs. Then, we calculate the FDR values of each covariate to each PC and filter for all covariates that have a significant (< 0.1) correlation to at least one PC. 
+Now, we will calculate the correlation of the covariances to the PCs. Then, we calculate the FDR values of each covariate to each PC and filter for all covariates that have a significant (< 0.05) correlation to at least one PC. 
 ```{r}
 all_cor <- corr.test(sample_pc_vals, design, use = 'pairwise.complete.obs', method = "pearson", adjust = "none")
 cor_mat <- melt(all_cor$p, varnames = c("PC", "Covariate"))
 colnames(cor_mat)[colnames(cor_mat) == "value"] <- "pvalue"
 cor_mat$r <- melt(all_cor$r)$value # add r to data frame
 # Now we check if any of the covariates is significantly (p < 0.01) correlated to ANY of the highly varianced PC's
+cor_mat$fdr <- p.adjust(cor_mat$pvalue, method = "BH")
 significant <- cor_mat$pvalue < 0.01
 # get covariate names
 cov_names <- lapply(colnames(pdata_new), function(x) colnames(design)[grep(x, colnames(design))])
@@ -1658,7 +1659,7 @@ cov_to_keep <- c("Age")
 plot_cor = na.omit(cor_mat[1:nrow(cor_mat), ])
 plot_cor$PC = factor(plot_cor$PC, levels = rev(levels(plot_cor$PC)))
 plot_x_labels = levels(plot_cor$Covariate)[levels(plot_cor$Covariate) %in% plot_cor$Covariate]
-ggplot(plot_cor, aes(Covariate, PC, fill = fdr)) + geom_tile() + scale_alpha_manual(values = c('TRUE' = 0.85, 'FALSE' = 1)) + xlab("") + ylab("")
+ggplot(plot_cor, aes(Covariate, PC, fill = pvalue)) + geom_tile() + scale_alpha_manual(values = c('TRUE' = 0.85, 'FALSE' = 1)) + xlab("") + ylab("")
 # get covariate names
 cov_to_use <- union(cov_to_keep, significant_cov)
 design_cor <- corr.test(design[, -1], use = 'pairwise.complete.obs', method = "pearson", adjust = "none")
@@ -1693,7 +1694,12 @@ bics$matrix.NA..nrow...1..ncol...1. <- NULL
 | Power of hydrogen | pH | 1 | `r bics$pH` |
 | Postmortem Interval | PMI | 1 | `r bics$PMI` |
 | Suicide | Suicide | 1 | `r bics$Suicide` |
+| Type of death | ToD | 2 | `r bics$Type_of_Death`|
 | RNA Integrity Number | RIN | 1 | `r bics$RIN` |
+| Ancestry Dim 1 | Dim1 | 1 | `r bics$C1` |
+| Ancestry Dim 2 | Dim2 | 1 | `r bics$C2` |
+| Ancestry Dim 3 | Dim3 | 1 | `r bics$C3` |
+| Ancestry Dim 4 | Dim4 | 1 | `r bics$C4` |
 
 Df = Degree of freedom (that is, the number of design matrix columns for one variable) 
 
