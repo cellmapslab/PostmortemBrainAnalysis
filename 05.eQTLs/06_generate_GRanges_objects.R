@@ -444,20 +444,21 @@ if(length(args) == 0){
     ### Variant Effect Predictor (VEP) ###
     ######################################
     vep_maf01 <- data.table::fread(vep, data.table = F)
-    vep_maf01$SNP.Position <- as.numeric(sapply(as.character(vep_maf01$SNP), function(x) unlist(strsplit(x, "_"))[2]))
-    vep_maf01$SNP.Chr <- as.character(sapply(as.character(vep_maf01$SNP), function(x) unlist(strsplit(x, "_"))[1]))
-    vep_melt <- melt(vep_maf01, id.vars = c("SNP", "SNP.Chr", "SNP.Position"))
+    vep_maf01$Position <- as.numeric(sapply(as.character(vep_maf01$SNP), function(x) unlist(strsplit(x, "_"))[2]))
+    vep_maf01$Chr <- as.character(sapply(as.character(vep_maf01$SNP), function(x) unlist(strsplit(x, "_"))[1]))
+    vep_melt <- reshape2::melt(vep_maf01, id.vars = c("SNP", "Chr", "Position"))
+    vep_melt <- vep_melt[vep_melt$value == 1, ]
     vep_gr <- makeGRangesFromDataFrame(
         data.frame(
-            chr = vep_melt$SNP.Chr, 
-            start = vep_melt$SNP.Position, 
-            end = vep_melt$SNP.Position, 
+            chr = vep_melt$Chr, 
+            start = vep_melt$Position, 
+            end = vep_melt$Position, 
             code = as.character(vep_melt$variable)), 
         keep.extra.columns = TRUE) 
 
     # downlift from GRCh38 to GRCh37 (hg19)
-    vep_gr_hg19 <- unlist(rtracklayer::liftOver(vep_gr, hg38_to_hg19)) # 10,719,405
-    vep_gr_hg19 <- vep_gr_hg19[!duplicated(vep_gr_hg19)]  # remove duplicated rows
+    vep_gr_hg19 <- unlist(rtracklayer::liftOver(vep_gr, hg38_to_hg19)) # 66,966,21
+    vep_gr_hg19 <- vep_gr_hg19[!duplicated(vep_gr_hg19)]  # remove duplicated rows (N = 6093195)
     GenomeInfoDb::seqlevelsStyle(vep_gr_hg19) <- "NCBI"
     seqlevels(vep_gr_hg19, pruning.mode = "coarse") <- setdiff(seqlevels(vep_gr_hg19), c("X", "Y", "M"))
     saveRDS(vep_gr_hg19, paste0(outpath, "/VEP_hg19_collapsed_MAF01.rds"))
