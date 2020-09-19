@@ -35,6 +35,22 @@ cdg_eeqts <- read.delim(paste0(input_path, "/3.5.7_diff_expr_exons_for_CDG2-2019
 mdd_eeqts <- read.delim(paste0(input_path, "/3.5.13_diff_expr_exons_for_MDD3-2019_PRS_new_pvalue_and_fdr.csv"))
 scz_eeqts <- read.delim(paste0(input_path, "/3.5.14_diff_expr_exons_for_SCZ2-2014_PRS_new_pvalue_and_fdr.csv"))
 
+# Generate ABMS data file
+adhd <- adhd_eeqts[adhd_eeqts$FDR.estimate <= 0.1, c("Ensembl.Gene.ID", "Gene.Symbol")]
+colnames(adhd) <- c("Ensembl Gene ID", "Gene Symbol")
+bip <- bip_eeqts[bip_eeqts$FDR.estimate <= 0.1, c("Ensembl.Gene.ID", "Gene.Symbol")]
+colnames(bip) <- c("Ensembl Gene ID", "Gene Symbol")
+mdd <- mdd_eeqts[mdd_eeqts$FDR.estimate <= 0.1, c("Ensembl.Gene.ID", "Gene.Symbol")]
+colnames(mdd) <- c("Ensembl Gene ID", "Gene Symbol")
+scz <- scz_eeqts[scz_eeqts$FDR.estimate <= 0.1, c("Ensembl.Gene.ID", "Gene.Symbol")]
+colnames(scz) <- c("Ensembl Gene ID", "Gene Symbol")
+# merge all datasets
+abms <- rbind(adhd, bip, mdd, scz)
+abms <- abms[!duplicated(abms), ]
+dim(abms)
+# write ABMS Genes into a file
+write.table(abms, file = paste0(input_path, "/4_exon_ABMS_eQTS.tsv"), row.names = F, col.names = F, quote = F, sep = "\t")
+
 # 3. Get only significant hits (as unique Ensembl Gene IDs)
 gene_sig <- gene[gene$FDR.estimate <= 0.1, "Ensembl.Gene.ID"]
 print(paste0("gDEGenes: ", length(unique(gene_sig))))  # 0

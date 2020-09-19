@@ -49,6 +49,7 @@ library(rtracklayer)
 library(limma)
 library(plyr)
 library(dplyr)
+library(readxl)  # for reading in excel files
 
 # Packages for pathway enrichment
 library(GSEABase)   # to load or generate gene set data
@@ -64,6 +65,7 @@ library(VennDiagram)
 library(viridis)  # color blind color palette
 library(ggrepel)  # for volcanoplot
 library(pheatmap)
+library(UpSetR)
 library(grid)
 library(gridExtra)
 library(ggpubr)  # for ggbaloonplot
@@ -80,6 +82,8 @@ rdata_path = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/
 results_path = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_DEA_results"
 # path to the polygenic risk score (PRS) results
 prs_path = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/04_PRSice-2"
+# path to CMC data
+cmc_path <- "/storage/groups/ccm01/datasets/2019_CMC_Fromer_et_al"
 # path to fuma_gtex results
 fuma_path = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/04_FUMA"
 # path to store the output into
@@ -92,7 +96,6 @@ system(paste0("mkdir -p ", outpath))
 # Functions
 
 To reduce code, we will generate some functions here. 
-
 ```{r definition, echo = F}
 # function to generate a vulcano plot for differentially expressed genes
 GenerateVolcanoPlot <- function(fit, variable, file, cols) {
@@ -102,32 +105,24 @@ GenerateVolcanoPlot <- function(fit, variable, file, cols) {
   # get first hit after FDR 10% for drawing a p-value threshold line
   index <- if(length(which(hits$adj.P.Val < 0.1)) == 0) 0 else which(hits$adj.P.Val < 0.1)
   threshold <- hits[index[length(index)] + 1, "P.Value"]
+  # set colors
+  hits$color <- "black"
+  if (length(hits[hits$adj.P.Val < 0.1, "adj.P.Val"]) != 0) {
+    hits[hits$adj.P.Val < 0.1, ]$color <- cols
+  }
   ### volcano plot ###
   # label only top 10 significant hits
-  g <- ggplot(hits, aes(x = logFC, y = -log10(P.Value))) + 
+  g <- ggplot(hits, aes(x = logFC, y = -log10(P.Value), color = color)) + 
     theme_classic(base_size = 22) + 
-    geom_point() + 
+    theme(panel.border = element_rect(fill = NA, size = 2), axis.text.x = element_text(color = "black"), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) +
+    geom_point(color = hits$color) + 
     xlim(-1, 1) + 
     ylim(0, 6) +
     xlab(bquote(~Log[2]~ "fold change")) +
     ylab(bquote(~-Log[10]~ italic(P))) +
-    theme(axis.line = element_line(),
-      panel.border = element_blank(),
-      panel.background = element_blank()) +
     labs(caption = paste0("Total variables: ", total)) +
-    geom_hline(yintercept = -log10(threshold), linetype = "dashed")
- if(length(index) >= 10){
-    g + geom_point(data = hits[index, ], aes(x = logFC, y = -log10(P.Value)), colour = cols, size = 2) +
-    geom_text_repel(data = hits[index[1:10], ], aes(label = gene_name), colour = cols)
-  # else: label hit genes (if some are found) purple and following genes green until a maximum of 10 genes is labeled
-  } else if(length(index) == 1 && index == 0) {
-    g + geom_text_repel(data = hits[1:10, ], aes(label = gene_name))
-  } else {
-    g + geom_point(data = hits[index, ], aes(x = logFC, y = -log10(P.Value)), colour = cols, size = 2) +
-    geom_text_repel(data = hits[index, ], aes(label = gene_name), colour = cols) +
-    geom_point(data = hits[(length(index) + 1):10, ], aes(x = logFC, y = -log10(P.Value)), size = 2) +
-    geom_text_repel(data = hits[(length(index) + 1):10, ], aes(label = gene_name))
-  }
+    geom_hline(yintercept = -log10(threshold), linetype = "dashed") +
+    geom_text_repel(data = hits[1:10, ], aes(label = gene_name), colour = hits[1:10, "color"])
   g
   ggsave(file = paste0(outpath, "/", file), width = 8, height = 6, units = "in")
 }
@@ -140,38 +135,25 @@ GenerateVolcanoPlot2 <- function(fit, variable, file, cols, highlight) {
   # get first hit after FDR 10% for drawing a p-value threshold line
   index <- if(length(which(hits$adj.P.Val < 0.1)) == 0) 0 else which(hits$adj.P.Val < 0.1)
   threshold <- hits[index[length(index)] + 1, "P.Value"]
-  # get the index of all eDEGenes in the dataset
-  index2 <- which(hits$gene_id %in% highlight)
-  htext <- index2[index2 < 11]  # highlight text of eDEGene hits
+  # set colors
+  hits$color <- "black"
+  hits[hits$gene_id %in% highlight, "color"] <- col_edegene
+  if (length(hits[hits$adj.P.Val < 0.1, "adj.P.Val"]) != 0) {
+    hits[hits$adj.P.Val < 0.1, ]$color <- cols
+  }
   ### volcano plot ###
   # label only top 10 significant hits
-  g <- ggplot(hits, aes(x = logFC, y = -log10(P.Value))) + 
+  g <- ggplot(hits, aes(x = logFC, y = -log10(P.Value), color = color)) + 
     theme_classic(base_size = 22) + 
-    geom_point() + 
+    theme(panel.border = element_rect(fill = NA, size = 2), axis.text.x = element_text(color = "black"), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) +
+    geom_point(color = hits$color) + 
     xlim(-1, 1) + 
     ylim(0, 6) +
     xlab(bquote(~Log[2]~ "fold change")) +
     ylab(bquote(~-Log[10]~ italic(P))) +
-    theme(axis.line = element_line(),
-      panel.border = element_blank(),
-      panel.background = element_blank()) +
     labs(caption = paste0("Total variables: ", total)) +
-    geom_hline(yintercept = -log10(threshold), linetype = "dashed")
- if(length(index) >= 10){
-    g + geom_point(data = hits[index, ], aes(x = logFC, y = -log10(P.Value)), colour = cols, size = 2) +
-    geom_text_repel(data = hits[index[1:10], ], aes(label = gene_name), colour = cols)
-  # else: do not label anything as no hits found
-  } else if(length(index) == 1 && index == 0) {
-    g + geom_point(data = hits[index2, ], aes(x = logFC, y = -log10(P.Value)), colour = col_exon, size = 2) + 
-      geom_text_repel(data = hits[htext, ], aes(label = gene_name), colour = col_exon) +
-      geom_text_repel(data = hits[seq(1, 10), ], aes(label = gene_name))
-  # else: label all hit genes as hits number < 10
-  } else {
-    g + geom_point(data = hits[index2, ], aes(x = logFC, y = -log10(P.Value)), colour = col_exon, size = 2) +
-    geom_point(data = hits[index, ], aes(x = logFC, y = -log10(P.Value)), colour = cols, size = 2) + 
-    geom_text_repel(data = hits[htext, ], aes(label = gene_name), colour = col_exon) + geom_text_repel(data = hits[index, ], aes(label = gene_name), colour = cols) +
-    geom_text_repel(data = hits[(length(index) + 1):10, ], aes(label = gene_name))
-  }
+    geom_hline(yintercept = -log10(threshold), linetype = "dashed") +
+    geom_text_repel(data = hits[1:10, ], aes(label = gene_name), colour = hits[1:10, "color"])
   g
   ggsave(file = paste0(outpath, "/", file), width = 8, height = 6, units = "in")
 }
@@ -204,8 +186,8 @@ GenerateVerticalBarplotOfDiffExprHits <- function(design, fit, from, to, plot_na
   g <- ggplot(limma_res_plot, aes(y = sort.limma_res_padj_0.1..decreasing...T., x = reorder(row.names(limma_res_plot), sort.limma_res_padj_0.1..decreasing...T.))) +
     geom_bar(stat = "identity") +
     coord_flip() +
-    theme_classic() +
-    theme(text = element_text(size = 22)) +
+    theme_classic(base_size = 22) +
+    theme(text = element_text(size = 22), panel.border = element_rect(fill = NA, size = 2), axis.text.x = element_text(color = "black"), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) +
     ylab("# significant hits") +
     xlab("") +
     geom_text(size = 7, aes(label = sort.limma_res_padj_0.1..decreasing...T.), nudge_y = 120, colour = "dimgray") + 
@@ -288,13 +270,14 @@ GenerateForestPlot <- function(gene) {
   all[all$ID == exon_expr$`Ensembl Exon ID`, "FDR"] <- exon_expr$`FDR estimate`
 
   # generate Plot
-  g <- ggplot(all, aes(x = ID, y = LogFC, ymin = CI_lower, ymax = CI_upper))+
+  g <- ggplot(all, aes(x = ID, y = LogFC, ymin = CI_lower, ymax = CI_upper)) +
+  theme_classic(base_size = 22) +
+  theme(plot.title = element_text(hjust = 0.5), panel.border = element_rect(fill = NA, size = 2), axis.text.x = element_text(color = "black"), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) +
   geom_pointrange() +
-  geom_hline(yintercept = 0, linetype = 2) +
-  geom_text(label = ifelse(all$FDR < 1, paste0("FDR = ", round(all$FDR, 2)), ""), aes(hjust = -0.5, vjust = -0.2)) +
+  geom_hline(yintercept = 0, linetype = 2, colour = brewer.pal(11, "RdBu")[3]) +
+  geom_text(label = ifelse(all$FDR < 1, paste0("FDR = ", round(all$FDR, 2)), ""), aes(hjust = -0.5, vjust = -0.2), colour = brewer.pal(11, "RdBu")[3]) +
   coord_flip() +
   ggtitle(paste0(gene_expr$ID, " (", gene, ")\n# filtered transcripts: ", (total_transcripts - filtered_transcripts), "; # total transcripts: ", total_transcripts, "\n# filtered exons: ", (total_exons - filtered_exons), "; # total exons: ", total_exons)) +
-  theme(plot.title = element_text(hjust = 0.5)) +
   xlab("") +
   ylab(bquote("Log"["2"]*"(Fold Change)"))
   # save plot
@@ -305,12 +288,13 @@ GenerateForestPlot <- function(gene) {
 
 # Colors
 
-We also will set the color for the three genetic level (gene, transcirpt and exon) using the viridis package. 
+We also will set the color for the three genetic level (gene, transcript and exon) using the viridis package. 
 ```{r}
-col_dis <- viridis(3, option = "C", begin = 0.15, end = 0.9)
-col_gene <- col_dis[3]  # yellow/light orange
-col_transcript <- col_dis[2]  # red/pink
-col_exon <- col_dis[1]  # purple
+col_con <- viridis(1000, option = "D", begin = 0.15, end = 0.9)
+col_dis <- viridis(3, option = "D", begin = 0.15, end = 0.9)
+col_gdegene <- col_dis[1]  # purple
+col_tdegene <- col_dis[2]  # turquoise
+col_edegene <- col_dis[3]  # light green
 ```
 
 # Load Data
@@ -360,7 +344,7 @@ load(paste0(results_path, "/1.1_diff_expr_genes_for_diagnosis.RData"))
 Generate a volcano plot (y-axis: -log10 of p-values, x-axis: log2FC) for all hits. As volcano plots include many points and therefore need a long time to open/load, we will not include them in the generated .pdf file of this script, but save them into their own files.
 ```{r}
 # generate volcano plot
-GenerateVolcanoPlot(fit, variable = "DxCASE", file = "1.1_volcano_plot_diff_expr_genes_for_diagnosis.pdf")
+GenerateVolcanoPlot(fit, variable = "DxCASE", cols = col_gdegene, file = "1.1_volcano_plot_diff_expr_genes_for_diagnosis.pdf")
 ```
 
 ### Barplot
@@ -372,8 +356,8 @@ limma_res_gene <- GenerateVerticalBarplotOfDiffExprHits(design, fit, from = 4, t
 ggplot(limma_res_gene, aes(y = sort.limma_res_padj_0.1..decreasing...T., x = reorder(row.names(limma_res_gene), sort.limma_res_padj_0.1..decreasing...T.))) +
     geom_bar(stat = "identity") +
     coord_flip() +
-    theme_classic() +
-    theme(text = element_text(size = 22)) +
+    theme_classic(base_size = 22) +
+    theme(text = element_text(size = 22), panel.border = element_rect(fill = NA, size = 2), axis.text.x = element_text(color = "black"), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) +
     ylab("# significant hits") +
     xlab("") +
     geom_text(size = 7, aes(label = sort.limma_res_padj_0.1..decreasing...T.), nudge_y = 120, colour = "dimgray") + 
@@ -396,7 +380,7 @@ load(paste0(results_path, "/1.2_diff_expr_genes_for_diagnosis_with_sex_dx_intera
 Generate a volcano plot (y-axis: -log10 of p-values, x-axis: log2FC) for all hits.
 ```{r}
 # volcano plot
-GenerateVolcanoPlot(fit, variable = "DxCASE", file = "1.2_volcano_plot_diff_expr_genes_for_diagnosis_with_sex_dx_interaction.pdf")
+GenerateVolcanoPlot(fit, variable = "DxCASE", cols = col_gdegene, file = "1.2_volcano_plot_diff_expr_genes_for_diagnosis_with_sex_dx_interaction.pdf")
 rm(design, fit)
 ```
 
@@ -413,9 +397,9 @@ trim10 <- merge(trim10, pData(gene_summaries)[, c("ShortName", "Dx", "Sex")], by
 trim10$DxSex <- paste0(trim10$Dx, trim10$Sex)
 g <- ggplot(trim10, aes(Sex, trim10, fill = Dx)) +
   scale_x_discrete(labels = c("Female", "Male")) +
-  theme_classic() + 
-  theme(text = element_text(size = 22), axis.text.x = element_text(angle = 45, hjust = 1)) +
-  scale_fill_manual(values = c("gray", col_gene), labels = c("Controls", "Cases")) + 
+  theme_classic(base_size = 22) + 
+  theme(text = element_text(size = 22), axis.text.x = element_text(color = "black", angle = 45, hjust = 1), panel.border = element_rect(fill = NA, size = 2), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) +
+  scale_fill_manual(values = c("gray", col_gdegene), labels = c("Controls", "Cases")) + 
   theme(plot.title = element_text(hjust = 0.5)) +
   geom_boxplot(alpha = 0.7) + 
   ggtitle("TRIM10") +
@@ -460,7 +444,7 @@ load(paste0(results_path, "/2.1_diff_expr_transcripts_for_diagnosis.RData"))
 Generate a volcano plot (y-axis: -log10 of p-values, x-axis: log2FC) for all hits.
 ```{r}
 # volcano plot
-GenerateVolcanoPlot(fit, variable = "DxCASE", file = "2.1_volcano_plot_diff_expr_transcripts_for_diagnosis.pdf")
+GenerateVolcanoPlot(fit, variable = "DxCASE", cols = col_tdegene, file = "2.1_volcano_plot_diff_expr_transcripts_for_diagnosis.pdf")
 ```
 
 ### Barplots
@@ -472,8 +456,8 @@ limma_res_transcript <- GenerateVerticalBarplotOfDiffExprHits(design, fit, from 
 ggplot(limma_res_transcript, aes(y = sort.limma_res_padj_0.1..decreasing...T., x = reorder(row.names(limma_res_transcript), sort.limma_res_padj_0.1..decreasing...T.))) +
     geom_bar(stat = "identity") +
     coord_flip() +
-    theme_classic() +
-    theme(text = element_text(size = 22)) +
+    theme_classic(base_size = 22) +
+    theme(text = element_text(size = 22), panel.border = element_rect(fill = NA, size = 2), axis.text.x = element_text(color = "black"), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) +
     ylab("# significant hits") +
     xlab("") +
     geom_text(size = 7, aes(label = sort.limma_res_padj_0.1..decreasing...T.), nudge_y = 120, colour = "dimgray") + 
@@ -496,7 +480,7 @@ load(paste0(results_path, "/2.2_diff_expr_transcripts_for_diagnosis_with_sex_dx_
 Generate a volcano plot (y-axis: -log10 of p-values, x-axis: log2FC) for all hits.
 ```{r}
 # volcano plot
-GenerateVolcanoPlot(fit, variable = "DxCASE", file = "2.2_volcano_plot_diff_expr_transcripts_for_diagnosis_with_sex_dx_interaction.pdf")
+GenerateVolcanoPlot(fit, variable = "DxCASE", cols = col_tdegene, file = "2.2_volcano_plot_diff_expr_transcripts_for_diagnosis_with_sex_dx_interaction.pdf")
 ```
 
 ## New FDR model
@@ -516,7 +500,7 @@ load(paste0(results_path, "/2.4_diff_expr_transcripts_for_diagnosis_new_pvalue_a
 Generate a volcano plot.
 ```{r}
 # volcano plot
-GenerateVolcanoPlot(fit, variable = "DxCASE", cols = col_transcript, file = "2.4_volcano_plot_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.pdf")
+GenerateVolcanoPlot(fit, variable = "DxCASE", cols = col_tdegene, file = "2.4_volcano_plot_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.pdf")
 ```
 
 ### Barplot of tDEGenes (all covariates)
@@ -528,8 +512,8 @@ limma_res_transcript_new <- GenerateVerticalBarplotOfDiffExprHits(design, fit, f
 ggplot(limma_res_transcript_new, aes(y = sort.limma_res_padj_0.1..decreasing...T., x = reorder(row.names(limma_res_transcript_new), sort.limma_res_padj_0.1..decreasing...T.))) +
     geom_bar(stat = "identity") +
     coord_flip() +
-    theme_classic() +
-    theme(text = element_text(size = 22)) +
+    theme_classic(base_size = 22) +
+    theme(text = element_text(size = 22), panel.border = element_rect(fill = NA, size = 2), axis.text.x = element_text(color = "black"), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) +
     ylab("# significant hits") +
     xlab("") +
     geom_text(size = 7, aes(label = sort.limma_res_padj_0.1..decreasing...T.), nudge_y = 120, colour = "dimgray") + 
@@ -589,8 +573,8 @@ g <- ggplot(logfc, aes(x = linearFC, y = Freq, fill = group)) +
   xlab("linear fold change") +
   ylab("# tDEGenes (FDR < 10%)") +
   xlim(1, 1.5) +
-  theme_classic(base_size = 13) +
-  theme(axis.line.x.bottom = element_line(colour = "black"), axis.line.y.left = element_line(colour = "black"), axis.ticks.length = unit(.15, "cm"), axis.ticks = element_line(colour = "black")) + 
+  theme_classic(base_size = 22) +
+  theme(axis.line.x.bottom = element_line(colour = "black"), panel.border = element_rect(fill = NA, size = 2), axis.text.x = element_text(color = "black"), axis.text.y = element_text(color = "black"), axis.line.y.left = element_line(colour = "black"), axis.ticks.length = unit(.15, "cm"), axis.ticks = element_line(colour = "black")) + 
   annotate("text", x = 1.4, y = 1.3, label = paste0("No. of genes upregulated: ", length(logfc[logfc$group == "Upregulated", "group"])), size = 4) +
   annotate("text", x = 1.4, y = -1.3, label = paste0("No. of genes downregulated: ", length(logfc[logfc$group == "Downregulated", "group"])), size = 4) + 
   scale_fill_manual(values = brewer.pal(11, "RdBu")[c(9, 3)])
@@ -612,11 +596,11 @@ for (hit in top_hits$`Ensembl Transcript ID`) {
   g <- ggplot(data, aes(x = Dx, y = expression, fill = Dx)) + 
     geom_violin() + 
     geom_boxplot(width = 0.2) +
-    theme_classic() +
-    theme(text = element_text(size = 20), plot.title = element_text(hjust = 0.5)) +
+    theme_classic(base_size = 22) +
+    theme(text = element_text(size = 20), plot.title = element_text(hjust = 0.5), panel.border = element_rect(fill = NA, size = 2), axis.text.x = element_text(color = "black"), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) +
     labs(title = paste0(top_hits[hit, "Ensembl Gene ID"], ": ", top_hits[hit, "Gene Symbol"]), x = element_blank(), y = "Expression values") +
     scale_x_discrete(labels = c("Controls", "Cases")) + 
-    scale_fill_manual(values = c("gray", col_transcript), guide = FALSE, name = "", labels = c("Controls", "Cases"))
+    scale_fill_manual(values = c("gray", col_tdegene), guide = FALSE, name = "", labels = c("Controls", "Cases"))
   ggsave(plot = g, file = paste0(outpath, "/2.4_violinplot_significant_DEA_hits_transcripts_new_pvalue_and_fdr_", top_hits[hit, "Gene Symbol"],".pdf"), width = 8, height = 6, units = "in")
   g
 }
@@ -652,8 +636,8 @@ Now, we can generate a barplot for all the PRS based DEA hits on transcript leve
 plot_prs <- reshape2::melt(prs_transcripts, id.vars = "PRS")
 g <- ggplot(data = plot_prs, aes(x = PRS, y = value, fill = variable)) +
   geom_bar(position = "identity", stat = "identity") + 
-  theme_classic() +
-  theme(text = element_text(size = 15), legend.position = c(0.07, 0.88), legend.box.background = element_rect(colour = "grey"), legend.title = element_blank()) +
+  theme_classic(base_size = 22) +
+  theme(text = element_text(size = 15), panel.border = element_rect(fill = NA, size = 2), axis.text.x = element_text(color = "black"), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black"), legend.position = c(0.07, 0.88), legend.box.background = element_rect(colour = "grey"), legend.title = element_blank()) +
   theme(axis.text.x = element_text(angle = 60, hjust = 1, vjust = 1)) +
   labs(x = "", y = "Number of transcript eQTS") +
   scale_fill_manual(values = brewer.pal(11, "RdBu")[c(9, 3)], labels = c("FDR < 0.01", "FDR < 0.05")) +
@@ -680,7 +664,7 @@ load(paste0(results_path, "/3.1_diff_expr_exons_for_diagnosis.RData"))
 Generate a volcano plot (y-axis: -log10 of p-values, x-axis: log2FC) for all hits.
 ```{r}
 # volcano plot
-GenerateVolcanoPlot(fit, variable = "DxCASE", file = "3.1_volcano_plot_diff_expr_exons_for_diagnosis.pdf")
+GenerateVolcanoPlot(fit, variable = "DxCASE", cols = col_edegene, file = "3.1_volcano_plot_diff_expr_exons_for_diagnosis.pdf")
 ```
 
 ### Barplots
@@ -692,8 +676,8 @@ limma_res_exon <- GenerateVerticalBarplotOfDiffExprHits(design, fit, from = 6, t
 ggplot(limma_res_exon, aes(y = sort.limma_res_padj_0.1..decreasing...T., x = reorder(row.names(limma_res_exon), sort.limma_res_padj_0.1..decreasing...T.))) +
     geom_bar(stat = "identity") +
     coord_flip() +
-    theme_classic() +
-    theme(text = element_text(size = 22)) +
+    theme_classic(base_size = 22) +
+    theme(text = element_text(size = 22), panel.border = element_rect(fill = NA, size = 2), axis.text.x = element_text(color = "black"), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) +
     ylab("# significant hits") +
     xlab("") +
     geom_text(size = 7, aes(label = sort.limma_res_padj_0.1..decreasing...T.), nudge_y = 120, colour = "dimgray") + 
@@ -720,11 +704,11 @@ limma_res_all$type <- factor(limma_res_all$type, levels = c("gene", "transcript"
 g <- ggplot(limma_res_all, aes(y = counts, x = covariates, fill = type)) +
   geom_bar(stat = "identity") +
   coord_flip() +
-  theme_classic() + 
+  theme_classic(base_size = 22) + 
   theme(axis.ticks = element_line(colour = NA), text = element_text(size = 22), panel.background = element_rect(fill = NA), strip.background = element_rect(fill = NA), panel.spacing = unit(2, "lines")) +
   ylab("# significant hits") +
   xlab("") +
-  scale_fill_viridis(discrete = T, direction = -1, option = "C", begin = 0.15, end = 0.9) +
+  scale_fill_manual(values = c(col_gdegene, col_tdegene, col_edegene)) +
   geom_text(size = 7, aes(label = counts), nudge_y = 120, colour = "dimgray") +
   scale_y_continuous(expand = c(0.02, 0.01)) + 
   facet_wrap(~ type, scale = "free_x")
@@ -750,7 +734,7 @@ load(paste0(results_path, "/3.2_diff_expr_exons_for_diagnosis_with_sex_dx_intera
 Generate a volcano plot (y-axis: -log10 of p-values, x-axis: log2FC) for all hits.
 ```{r}
 # volcano plot
-GenerateVolcanoPlot(fit, variable = "DxCASE", file = "3.2_volcano_plot_diff_expr_exons_for_diagnosis_with_sex_dx_interaction.pdf")
+GenerateVolcanoPlot(fit, variable = "DxCASE", cols = col_edegene, file = "3.2_volcano_plot_diff_expr_exons_for_diagnosis_with_sex_dx_interaction.pdf")
 ```
 
 ## New FDR model
@@ -767,10 +751,10 @@ load(paste0(results_path, "/3.4_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr
 Generate a volcano plot (y-axis: -log10 of p-values, x-axis: log2FC) for all eDEGene hits.
 ```{r}
 # volcano plot
-GenerateVolcanoPlot(fit, variable = "DxCASE", cols = col_exon, file = "3.4_volcano_plot_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.pdf")
+GenerateVolcanoPlot(fit, variable = "DxCASE", cols = col_edegene, file = "3.4_volcano_plot_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.pdf")
 ```
 
-Now, we will regenerate the volcano plots for the gene and transcript level differentially expressed genes, with all eDEGenes highlighted in green. 
+Now, we will regenerate the volcano plots for the gene and transcript level differentially expressed genes, with all eDEGenes highlighted in light green. 
 ```{r}
 # get eDEGene hits (Ensembl gene IDs)
 eDEGene_hits <- topTable(fit, coef = "DxCASE", number = Inf, adjust.method = "BH")
@@ -778,10 +762,10 @@ eDEGene_hits <- eDEGene_hits[eDEGene_hits$adj.P.Val < 0.1, ]
 eDEGene_hits <- unique(separate_rows(eDEGene_hits, `gene_id`, sep = "\\|")$gene_id)  # separate if gene IDs were merged
 # gDEGenes
 load(paste0(results_path, "/1.1_diff_expr_genes_for_diagnosis.RData"))
-GenerateVolcanoPlot2(fit, variable = "DxCASE", cols = col_gene, highlight = eDEGene_hits, file = "1.1_volcano_plot_diff_expr_genes_for_diagnosis_eDEGenes_colored.pdf")
+GenerateVolcanoPlot2(fit, variable = "DxCASE", cols = col_gdegene, highlight = eDEGene_hits, file = "1.1_volcano_plot_diff_expr_genes_for_diagnosis_eDEGenes_colored.pdf")
 #tDEGenes
 load(paste0(results_path, "/2.4_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.RData"))
-GenerateVolcanoPlot2(fit, variable = "DxCASE", cols = col_transcript, highlight = eDEGene_hits, file = "2.4_volcano_plot_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr_eDEGenes_colored.pdf")
+GenerateVolcanoPlot2(fit, variable = "DxCASE", cols = col_tdegene, highlight = eDEGene_hits, file = "2.4_volcano_plot_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr_eDEGenes_colored.pdf")
 ```
 
 ### Barplots
@@ -789,13 +773,15 @@ GenerateVolcanoPlot2(fit, variable = "DxCASE", cols = col_transcript, highlight 
 New FDR:
 Get significantly differentially expressed genes for all the different covariates. 
 ```{r, echo = F}
+# load RData file
+load(paste0(results_path, "/3.4_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.RData"))
 # generate vertical barplot
 limma_res_exon_new <- GenerateVerticalBarplotOfDiffExprHits(design, fit, from = 6, to = 5, plot_name = "3.4_barplot_significant_DEA_hits_exons_new_pvalue_and_fdr.pdf")
 ggplot(limma_res_exon_new, aes(y = sort.limma_res_padj_0.1..decreasing...T., x = reorder(row.names(limma_res_exon_new), sort.limma_res_padj_0.1..decreasing...T.))) +
     geom_bar(stat = "identity") +
     coord_flip() +
-    theme_classic() +
-    theme(text = element_text(size = 22)) +
+    theme_classic(base_size = 22) +
+    theme(text = element_text(size = 22), panel.border = element_rect(fill = NA, size = 2), axis.text.x = element_text(color = "black"), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) +
     ylab("# significant hits") +
     xlab("") +
     geom_text(size = 7, aes(label = sort.limma_res_padj_0.1..decreasing...T.), nudge_y = 120, colour = "dimgray") + 
@@ -818,12 +804,12 @@ limma_res_all$covariates <- factor(limma_res_all$covariates, levels = c("C4", "C
 g <- ggplot(limma_res_all, aes(y = counts, x = covariates, fill = type)) +
   geom_bar(stat = "identity") +
   coord_flip() + 
-  theme_classic() +
-  theme(axis.ticks = element_line(colour = NA), text = element_text(size = 22), panel.background = element_rect(fill = NA), strip.background = element_rect(fill = NA), panel.spacing = unit(2, "lines")) +
+  theme_classic(base_size = 22) +
+  theme(axis.ticks = element_line(colour = NA), text = element_text(size = 22), panel.background = element_rect(fill = NA), strip.background = element_rect(fill = NA), panel.spacing = unit(2, "lines"), axis.text.x = element_text(color = "black"), axis.text.y = element_text(color = "black")) +
   ylab("# significant hits") +
   xlab("") +
-  geom_text(size = 7, aes(label = limma_res_all$counts), nudge_y = 120, colour = "dimgray") +
-  scale_fill_viridis(option = "D", discrete = T, begin = 0.1, end = 0.9) +
+  geom_text(size = 7, aes(label = counts), nudge_y = 120, colour = "dimgray") +
+  scale_fill_manual(values = c(col_gdegene, col_tdegene, col_edegene)) +
   scale_y_continuous(expand = c(0.02, 0.01)) + 
   facet_wrap(~ type, scale = "free_x")
 ggsave(plot = g, file = paste0(outpath, "/4_barplots_significant_DEA_hits_gene_transcript_exon_combined_new_pvalues_and_fdr.pdf"))
@@ -835,17 +821,17 @@ rm(design, fit, limma_res_exon_new, limma_res_transcript_new, limma_res_gene, g)
 And we also generate a barplot only including the diagnosis bars of gene, transcript and exon level differentially expressed hits. 
 ```{r}
 limma_res_all <- limma_res_all[limma_res_all$covariates == "Diagnosis", ]
-limma_res_all$type <- factor(limma_res_all$type, levels = c("exon", "transcript", "gene"))
-g <- ggplot(limma_res_all, aes(y = counts, x = type)) +
+limma_res_all$type <- factor(limma_res_all$type, levels = c("gene", "transcript", "exon"))
+g <- ggplot(limma_res_all, aes(y = counts, x = type, fill = type)) +
   geom_bar(stat = "identity") +
-  coord_flip() +
   theme_classic(base_size = 22) + 
+  theme(axis.text.x = element_text(color = "black", angle = 45, hjust = 1), panel.border = element_rect(fill = NA, size = 2), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) +
   ylab("# significant hits") +
   xlab("") +
   scale_y_continuous(breaks = seq(0, 2000, 1000)) + 
   geom_text(size = 7, aes(label = counts), nudge_y = 120, colour = "dimgray") + 
-  scale_fill_viridis(option = "D", discrete = T, begin = 0.1, end = 0.9)
-ggsave(plot = g, file = paste0(outpath, "/4_barplots_significant_DEA_hits_gene_transcript_exon_new_pvalues_and_fdr_diagnosis_only.pdf"), width = 4, height = 4)
+  scale_fill_manual(values = c(col_gdegene, col_tdegene, col_edegene))
+ggsave(plot = g, file = paste0(outpath, "/4_barplots_significant_DEA_hits_gene_transcript_exon_new_pvalues_and_fdr_diagnosis_only.pdf"), width = 6, height = 4)
 g
 rm(limma_res_all)
 ```
@@ -907,8 +893,8 @@ g <- ggplot(logfc, aes(x = linearFC, y = Freq, fill = group)) +
   xlab("Linear fold change") +
   ylab("# tDEGenes (FDR < 10%)") +
   xlim(1, 1.8) +
-  theme_classic(base_size = 13) +
-  theme(axis.line.x.bottom = element_line(colour = "black"), axis.line.y.left = element_line(colour = "black"), axis.ticks.length = unit(.15, "cm"), axis.ticks = element_line(colour = "black")) + 
+  theme_classic(base_size = 22) +
+  theme(axis.line.x.bottom = element_line(colour = "black"), axis.line.y.left = element_line(colour = "black"), axis.ticks.length = unit(.15, "cm"), panel.border = element_rect(fill = NA, size = 2), axis.text.x = element_text(color = "black"), axis.text.y = element_text(color = "black"), axis.ticks = element_line(colour = "black")) + 
   annotate("text", x = 1.5, y = 30, label = paste0("No. of genes upregulated: ", length(logfc[logfc$group == "Upregulated", "group"])), size = 4) +
   annotate("text", x = 1.5, y = -30, label = paste0("No. of genes downregulated: ", length(logfc[logfc$group == "Downregulated", "group"])), size = 4) + 
   scale_fill_manual(values = brewer.pal(11, "RdBu")[c(9, 3)])
@@ -930,8 +916,8 @@ for (hit in top_hits$`Ensembl Exon ID`[1:6]) {
   g <- ggplot(data, aes(x = Dx, y = expression, fill = Dx)) + 
     geom_violin() + 
     geom_boxplot(width = 0.2) +
-    theme_classic() +
-    theme(text = element_text(size = 20), plot.title = element_text(hjust = 0.5)) +
+    theme_classic(base_size = 22) +
+    theme(text = element_text(size = 20), plot.title = element_text(hjust = 0.5), panel.border = element_rect(fill = NA, size = 2), axis.text.x = element_text(color = "black"), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) +
     labs(title = top_hits[hit, "Gene Symbol"], x = element_blank(), y = "Expression values") +
     scale_x_discrete(labels = c("Controls", "Cases")) + 
     scale_fill_manual(values = brewer.pal(11, "RdBu")[c(9, 3)], guide = FALSE, name = "", labels = c("Controls", "Cases"))
@@ -970,8 +956,8 @@ Now, we can generate a barplot for all the PRS based DEA hits on exon level, als
 plot_prs <- reshape2::melt(prs_exons, id.vars = "PRS")
 g <- ggplot(data = plot_prs, aes(x = PRS, y = value, fill = variable)) +
   geom_bar(position = "identity", stat = "identity") + 
-  theme_bw() +
-  theme(text = element_text(size = 15), legend.position = c(0.07, 0.88), legend.box.background = element_rect(colour = "grey"), legend.title = element_blank()) +
+  theme_classic(base_size = 22) +
+  theme(text = element_text(size = 22), legend.position = c(0.07, 0.88), legend.box.background = element_rect(colour = "grey"), legend.title = element_blank(), panel.border = element_rect(fill = NA, size = 2), axis.text.x = element_text(color = "black"), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) +
   theme(axis.text.x = element_text(angle = 60, hjust = 1, vjust = 1)) +
   labs(x = "", y = "Number of exon eQTS") +
   scale_fill_manual(values = brewer.pal(11, "RdBu")[c(9, 3)], labels = c("FDR < 0.01", "FDR < 0.05")) +
@@ -993,11 +979,10 @@ prs_both$Type <- factor(prs_both$Type, levels = rev(levels(prs_both$Type)))
 # Graph with ALL GWAS
 g <- ggplot(prs_both, aes(x = PRS, y = FDR_0.1, fill = Type)) + 
   geom_bar(stat = "identity", position = position_dodge()) +
-  geom_text(aes(label = FDR_0.1), vjust = -0.25, position = position_dodge(0.9), size = 3.5) +
+  geom_text(aes(label = FDR_0.1), vjust = -0.25, position = position_dodge(0.9), size = 2.5) +
   scale_fill_manual(values = brewer.pal(11, "RdBu")[c(9, 3)]) +
-  theme_bw() +
-  theme(legend.position = c(0.07, 0.88), legend.box.background = element_rect(colour = "grey"), legend.title = element_blank()) +
-  theme(axis.text.x = element_text(angle = 60, hjust = 1, vjust = 1)) +
+  theme_classic(base_size = 22) +
+  theme(legend.position = c(0.07, 0.88), legend.box.background = element_rect(colour = "black"), legend.title = element_blank(), panel.border = element_rect(fill = NA, size = 2), axis.text.x = element_text(angle = 60, hjust = 1, vjust = 1, color = "black"), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) + 
   xlab("") +
   ylab("Number of transcript/exon eQTS")
 ggsave(plot = g, file = paste0(outpath, "/4_barplot_ALL_PRS_transcript_and_exon_eQTS_new_pvalue_and_fdr.pdf"))
@@ -1010,11 +995,10 @@ prs_both$Label <- prs_both$FDR_0.1
 prs_both[prs_both$Type == "Transcript", "FDR_0.1"] <- prs_both[prs_both$Type == "Transcript", "FDR_0.1"] * 330
 g <- ggplot(prs_both, aes(x = PRS, y = FDR_0.1, fill = Type)) + 
   geom_bar(stat = "identity", position = position_dodge()) +
-  geom_text(aes(label = Label), vjust = -0.25, position = position_dodge(0.9), size = 3.5) +
+  geom_text(aes(label = Label), vjust = -0.25, position = position_dodge(0.9), size = 2.5) +
   scale_fill_manual(values = brewer.pal(11, "RdBu")[c(9, 3)]) +
-  theme_bw() +
-  theme(legend.position = c(0.07, 0.88), legend.box.background = element_rect(colour = "grey"), legend.title = element_blank()) +
-  theme(axis.text.x = element_text(angle = 60, hjust = 1, vjust = 1)) +
+  theme_classic(base_size = 22) +
+  theme(legend.position = c(0.07, 0.88), legend.box.background = element_rect(colour = "black"), legend.title = element_blank(), panel.border = element_rect(fill = NA, size = 2), axis.text.x = element_text(angle = 60, hjust = 1, vjust = 1, color = "black"), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) +
   scale_y_continuous(sec.axis = sec_axis(~ . * 1 / 330, name = "Number of transcript eQTS")) +
   xlab("") +
   ylab("Number of exon eQTS")
@@ -1022,24 +1006,98 @@ ggsave(plot = g, file = paste0(outpath, "/4_barplot_ADHD_BIP_CDG2_EA_MDD2_MDD3_S
 # only exon hits
 g <- ggplot(prs_both[prs_both$Type != "Transcript", ], aes(x = PRS, y = FDR_0.1)) + 
   geom_bar(stat = "identity", position = position_dodge()) +
-  geom_text(aes(label = Label), vjust = -0.25, position = position_dodge(0.9), size = 3.5) +
-  theme_bw() +
-  theme(legend.position = c(0.07, 0.88), legend.box.background = element_rect(colour = "grey"), legend.title = element_blank()) +
-  theme(axis.text.x = element_text(angle = 60, hjust = 1, vjust = 1)) +
+  geom_text(aes(label = Label), vjust = -0.25, position = position_dodge(0.9), size = 2.5) +
+  theme_classic(base_size = 22) +
+  theme(legend.position = c(0.07, 0.88), legend.box.background = element_rect(colour = "black"), legend.title = element_blank(), panel.border = element_rect(fill = NA, size = 2), axis.text.x = element_text(angle = 60, hjust = 1, vjust = 1, color = "black"), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) +
   xlab("") +
   ylab("Number of exon eQTS genes")
 ggsave(plot = g, file = paste0(outpath, "/4_barplot_ADHD_BIP_CDG2_EA_MDD2_MDD3_SCZ2_T2D_exons_eQTS_new_pvalue_and_fdr.pdf"))
 g
 ```
 
+### Upset Plot
+
+Upset plot (like VENN) to compare the GWAS DEGene hits (eQTS) with each other:
+```{r}
+# load data
+prs_exons <- list()
+count = 1
+for (p in prs_all) {
+  prs <- fread(paste0(results_path, "/3.5.", count, "_diff_expr_exons_for_", p, "_PRS_new_pvalue_and_fdr.csv"), select = c("Ensembl Gene ID", "Gene Symbol", "FDR estimate"), stringsAsFactors = F)
+  prs_exons[[length(prs_exons) + 1]] <- list(unique(prs[prs$`FDR estimate` < 0.10, ]$`Ensembl Gene ID`))
+  count = count + 1
+}
+names(prs_exons) <- prs_all
+
+eqts_genes <- list("ADHD-2019" = unlist(prs_exons$`ADHD-2019`), "BIP-2019" = unlist(prs_exons$`BIP-2019`), "SCZ2-2014" = unlist(prs_exons$`SCZ2-2014`), "CDG2-2019" = unlist(prs_exons$`CDG2-2019`), "MDD2-2018" = unlist(prs_exons$`MDD2-2018`), "MDD3_2019" = unlist(prs_exons$`MDD3-2019`))
+pdf(paste0(outpath, "/4_upset_plot__ADHD_BIP_CDG2_MDD2_MDD3_SCZ2_exons_eQTS_new_pvalue_and_fdr.pdf"), width = 14, height = 7, onefile = F)
+upset(fromList(eqts_genes), 
+      sets = c("ADHD-2019", "BIP-2019", "CDG2-2019", "MDD2-2018", "MDD3_2019", "SCZ2-2014"),
+      nsets = 6, 
+      mainbar.y.label = "# genes", 
+      text.scale = 2, 
+      keep.order = F)
+dev.off()
+```
+
+
 # Overlap to GWAS Catalog
 
 Now, we will check, how many of the eDEGenes overlap with the schizophrenia trait (EFO_0000692) in the GWAS Catalog v1.0 (2020-07-14) downloaded on 28th July 2020.
 ```{r}
-# 1. load GWAS Catalog
+# load GWAS Catalog
 gwas_cat <- fread("/storage/groups/ccm01/datasets/2020_GWAS_Catalog/gwas_catalog_v1.0.2-associations_e100_r2020-07-14.tsv", header = T, sep = "\t", stringsAsFactors = F)
 gwas_cat <- gwas_cat[grep("EFO_0000692", gwas_cat$MAPPED_TRAIT_URI), ]
-head(gwas_cat)
+gwas_cat_genes <- gwas_cat$SNP_GENE_IDS
+gwas_cat_genes <- gwas_cat_genes[gwas_cat_genes != ""]
+gwas_cat_genes <- unique(unlist(lapply(gwas_cat_genes, function(x) strsplit(x, ", "))))
+print(paste0("GWAS Catalog - number of Schizophrenia related Genes: ", length(gwas_cat_genes)))
+# get tDEGene hits (Ensembl gene IDs)
+load(paste0(results_path, "/2.4_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.RData"))
+tDEGene_hits <- topTable(fit, coef = "DxCASE", number = Inf, adjust.method = "BH")
+tDEGene_hits <- tDEGene_hits[tDEGene_hits$adj.P.Val < 0.1, ]
+tDEGene_hits <- unique(separate_rows(tDEGene_hits, `gene_id`, sep = "\\|")$gene_id)  # separate if gene IDs were merged
+# remove the ending of the Ensembl Gene IDs
+eDEGene_hits <- unlist(lapply(eDEGene_hits, function(x) strsplit(x, "\\.")[[1]][1]))
+tDEGene_hits <- unlist(lapply(tDEGene_hits, function(x) strsplit(x, "\\.")[[1]][1]))
+# get number of overlap to GWAS catalog genes
+print(paste0("Overlap tDEGenes to SCZ-GWAScat: ", length(intersect(tDEGene_hits, gwas_cat_genes))))
+print(paste0("Overlap tDEGenes to SCZ-GWAScat: ", length(intersect(eDEGene_hits, gwas_cat_genes)), " (", round((length(intersect(eDEGene_hits, gwas_cat_genes)) / length(eDEGene_hits)) * 100, 2), "%)"))
+rm(gwas_cat, gwas_cat_genes)
+```
+
+
+# Overlap to CMC DEGenes
+
+## gDEGenes 
+
+```{r}
+# load data
+cmc_gDEGenes <- as.data.frame(read_excel(paste0(cmc_path, "/nn.4399-S5.xlsx"), sheet = "Genes", skip = 1))
+cmc_gDEGenes <- unique(cmc_gDEGenes[cmc_gDEGenes$`FDR estimate` < 0.05, "Ensembl Gene ID"])  # filter for FDR < 0.05
+
+# get overlap from t/eDEGenes to CMC gDEGenes
+print(paste0("Unique CMC gDEGenes (Ensembl Gene IDs): ", length(unique(cmc_gDEGenes))))
+print(paste0("Overlap PMB tDEGenes to CMC gDEGenes: ", length(intersect(cmc_gDEGenes, tDEGene_hits)), " (", length(intersect(cmc_gDEGenes, tDEGene_hits)) / (length(tDEGene_hits) / 100), "%)"))
+print(paste0("Overlap PMB eDEGenes to CMC gDEGenes: ", length(intersect(cmc_gDEGenes, eDEGene_hits)), " (", round(length(intersect(cmc_gDEGenes, eDEGene_hits)) / (length(eDEGene_hits) / 100), 2), "%)"))
+print(paste0("Overlap from CMC gDEGenes to PMB eDEGenes: ", round(length(intersect(cmc_gDEGenes, eDEGene_hits)) / (length(cmc_gDEGenes) / 100), 2), "%"))
+rm(cmc_gDEGenes)
+```
+
+## isoDEGenes
+
+```{r}
+# read CMC isoDEGenes (from xslx file) 
+# load data
+cmc_iDEGenes <- as.data.frame(read_excel(paste0(cmc_path, "/nn.4399-S5.xlsx"), sheet = "Isoforms", skip = 1))
+cmc_iDEGenes <- unique(cmc_iDEGenes[cmc_iDEGenes$`FDR estimate` < 0.05, "Ensembl Gene ID"])  # filter for FDR < 0.05
+
+# get overlap from t/eDEGenes to CMC isoDEGenes
+print(paste0("Unique CMC isoDEGenes (Ensembl Gene IDs): ", length(unique(cmc_iDEGenes))))
+print(paste0("Overlap PMB tDEGenes to CMC isoDEGenes: ", length(intersect(cmc_iDEGenes, tDEGene_hits)), " (", length(intersect(cmc_iDEGenes, tDEGene_hits)) / (length(tDEGene_hits) / 100), "%)"))
+print(paste0("Overlap PMB eDEGenes to CMC isoDEGenes: ", length(intersect(cmc_iDEGenes, eDEGene_hits)), " (", round(length(intersect(cmc_iDEGenes, eDEGene_hits)) / (length(eDEGene_hits) / 100), 2), "%)"))
+print(paste0("Overlap from CMC isoDEGenes to PMB eDEGenes: ", round(length(intersect(cmc_iDEGenes, eDEGene_hits)) / (length(cmc_iDEGenes) / 100), 2), "%"))
+rm(cmc_iDEGenes)
 ```
 
 
@@ -1138,11 +1196,9 @@ fndc3a <- merge(fndc3a, fndc3a_exon_expr, by.x = "Row.names", by.y = "row.names"
 #fndc3a <- merge(fndc3a, pData, by.x = "Row.names", by.y = "row.names")
 colnames(fndc3a)[1] <- "SampleID"
 dim(fndc3a)  # should be 169 rows (samples)
-
 # 3.6 Form data into right order
-fndc3a <- fndc3a[, c("SampleID", "ENSG00000102531.12", "ENST00000378383.1", "ENST00000398316.3", "ENST00000492622.2", "ENST00000541916.1|ENST00000484074.1", "ENST00000497644.1", "ENSE00000682482.1", "ENSE00001477281.1", "ENSE00001342704.1", "ENSE00001532665.1", "ENSE00001129140.1", "ENSE00001335285.2", "ENSE00000682481.1", "ENSE00001477293.1", "ENSE00000939645.1", "ENSE00001129152.1", "ENSE00001422888.3", "ENSE00001342700.1", "ENSE00001922094.2", "ENSE00001129131.1", "ENSE00001129122.1", "ENSE00002208454.1|ENSE00001816455.1", "ENSE00003676028.1|ENSE00003632112.1", "ENSE00003610694.1|ENSE00003685468.1", "ENSE00003647569.1|ENSE00003636520.1", "ENSE00003618072.1|ENSE00003538992.1", "ENSE00003553418.1|ENSE00003591878.1", "ENSE00003657943.1|ENSE00003595023.1", "ENSE00001378011.1|ENSE00001934521.1", "ENSE00003561019.1|ENSE00003616958.1", "ENSE00003535624.1|ENSE00003689909.1", "ENSE00003488149.1|ENSE00003524858.1", "ENSE00003537609.1|ENSE00003598917.1", "ENSE00003479083.1|ENSE00003595348.1|ENSE00003582104.1", "ENSE00003532194.1|ENSE00001896523.1|ENSE00003662779.1", "ENSE00001886294.1|ENSE00001853011.1|ENSE00002227968.1")]
-
-colnames(fndc3a) <- c("SampleID", "FNDC3A", "FNDC3A-001", "FNDC3A-002", "FNDC3A-003", "FNDC3A-004|FNDC3A-201", "FNDC3A-006", "ENSE00000682482.1", "ENSE00001477281.1", "ENSE00001342704.1", "ENSE00001532665.1", "ENSE00001129140.1", "ENSE00001335285.2", "ENSE00000682481.1", "ENSE00001477293.1", "ENSE00000939645.1", "ENSE00001129152.1", "ENSE00001422888.3", "ENSE00001342700.1", "ENSE00001922094.2", "ENSE00001129131.1", "ENSE00001129122.1", "ENSE00002208454.1|ENSE00001816455.1", "ENSE00003676028.1|ENSE00003632112.1", "ENSE00003610694.1|ENSE00003685468.1", "ENSE00003647569.1|ENSE00003636520.1", "ENSE00003618072.1|ENSE00003538992.1", "ENSE00003553418.1|ENSE00003591878.1", "ENSE00003657943.1|ENSE00003595023.1", "ENSE00001378011.1|ENSE00001934521.1", "ENSE00003561019.1|ENSE00003616958.1", "ENSE00003535624.1|ENSE00003689909.1", "ENSE00003488149.1|ENSE00003524858.1", "ENSE00003537609.1|ENSE00003598917.1", "ENSE00003479083.1|ENSE00003595348.1|ENSE00003582104.1", "ENSE00003532194.1|ENSE00001896523.1|ENSE00003662779.1", "ENSE00001886294.1|ENSE00001853011.1|ENSE00002227968.1")
+fndc3a <- fndc3a[, c("SampleID", "ENSG00000102531.12", "ENST00000378383.1", "ENST00000398316.3", "ENST00000492622.2", "ENST00000541916.1|ENST00000484074.1", "ENST00000497644.1", "ENSE00001422888.3", "ENSE00003553418.1|ENSE00003591878.1", "ENSE00003488149.1|ENSE00003524858.1", "ENSE00003537609.1|ENSE00003598917.1", "ENSE00003676028.1|ENSE00003632112.1", "ENSE00003618072.1|ENSE00003538992.1", "ENSE00001335285.2", "ENSE00001129152.1", "ENSE00001342704.1", "ENSE00000939645.1", "ENSE00001342700.1", "ENSE00001129140.1", "ENSE00000682481.1", "ENSE00000682482.1", "ENSE00001129131.1", "ENSE00001129122.1", "ENSE00001378011.1|ENSE00001934521.1", "ENSE00003657943.1|ENSE00003595023.1", "ENSE00003610694.1|ENSE00003685468.1", "ENSE00003561019.1|ENSE00003616958.1", "ENSE00003535624.1|ENSE00003689909.1", "ENSE00003479083.1|ENSE00003595348.1|ENSE00003582104.1", "ENSE00003647569.1|ENSE00003636520.1", "ENSE00003532194.1|ENSE00001896523.1|ENSE00003662779.1", "ENSE00001922094.2")]
+colnames(fndc3a) <- c("SampleID", "FNDC3A", "FNDC3A-001", "FNDC3A-002", "FNDC3A-003", "FNDC3A-004", "FNDC3A-006", "ENSE00001422888.3", "ENSE00003553418.1", "ENSE00003488149.1", "ENSE00003537609.1", "ENSE00003632112.1", "ENSE00003618072.1", "ENSE00001335285.2", "ENSE00001129152.1", "ENSE00001342704.1", "ENSE00000939645.1", "ENSE00001342700.1", "ENSE00001129140.1", "ENSE00000682481.1", "ENSE00000682482.1", "ENSE00001129131.1", "ENSE00001129122.1", "ENSE00001378011.1", "ENSE00003657943.1", "ENSE00003685468.1", "ENSE00003561019.1", "ENSE00003689909.1", "ENSE00003479083.1", "ENSE00003636520.1", "ENSE00003532194.1", "ENSE00001922094.2")
 head(fndc3a)
 
 # 3.7 Change FNDC3A data into ggplot long format
@@ -1161,10 +1217,10 @@ head(fndc3a_plot_data)
 
 # 3.8 Generate FNDC3A plot
 cols <- c("#FDAE6B", "gray", rep(c("#4292C6", "gray"), 6), rep(c("#A6D854", "gray"), 30))
-pdf(paste0(outpath, "/4.1_boxplot_FNDC3A_gene_vs_transcripts_vs_exons_residuals.pdf"), width = 15, height = 9)
+pdf(paste0(outpath, "/4.1_boxplot_FNDC3A_gene_vs_transcripts_vs_exons_residuals.pdf"), width = 15, height = 7)
 sp <- ggplot(fndc3a_plot_data, aes(x = EnsemblID, y = Expression, fill = SampleType)) +
-  theme_classic() +
-  theme(text = element_text(size = 22), axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_classic(base_size = 22) +
+  theme(text = element_text(size = 22), panel.border = element_rect(fill = NA, size = 2), axis.text.x = element_text(angle = 45, hjust = 1, color = "black"), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) +
   geom_boxplot(alpha = 0.7) +
   xlab("") +
   ylab("Gene expression") +
@@ -1353,7 +1409,7 @@ plot_data$Group <- ifelse(plot_data$eQTS != "Index", "eQTS", "Index")
 Generate a balloonplot including the results of the enriched (FDR <= 0.05) KEGG gene sets. 
 ```{r, echo = F}
 ggballoonplot(plot_data, x = "eQTS", y = "GeneSet", fill = "log_adjP", size = "GeneRatio", ggtheme = theme_bw(), legend.title = "-log10(adjP)", size.range = c(1, 6), color = "lightgray") +
-  scale_fill_viridis_c(option = "C", direction = 1) +
+  scale_fill_viridis_c(option = "D", direction = 1) +
   facet_grid(~ Group, scales = "free_x", space = "free_x")
 ggsave(file = paste0(outpath, "/4.2_balloonplot_exon_eQTS_FUMA_KEGG.pdf"), width = 6.2, height = 17)
 # delete unnecessary data
@@ -1430,9 +1486,7 @@ draw.triple.venn(area1 = length(gDEGenes_age), area2 = length(tDEGenes_age),
                  category = c(paste("gDEGenes", length(gDEGenes_age), sep = "\n"), 
                               paste("tDEGenes", length(tDEGenes_age), sep = "\n"), 
                               paste("eDEGenes", length(eDEGenes_age), sep = "\n")), 
-                 fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), 
-                          rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), 
-                          rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
+                 fill = c(col_gdegene, col_tdegene, col_edegene))
 dev.off()
 # save plot
 pdf(paste0(outpath, "/4_VENN_DEGenes_for_age.pdf"))
@@ -1448,9 +1502,7 @@ draw.triple.venn(area1 = length(gDEGenes_age), area2 = length(tDEGenes_age),
                  category = c(paste("gDEGenes", length(gDEGenes_age), sep = "\n"), 
                               paste("tDEGenes", length(tDEGenes_age), sep = "\n"), 
                               paste("eDEGenes", length(eDEGenes_age), sep = "\n")), 
-                 fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), 
-                          rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), 
-                          rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
+                 fill = c(col_gdegene, col_tdegene, col_edegene))
 dev.off()
 # delete unnecessary data
 rm(gDEGenes_age, tDEGenes_age, eDEGenes_age, ageing_gene, p)
@@ -1494,9 +1546,7 @@ draw.triple.venn(area1 = length(gDEGenes_ph), area2 = length(tDEGenes_ph),
                  category = c(paste("gDEGenes", length(gDEGenes_ph), sep = "\n"), 
                               paste("tDEGenes", length(tDEGenes_ph), sep = "\n"), 
                               paste("eDEGenes", length(eDEGenes_ph), sep = "\n")), 
-                 fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), 
-                          rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), 
-                          rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
+                 fill = c(col_gdegene, col_tdegene, col_edegene))
 dev.off()
 # save plot
 pdf(paste0(outpath, "/4_VENN_DEGenes_for_ph.pdf"))
@@ -1511,9 +1561,7 @@ draw.triple.venn(area1 = length(gDEGenes_ph), area2 = length(tDEGenes_ph),
                  category = c(paste("gDEGenes", length(gDEGenes_ph), sep = "\n"), 
                               paste("tDEGenes", length(tDEGenes_ph), sep = "\n"), 
                               paste("eDEGenes", length(eDEGenes_ph), sep = "\n")), 
-                 fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), 
-                          rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), 
-                          rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
+                 fill = c(col_gdegene, col_tdegene, col_edegene))
 dev.off()
 # delete unnecessary data 
 rm(gDEGenes_ph, tDEGenes_ph, eDEGenes_ph, p)
@@ -1558,9 +1606,7 @@ draw.triple.venn(area1 = length(gDEGenes_pmi), area2 = length(tDEGenes_pmi),
                  category = c(paste("gDEGenes", length(gDEGenes_pmi), sep = "\n"), 
                               paste("tDEGenes", length(tDEGenes_pmi), sep = "\n"), 
                               paste("eDEGenes", length(eDEGenes_pmi), sep = "\n")), 
-                 fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), 
-                          rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), 
-                          rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
+                 fill = c(col_gdegene, col_tdegene, col_edegene))
 dev.off()
 # save plot
 pdf(paste0(outpath, "/4_VENN_DEGenes_for_pmi.pdf"))
@@ -1576,9 +1622,7 @@ draw.triple.venn(area1 = length(gDEGenes_pmi), area2 = length(tDEGenes_pmi),
                  category = c(paste("gDEGenes", length(gDEGenes_pmi), sep = "\n"), 
                               paste("tDEGenes", length(tDEGenes_pmi), sep = "\n"), 
                               paste("eDEGenes", length(eDEGenes_pmi), sep = "\n")), 
-                 fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), 
-                          rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), 
-                          rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
+                 fill = c(col_gdegene, col_tdegene, col_edegene))
 dev.off()
 # delete unnecessary data
 rm(gDEGenes_pmi, tDEGenes_pmi, eDEGenes_pmi)
@@ -1615,8 +1659,7 @@ draw.pairwise.venn(area1 = length(gDEGenes_c1), area2 = length(tDEGenes_c1),
                    euler.d = F, scaled = F, lty = "blank", 
                    category = c(paste("gDEGenes", length(gDEGenes_c1), sep = "\n"), 
                                      paste("tDEGenes", length(tDEGenes_c1), sep = "\n")), 
-                   fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), 
-                            rgb(red = 66, green = 146, blue = 198, maxColorValue = 255)))
+                   fill = c(col_gdegene, col_tdegene))
 dev.off()
 # save plot
 pdf(paste0(outpath, "/4_VENN_DEGenes_for_c1.pdf"))
@@ -1625,9 +1668,8 @@ draw.pairwise.venn(area1 = length(gDEGenes_c1), area2 = length(tDEGenes_c1),
                    cross.area = length(intersect(gDEGenes_c1, tDEGenes_c1)), 
                    euler.d = F, scaled = F, lty = "blank", 
                    category = c(paste("gDEGenes", length(gDEGenes_c1), sep = "\n"), 
-                                     paste("tDEGenes", length(tDEGenes_c1), sep = "\n")), 
-                   fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), 
-                            rgb(red = 66, green = 146, blue = 198, maxColorValue = 255)))
+                                paste("tDEGenes", length(tDEGenes_c1), sep = "\n")), 
+                   fill = c(col_gdegene, col_tdegene))
 dev.off()
 # delete unnecessary data
 rm(gDEGenes_c1, tDEGenes_c1, eDEGenes_c1)
@@ -1671,9 +1713,7 @@ draw.triple.venn(area1 = length(gDEGenes_c2), area2 = length(tDEGenes_c2),
                  category = c(paste("gDEGenes", length(gDEGenes_c2), sep = "\n"), 
                               paste("tDEGenes", length(tDEGenes_c2), sep = "\n"), 
                               paste("eDEGenes", length(eDEGenes_c2), sep = "\n")), 
-                 fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), 
-                          rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), 
-                          rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
+                 fill = c(col_gdegene, col_tdegene, col_edegene))
 dev.off()
 # save plot
 pdf(paste0(outpath, "/4_VENN_DEGenes_for_c2.pdf"))
@@ -1688,9 +1728,7 @@ draw.triple.venn(area1 = length(gDEGenes_c2), area2 = length(tDEGenes_c2),
                  category = c(paste("gDEGenes", length(gDEGenes_c2), sep = "\n"), 
                               paste("tDEGenes", length(tDEGenes_c2), sep = "\n"), 
                               paste("eDEGenes", length(eDEGenes_c2), sep = "\n")), 
-                 fill = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), 
-                          rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), 
-                          rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
+                 fill = c(col_gdegene, col_tdegene, col_edegene))
 dev.off()
 # delete unnecessary data
 rm(gDEGenes_c2, tDEGenes_c2, eDEGenes_c2)
@@ -1743,14 +1781,14 @@ eDEGenes_fuma_gtex_reg$GeneSet <- factor(as.factor(eDEGenes_fuma_gtex_reg$GeneSe
 g <- ggplot(eDEGenes_fuma_gtex_reg, aes(fill = variable, y = value, x = GeneSet)) +
     geom_bar(stat = "identity") +
     coord_flip() +
-    theme_classic() +
+    theme_classic(base_size = 22) +
     scale_fill_manual(values = brewer.pal(11, "RdBu")[c(3, 9)], name = "", labels = c("Down-regulated", "Up-regulated")) +
     ylab(bquote("-log"["10"]*"(adjP)")) +
     xlab("") +
     labs(fill = "", labels = c("A", "B")) +
     ggtitle("eDEGenes: KEGG pathways") +
     scale_y_continuous(expand = c(0.02, 0.01)) +
-    theme(axis.ticks = element_line(colour = NA), text = element_text(size = 22), panel.background = element_rect(fill = NA), panel.grid.major.x = element_line(colour = "grey"), panel.grid.minor.x = element_line(colour = "grey"), strip.background = element_rect(fill = NA))
+    theme(axis.ticks = element_line(colour = NA), text = element_text(size = 22), panel.background = element_rect(fill = NA), panel.grid.major.x = element_line(colour = "grey"), panel.grid.minor.x = element_line(colour = "grey"), strip.background = element_rect(fill = NA), panel.border = element_rect(fill = NA, size = 2), axis.text.x = element_text(color = "black"), axis.text.y = element_text(color = "black"))
 ggsave(plot = g, file = paste0(outpath, "/3.4_barplot_eDEGenes_FUMA_GTEx_v8_up_down_reg_genes.pdf"), width = 8, height = 8)
 g
 # barplot without up/downregulated genes colored
@@ -1758,7 +1796,8 @@ eDEGenes_fuma_gtex$GeneSet <- factor(as.factor(eDEGenes_fuma_gtex$GeneSet), leve
 g <- ggplot(eDEGenes_fuma_gtex, aes(y = log_adjP, x = GeneSet)) +
     geom_bar(stat = "identity") +
     coord_flip() +
-    theme_classic() +
+    theme_classic(base_size = 22) +
+    theme(panel.border = element_rect(fill = NA, size = 2), axis.text.x = element_text(color = "black"), axis.text.y = element_text(color = "black")) +
     ylab(bquote("-log"["10"]*"(adjP)")) +
     xlab("") +
     ggtitle("eDEGenes") +
@@ -1807,7 +1846,8 @@ eDEGenes_fuma_kegg$GeneSet <- factor(as.factor(eDEGenes_fuma_kegg$GeneSet), leve
 g <- ggplot(eDEGenes_fuma_kegg, aes(fill = variable, y = value, x = GeneSet)) + 
     geom_bar(position = "stack", stat = "identity") +
     coord_flip() + 
-    theme_classic() +
+    theme_classic(base_size = 22) +
+    theme(panel.border = element_rect(fill = NA, size = 2), axis.text.x = element_text(color = "black"), axis.text.y = element_text(color = "black")) +
     scale_fill_manual(values = brewer.pal(11, "RdBu")[c(3, 9)]) +
     ylab(bquote("-log"["10"]*"(FDR)")) +
     xlab("") +
@@ -1900,8 +1940,7 @@ draw.pairwise.venn(area1 = length(unique(tDEGenes$`Ensembl Gene ID`)),
                    area2 = length(unique(eDEGenes$`Ensembl Gene ID`)), 
                    cross.area = length(intersect(unique(tDEGenes$`Ensembl Gene ID`),
                                                  unique(eDEGenes$`Ensembl Gene ID`))), 
-                   fill = c(rgb(red = 66, green = 146, blue = 198, maxColorValue = 255),
-                            rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)),
+                   fill = c(col_tdegene, col_edegene),
                    category = c(paste("tDEGenes", length(unique(tDEGenes$`Ensembl Gene ID`)),
                                       sep = "\n"), 
                                 paste("eDEGenes", length(unique(eDEGenes$`Ensembl Gene ID`)),
@@ -1914,8 +1953,7 @@ draw.pairwise.venn(area1 = length(unique(tDEGenes$`Ensembl Gene ID`)),
                    area2 = length(unique(eDEGenes$`Ensembl Gene ID`)), 
                    cross.area = length(intersect(unique(tDEGenes$`Ensembl Gene ID`),
                                                  unique(eDEGenes$`Ensembl Gene ID`))), 
-                   fill = c(rgb(red = 66, green = 146, blue = 198, maxColorValue = 255),
-                            rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)),
+                   fill = c(col_tdegene, col_edegene),
                    category = c(paste("tDEGenes", length(unique(tDEGenes$`Ensembl Gene ID`)),
                                       sep = "\n"), 
                                 paste("eDEGenes", length(unique(eDEGenes$`Ensembl Gene ID`)),
@@ -1971,7 +2009,7 @@ mgsa_res_cp <- mgsa_res_cp[mgsa_res_cp$estimate > 0.5 & !is.na(mgsa_res_cp$estim
 mgsa_res_cp <- mgsa_res_cp[!(row.names(mgsa_res_cp) == "NA"), ]
 plot_mgsa_cp <- as.data.frame(mgsa_res_cp[order(mgsa_res_cp$estimate, decreasing = T), ])
 ## set the levels in order we want
-g <- ggplot(data = plot_mgsa_cp, aes(x = reorder(row.names(plot_mgsa_cp), estimate), y = estimate)) + geom_bar(stat = "identity") + xlab("") + coord_flip() + theme_classic() + ggtitle("MsigDB: c2 - cp") + geom_hline(yintercept = 0.5, linetype = "dashed", color = brewer.pal(11, "RdBu")[2])
+g <- ggplot(data = plot_mgsa_cp, aes(x = reorder(row.names(plot_mgsa_cp), estimate), y = estimate)) + geom_bar(stat = "identity") + xlab("") + coord_flip() + theme_classic(base_size = 22) + theme(panel.border = element_rect(fill = NA, size = 2), axis.text.x = element_text(color = "black"), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) + ggtitle("MsigDB: c2 - cp") + geom_hline(yintercept = 0.5, linetype = "dashed", color = brewer.pal(11, "RdBu")[2])
 ggsave(plot = g, file = paste0(outpath, "/3.6_barplot_eDEGenes_MSigDB_top10_enriched_c2_canonical_pathways.pdf"), width = 5, height = 2)
 g
 ```
@@ -2001,7 +2039,8 @@ mgsa_res_go <- mgsa_res_go[mgsa_res_go$estimate > 0.5 & !is.na(mgsa_res_go$estim
 mgsa_res_go <- mgsa_res_go[!(row.names(mgsa_res_go) == "NA"), ]
 plot_mgsa_go <- as.data.frame(mgsa_res_go[order(mgsa_res_go$estimate, decreasing = T), ])
 ## set the levels in order we want
-g <- ggplot(data = plot_mgsa_go, aes(x = reorder(row.names(plot_mgsa_go), estimate), y = estimate)) + geom_bar(stat = "identity") + xlab("") + coord_flip() + theme_classic() + ggtitle("MsigDB: c5 - GO") + geom_hline(yintercept = 0.5, linetype = "dashed", color = brewer.pal(11, "RdBu")[2])
+g <- ggplot(data = plot_mgsa_go, aes(x = reorder(row.names(plot_mgsa_go), estimate), y = estimate)) + geom_bar(stat = "identity") + xlab("") + coord_flip() + theme_classic(base_size = 22) +
+    theme(panel.border = element_rect(fill = NA, size = 2), axis.text.x = element_text(color = "black"), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) + ggtitle("MsigDB: c5 - GO") + geom_hline(yintercept = 0.5, linetype = "dashed", color = brewer.pal(11, "RdBu")[2])
 ggsave(plot = g, file = paste0(outpath, "/3.6_barplot_eDEGenes_MSigDB_top10_enriched_c5_all_GO_gene_sets.pdf"), width = 6, height = 4)
 g
 ```
@@ -2047,8 +2086,8 @@ tfreq$variable <- factor(tfreq$variable, levels = c("OriginalFreq", "ExpressionF
 
 g <- ggplot(tfreq, aes(x = TranscriptCount, y = value, color = variable)) +
   geom_line(size = 1.2) +
-  theme_classic() +
-  theme(text = element_text(size = 15), legend.position = c(0.9, 0.9), legend.box.background = element_rect(colour = "black"), legend.title = element_blank(), plot.title = element_text(hjust = 0.5)) +
+    theme_classic(base_size = 22) +
+    theme(text = element_text(size = 22), legend.position = c(0.9, 0.9), legend.box.background = element_rect(colour = "black"), legend.title = element_blank(), plot.title = element_text(hjust = 0.5), panel.border = element_rect(fill = NA, size = 2), axis.text.x = element_text(color = "black"), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) +
   ggtitle("Transcripts") +
   scale_x_continuous(expand = c(0.015, 0)) +
   scale_y_continuous(expand = c(0.01, 0)) +
@@ -2106,8 +2145,8 @@ efreq$variable <- factor(efreq$variable, levels = c("OriginalFreq", "ExpressionF
 
 g <- ggplot(efreq, aes(x = ExonCount, y = value, color = variable)) +
   geom_line(size = 1.2) +
-  theme_classic() +
-  theme(text = element_text(size = 15), legend.position = c(0.9, 0.9), legend.box.background = element_rect(colour = "black"), legend.title = element_blank(), plot.title = element_text(hjust = 0.5)) +
+    theme_classic(base_size = 22) +
+    theme(text = element_text(size = 22), legend.position = c(0.9, 0.9), legend.box.background = element_rect(colour = "black"), legend.title = element_blank(), plot.title = element_text(hjust = 0.5), panel.border = element_rect(fill = NA, size = 2), axis.text.x = element_text(color = "black"), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) +
   ggtitle("Exons") +
   scale_x_continuous(expand = c(0.015, 0)) +
   scale_y_continuous(expand = c(0.01, 0)) +

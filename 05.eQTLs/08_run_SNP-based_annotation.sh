@@ -22,8 +22,8 @@ Rscript ${script_path}/08_SNP-based_annotation.R inpath=\"${inpath}\" what=\"GTE
 # GTEx_BA9
 Rscript ${script_path}/08_SNP-based_annotation.R inpath=\"${inpath}\" what=\"GTEx_BA9\" outpath=\"${outpath}\" &> ${outpath}/SNP-based_annotation_GTEx_BA9.log
 # CMC
-Rscript ${script_path}/08_SNP-based_annotation.R inpath=\"${inpath}\" what=\"CMC\" outpath=\"${outpath}\" &> ${outpath}/SNP-based_annotation_CMC.log
+#Rscript ${script_path}/08_SNP-based_annotation.R inpath=\"${inpath}\" what=\"CMC\" outpath=\"${outpath}\" &> ${outpath}/SNP-based_annotation_CMC.log
 # meQTL
-Rscript ${script_path}/08_SNP-based_annotation.R inpath=\"${inpath}\" what=\"meQTL\" outpath=\"${outpath}\" &> ${outpath}/SNP-based_annotation_Cortex_meQTL.log
+#Rscript ${script_path}/08_SNP-based_annotation.R inpath=\"${inpath}\" what=\"meQTL\" outpath=\"${outpath}\" &> ${outpath}/SNP-based_annotation_Cortex_meQTL.log
 # GWAS
-Rscript ${script_path}/08_SNP-based_annotation.R inpath=\"${inpath}\" what=\"GWAS\" outpath=\"${outpath}\" &> ${outpath}/SNP-based_annotation_GWAS.log
+#Rscript ${script_path}/08_SNP-based_annotation.R inpath=\"${inpath}\" what=\"GWAS\" outpath=\"${outpath}\" &> ${outpath}/SNP-based_annotation_GWAS.log

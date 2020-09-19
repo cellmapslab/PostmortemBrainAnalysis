@@ -16,4 +16,3 @@ Rscript ${script_path}/01a_generate_necessary_files.R input1=\"${sample_file}\" 
 
 # 2. Preprocess the genotypes: filter for MAF, HWE, merge chromosome files, remove duplicates and change probabilities (three columns/numbers to one)
 bash ${script_path}/01b_prepare_genotypes.sh -g ${genotypes} -e ${output1} -i ${output2} -o ${outpath_geno} -t ${tools_path} -s ${script_path} &> ${outpath_geno}/prepare_genotypes.log
-
