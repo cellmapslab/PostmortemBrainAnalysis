@@ -30,11 +30,16 @@ Following analyses will be performed:
   - Pre-processing of genotype data
   - Generate input files (genotype, expression and covariate files)
   - Run MatrixEQTL
-  - Clump eSNPs using PLINK (LD clumping) and generate result tables
-  - Generate GRanges objects (and save as .Rds files)
-  - eSNP based annotation and resampling 
-  - Annotation to ChromHMM, VEP, GTEx, CMC and meQTLs using resampling (10,000 times)
+  - Generate result tables
+  - Clump eSNPs using PLINK (LD clumping) and generate their result tables
+  - Generate GRanges objects (and save as .Rds files) 
+  - Generate FUMA input files
+  - SNP-based annotation to ChromHMM, VEP, GTEx, CMC and meQTLs using resampling (10,000 times)
   - Evaluate and plot results
+6. **Overlap to rare variants of index-patients**
+  - Preprocessing and GRanges object generation
+  - Generate FUMA input files
+  - Generate overlap to eeGenes and eQTS genes and plot results
 6. **LD Score Regression**
   - Estimate heritability & calculate genetic correlation to different GWAS summary statistic files
 8. **Co-expression analysis**
