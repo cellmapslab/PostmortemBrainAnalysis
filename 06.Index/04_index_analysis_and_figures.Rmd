@@ -1,0 +1,449 @@
+---
+title: "Index  Analysis and Figure Generation"
+author:
+  - name: Karolina Worf
+affiliation: 
+  - Institute of Computational Biology, Helmholtz Zentrum München, Neuherberg 85764, Germany
+email: karolina.worf@helmholtz-muenchen.de
+header-includes:
+  - \usepackage{float}
+date: "`r doc_date()`"
+graphics: yes
+abstract: In this R markdown file, we will provide the analysis and figure generation of the overlap of the index dataset to the exon eQTL genes (eeGenes) and ADHD, BIP, MDD, SCZ (ABMS) eQTS results. 
+output: 
+  BiocStyle::pdf_document:
+  toc: true
+number_sections: true
+editor_options: 
+  chunk_output_type: console
+vignette: >
+  %\VignetteIndexEntry{Index  Analysis and Figure Generation}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+---
+  
+```{r global_options, include = FALSE}
+require(knitr)
+knitr::opts_chunk$set(warning = F, echo = T, message = F, cache = T, cache.lazy = F)
+options(stringsAsFactors = T)
+```
+
+<p>
+  **R version**: `r R.version.string`
+<br />
+  **Bioconductor version**: `r BiocManager::version()`
+</p>
+  
+  
+# Load Packages
+  
+Below you can find the list of packages that are required for all analysis steps. 
+```{r}
+# packages for preprocessing data
+library(data.table)
+library(readxl)  # read in excel files
+library(tidyr)
+
+# packages for plotting
+library(ggplot2)
+library(grid)
+library(VennDiagram)
+
+# package for colorblind colors
+library(viridis)
+```
+
+
+# Paths
+
+Before we can start, we need to make sure that all necessary paths and folder names are saved. If the output folder does not exist, we will generate it using the systems (Red Hat Enterprise Linux operating system: Fedora 25) "mkdir" command.
+```{r}
+# index path
+path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Index"
+# path to the rare variants of index patients RData file
+rdata_path <- paste0(path, "/01_RData_file")
+# path to the overlap file
+overlap_path <- paste0(path, "/02_overlap")
+# path to the fuma files
+fuma_path <- paste0(path, "/03_FUMA")
+# path to the eQTL result tables
+eqtl_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/04_result_tables"
+# path to differentially expression analysis (DEA) hits
+dea_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_DEA_results"
+# path to eQTS genes of ABMS
+eqts_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/04_FUMA/4.1_input_files/"
+# path to CMC data
+cmc_path <- "/storage/groups/ccm01/datasets/2019_CMC_Fromer_et_al"
+# path to SCZ GWAS loci genes
+gwas_path <- "/storage/groups/ccm01/datasets/2018_GWAS_summary_statistics/SCZ2-2014"
+# path to store the output into 
+out_path <- paste0(path, "/04_figures")
+# generate ouput path if not existing already
+system(paste0("mkdir -p ", out_path))
+```
+
+
+# Functions
+
+To reduce code, we will generate some functions here. 
+```{r}
+# function, to get the frequency of all genes, that can be found two or more times in the data sets
+get_frequencies <- function(genes) {
+  genes_freq <- as.data.frame(table(genes))
+  names(genes_freq) <- c("Gene", "Freq")
+  genes_freq <- genes_freq[order(genes_freq$Freq, decreasing = T), ]
+  print(genes_freq[genes_freq$Freq > 1, ])
+  return(genes_freq)
+}
+```
+
+
+# Load data
+
+## Load Index and Overlap data
+
+Here, we will load all necessary data files. Following files will be loaded:
+1. Rare variants of index patients including all columns,
+2. ABMS exon eQTS genes (gene symbol and Ensembl gene ID),
+3. exon eQTL Genes (eeGenes, gene symbol and Ensembl gene ID) and
+4. overlap genes of rare variants, ABMS eeQTS and eeGenes (gene symbol and Ensembl gene ID). 
+```{r}
+# 1. Rare variants of index patients
+index <- readRDS(paste0(rdata_path, "/Index-patients_rare_variants_filtered.rds"))
+# 2. ABMS eeQTS
+eeqts <- fread(paste0(overlap_path, "/1_ABMS_eQTS_genes.txt"), header = T, stringsAsFactors = F)
+# 3. eeGenes
+eegenes <- fread(paste0(overlap_path, "/2_exon_eQTL_genes.txt"), header = T, stringsAsFactors = F)
+# 4. Overlap
+overlap <- fread(paste0(overlap_path, "/4_overlap_eeGenes_ABMS_rare.txt"), header = T, stringsAsFactors = F)
+```
+
+Then, we will check the number of found index-patient genes:
+
+|      | Counts |
+|------|------|
+| Index (Mutations) | `r length(index$"Ensembl Gene ID")` |
+| Index (Genes) | `r length(unique(index$"Ensembl Gene ID"))` |
+
+## Load eQTL hits
+
+First, we will load all cis-eQTL datasets (already filtered for FDR < 0.05).
+```{r, echo = F}
+# Gene cis-eQTL cases and controls
+eqtls_gene <- fread(paste0(eqtl_path, "/01_pmb_cis-eQTL_gene_hits_cases_vs_controls.txt"), header = T, stringsAsFactors = F)
+# Transcript cis-eQTL cases and controls
+eqtls_transcript <- fread(paste0(eqtl_path, "/01_pmb_cis-eQTL_transcript_hits_cases_vs_controls.txt"), header = T, stringsAsFactors = F)
+# Exon cis-eQTL cases and controls
+eqtls_exon <- fread(paste0(eqtl_path, "/01_pmb_cis-eQTL_exon_hits_cases_vs_controls.txt"), header = T, stringsAsFactors = F)
+```
+
+## Load DEGene hits
+
+Load tDEGenes (6 hits) and eDEGenes (2,223 hits). 
+```{r, echo = F}
+# tDEGenes
+tDEGenes <- fread(paste0(dea_path, "/2.4_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.csv"), data.table = F, stringsAsFactors = F)
+tDEGenes <- tDEGenes[tDEGenes$`FDR estimate` < 0.1, ]
+tDEGenes$`Ensembl Gene ID` <- sapply(unlist(strsplit(tDEGenes$`Ensembl Gene ID`, "\\|")), function(x) strsplit(x, "\\.")[[1]][1])
+
+# eDEGenes
+eDEGenes <- fread(paste0(dea_path, "/3.4_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.csv"), data.table = F, stringsAsFactors = F)
+eDEGenes <- eDEGenes[eDEGenes$`FDR estimate` < 0.1, ]
+eDEGenes$`Ensembl Gene ID` <- sapply(unlist(strsplit(eDEGenes$`Ensembl Gene ID`, "\\|")), function(x) strsplit(x, "\\.")[[1]][1])
+```
+
+## Load eQTS hits
+
+Load all interesting eQTS gene hits. only the ABMS combined dataset including ADHD-2019, BIP-2019, MDD-2019 and SCZ-2014 eQTS hits. 
+```{r, echo = F}
+# Load ADHD-2019 eQTS
+adhd <- fread(paste0(dea_path, "/3.5.1_diff_expr_exons_for_ADHD-2019_PRS_new_pvalue_and_fdr.csv"), header = T, data.table = F, stringsAsFactors = F)
+adhd <- adhd[adhd$`FDR estimate` <= 0.1, ]
+adhd_symbols <- adhd$`Gene Symbol`
+adhd <- unique(as.vector(sapply(adhd$`Ensembl Gene ID`, function(x) strsplit(x, "\\.")[[1]][1])))
+# Load ASD-2019 eQTS
+asd <- fread(paste0(dea_path, "/3.5.2_diff_expr_exons_for_ASD-2019_PRS_new_pvalue_and_fdr.csv"), header = T, data.table = F, stringsAsFactors = F)
+asd <- asd[asd$`FDR estimate` <= 0.1, ]
+asd_symbols <- asd$`Gene Symbol`
+asd <- unique(as.vector(sapply(asd$`Ensembl Gene ID`, function(x) strsplit(x, "\\.")[[1]][1])))
+# Load BIP-2019 eQTS
+bip <- fread(paste0(dea_path, "/3.5.3_diff_expr_exons_for_BIP-2019_PRS_new_pvalue_and_fdr.csv"), header = T, data.table = F, stringsAsFactors = F)
+bip <- bip[bip$`FDR estimate` <= 0.1, ]
+bip_symbols <- bip$`Gene Symbol`
+bip <- unique(as.vector(sapply(bip$`Ensembl Gene ID`, function(x) strsplit(x, "\\.")[[1]][1])))
+# Load CDG-2019 eQTS
+cdg <- fread(paste0(dea_path, "/3.5.7_diff_expr_exons_for_CDG2-2019_PRS_new_pvalue_and_fdr.csv"), header = T, data.table = F, stringsAsFactors = F)
+cdg <- cdg[cdg$`FDR estimate` <= 0.1, ]
+cdg_symbols <- cdg$`Gene Symbol`
+cdg <- unique(as.vector(sapply(cdg$`Ensembl Gene ID`, function(x) strsplit(x, "\\.")[[1]][1])))
+# Load MDD-2019 eQTS
+mdd <- fread(paste0(dea_path, "/3.5.13_diff_expr_exons_for_MDD3-2019_PRS_new_pvalue_and_fdr.csv"), header = T, data.table = F, stringsAsFactors = F)
+mdd <- mdd[mdd$`FDR estimate` <= 0.1, ]
+mdd_symbols <- mdd$`Gene Symbol`
+mdd <- unique(as.vector(sapply(mdd$`Ensembl Gene ID`, function(x) strsplit(x, "\\.")[[1]][1])))
+# Load SCZ-2014 eQTS
+scz <- fread(paste0(dea_path, "/3.5.14_diff_expr_exons_for_SCZ2-2014_PRS_new_pvalue_and_fdr.csv"), header = T, data.table = F, stringsAsFactors = F)
+scz <- scz[scz$`FDR estimate` <= 0.1, ]
+scz_symbols <- scz$`Gene Symbol`
+scz <- unique(as.vector(sapply(scz$`Ensembl Gene ID`, function(x) strsplit(x, "\\.")[[1]][1])))
+# Load ABMS eQTS
+abms <- fread(paste0(eqts_path, "/3_exon_eQTS_ADHD_BIP_MDD_SCZ.txt"), data.table = F, stringsAsFactors = F, header = F)
+```
+
+## Load GWAS Catalog for SCZ-related genes
+
+```{r}
+# load GWAS Catalog
+gwas_cat <- fread("/storage/groups/ccm01/datasets/2020_GWAS_Catalog/gwas_catalog_v1.0.2-associations_e100_r2020-07-14.tsv", header = T, sep = "\t", stringsAsFactors = F)
+gwas_cat <- gwas_cat[grep("EFO_0000692", gwas_cat$MAPPED_TRAIT_URI), ]
+gwas_cat_genes <- gwas_cat$`REPORTED GENE(S)`
+gwas_cat_genes <- gwas_cat_genes[gwas_cat_genes != ""]
+gwas_cat_genes <- unique(unlist(lapply(gwas_cat_genes, function(x) strsplit(x, ", "))))
+print(paste0("GWAS Catalog - number of Schizophrenia related Genes: ", length(gwas_cat_genes)))
+```
+
+## Load CMC gDEGenes and isoDEGenes
+
+```{r}
+# gDEGenes
+cmc_gDEGenes <- as.data.frame(read_excel(paste0(cmc_path, "/nn.4399-S5.xlsx"), sheet = "Genes", skip = 1))
+cmc_gDEGenes <- unique(cmc_gDEGenes[cmc_gDEGenes$`FDR estimate` < 0.05, "Gene Symbol"])  # filter for FDR < 0.05
+# iDEGenes
+cmc_iDEGenes <- as.data.frame(read_excel(paste0(cmc_path, "/nn.4399-S5.xlsx"), sheet = "Isoforms", skip = 1))
+cmc_iDEGenes <- unique(cmc_iDEGenes[cmc_iDEGenes$`FDR estimate` < 0.05, "Gene Symbol"])  # filter for FDR < 0.05
+```
+
+## Load SCZ GWAS loci genes
+
+```{r}
+scz_gwas <- fread(paste0(gwas_path, "/SCZ2_GWAS_107_loci_genes.txt"), header = F, data.table = F, stringsAsFactors = F)
+scz_gwas <- unique(scz_gwas$V1)
+length(scz_gwas)
+```
+
+
+# Overlaps to other resources
+
+Before, we can do the overlaps, we need to remove the endings from the Ensembl gene IDs from the eGenes.
+```{r, echo = F}
+# for all eGenes remove endings from the Ensembl Gene IDs for the overlap to CMC
+geGenes <- unique(as.vector(sapply(unlist(strsplit(eqtls_gene$`Ensembl Gene ID`, "\\|")), function(x) strsplit(x, "\\.")[[1]][1])))
+length(geGenes)
+teGenes <- unique(as.vector(sapply(unlist(strsplit(eqtls_transcript$`Ensembl Gene ID`, "\\|")), function(x) strsplit(x, "\\.")[[1]][1])))
+length(teGenes)
+eeGenes <- unique(as.vector(sapply(unlist(strsplit(eqtls_exon$`Ensembl Gene ID`, "\\|")), function(x) strsplit(x, "\\.")[[1]][1])))
+length(eeGenes)
+```
+
+Now, we can check all the overlaps to the index dataset:
+
+|      | Index |
+|------|------|
+| tDEGenes | `r length(intersect(tDEGenes$"Ensembl Gene ID", index$"Ensembl Gene ID"))` |
+| eDEGenes | `r length(intersect(eDEGenes$"Ensembl Gene ID", index$"Ensembl Gene ID"))` (`r round(length(intersect(eDEGenes$"Ensembl Gene ID", index$"Ensembl Gene ID")) / (length(index$"Ensembl Gene ID") / 100), digits = 2)`%) |
+| geGenes | `r length(intersect(geGenes, index$"Ensembl Gene ID"))` (`r round(length(intersect(geGenes, index$"Ensembl Gene ID")) / (length(index$"Ensembl Gene ID") / 100), digits = 2)`%) |
+| teGenes | `r length(intersect(teGenes, index$"Ensembl Gene ID"))` (`r round(length(intersect(teGenes, index$"Ensembl Gene ID")) / (length(index$"Ensembl Gene ID") / 100), digits = 2)`%) |
+| eeGenes | `r length(intersect(eeGenes, index$"Ensembl Gene ID"))` (`r round(length(intersect(eeGenes, index$"Ensembl Gene ID")) / (length(index$"Ensembl Gene ID") / 100), digits = 2)`%) |
+| ADHD eQTS | `r length(intersect(adhd, index$"Ensembl Gene ID"))` (`r round(length(intersect(adhd, index$"Ensembl Gene ID")) / (length(index$"Ensembl Gene ID") / 100), digits = 2)`%) |
+| ASD eQTS | `r length(intersect(asd, index$"Ensembl Gene ID"))` (`r round(length(intersect(asd, index$"Ensembl Gene ID")) / (length(index$"Ensembl Gene ID") / 100), digits = 2)`%) |
+| BIP eQTS | `r length(intersect(bip, index$"Ensembl Gene ID"))` (`r round(length(intersect(bip, index$"Ensembl Gene ID")) / (length(index$"Ensembl Gene ID") / 100), digits = 2)`%) |
+| CDG eQTS | `r length(intersect(cdg, index$"Ensembl Gene ID"))` (`r round(length(intersect(cdg, index$"Ensembl Gene ID")) / (length(index$"Ensembl Gene ID") / 100), digits = 2)`%) |
+| MDD eQTS | `r length(intersect(mdd, index$"Ensembl Gene ID"))` (`r round(length(intersect(mdd, index$"Ensembl Gene ID")) / (length(index$"Ensembl Gene ID") / 100), digits = 2)`%) |
+| SCZ eQTS | `r length(intersect(scz, index$"Ensembl Gene ID"))` (`r round(length(intersect(scz, index$"Ensembl Gene ID")) / (length(index$"Ensembl Gene ID") / 100), digits = 2)`%) |
+| ABMS eQTS | `r length(intersect(abms$V1, index$"Ensembl Gene ID"))` (`r round(length(intersect(abms$V1, index$"Ensembl Gene ID")) / (length(index$"Ensembl Gene ID") / 100), digits = 2)`%) |
+
+
+# Figures
+
+## Rare variants of index patients dataset
+
+### Barplot of variants per patient
+
+```{r}
+# And we will plot the rare variants frequency:
+# get frequency for each gene ID
+index_new <- as.data.table(index)[, c("PatientID", "Ensembl.Gene.ID")]
+index_freq <- get_frequencies(index_new$Ensembl.Gene.ID)
+
+# Generate barplot
+pdf(file = paste0(out_path, "/1_barplot_rare_variants_index-patients_gene_counts.pdf"), width = 8, height = 6)
+barplot(table(index_freq$Freq), xlab = "Frequency", ylab = "# genes with this frequency", col = "black", cex.axis = 1.5, lwd = 2, cex.names = 1.5, cex.lab = 2, cex.main = 2)
+dev.off()
+barplot(table(index_freq$Freq), xlab = "Frequency", ylab = "# genes with this frequency", col = "black", cex.axis = 1.5, lwd = 2, cex.names = 1.5, cex.lab = 2, cex.main = 2)
+```
+
+## Barplot of FUMA results
+
+First we need to load the dataset and filter it for FDR < 0.05:
+```{r}
+# Load FUMA GS file for the rare variants of index patients
+index_fuma <-fread(paste0(fuma_path, "/3.2_rare_variants_index/GS.txt"), header = T, stringsAsFactors = F)
+index_fuma <- index_fuma[index_fuma$Category == "3_kegg_entrez_no_disease_pathways.txt", ]
+index_fuma <- index_fuma[index_fuma$adjP < 0.05, ]
+print(paste0("Significant gene sets for geGenes (cases and controls): ", dim(index_fuma)[[1]][1]))
+
+index_fuma$log_adjP <- -log10(index_fuma$adjP)
+index_fuma$GeneSet <- factor(index_fuma$GeneSet, levels = index_fuma$GeneSet[order(index_fuma$log_adjP)])
+
+# Generate barplot
+g <- ggplot(index_fuma, aes(y = log_adjP, x = GeneSet)) +
+    geom_bar(stat = "identity") +
+    coord_flip() +
+    theme_minimal() +
+    ylab(bquote("-log"["10"]*"(adjP)")) +
+    xlab("") +
+    ggtitle("Index: KEGG pathways") +
+    scale_y_continuous(expand = c(0.02, 0.01)) +
+    theme(axis.ticks = element_line(colour = NA), text = element_text(size = 16), panel.background = element_rect(fill = NA), panel.grid.major.x = element_line(colour = "grey"), panel.grid.minor.x = element_line(colour = "grey"), strip.background = element_rect(fill = NA))
+ggsave(plot = g, file = paste0(out_path, "/1_barplot_rare_variants_index-patients_top_KEGG_pathways.pdf"), width = 11, height = 12)
+g
+dev.off()
+```
+
+
+# Overlap dataset
+
+## VENN diagram of Overlap
+
+```{r}
+#############################
+### Generate VENN diagram ###
+#############################
+pdf(paste0(out_path, "/2_VENN_diagram_overlap_eeGenes_ABMS_index.pdf"))
+grid.newpage()
+overrideTriple=T
+test <- draw.triple.venn(area1 = length(unique(eeGenes)), area2 = length(unique(abms$V1)),
+                         area3 = length(unique(index_new$Ensembl.Gene.ID)), lty = "blank",  
+                         n12 = length(intersect(eeGenes, abms$V1)), 
+                         n23 = length(intersect(abms$V1, index_new$Ensembl.Gene.ID)), 
+                         n13 = length(intersect(eeGenes, index_new$Ensembl.Gene.ID)),            
+                         n123 = length(intersect(eeGenes, intersect(abms$V1, index_new$Ensembl.Gene.ID))),
+                         category = c(paste("eeGenes", length(unique(eeGenes)), sep = "\n"), 
+                                      paste("ABMS eQTS", length(unique(abms$V1)), sep = "\n"), 
+                                      paste("Index", length(unique(index_new$Ensembl.Gene.ID)), sep = "\n")),
+                         fill = viridis(3))
+grid.draw(test)
+dev.off()
+```
+
+## Barplot of FUMA results
+
+First we need to load the dataset and filter it for FDR < 0.05:
+```{r}
+# Load FUMA GS file for the overlap dataset
+overlap_fuma <- fread(paste0(fuma_path, "/3.3_overlap_rare_eeGenes_eQTS/GS.txt"), header = T, stringsAsFactors = F)
+overlap_fuma <- overlap_fuma[overlap_fuma$Category == "3_kegg_entrez_no_disease_pathways.txt", ]
+overlap_fuma <- overlap_fuma[overlap_fuma$adjP < 0.05, ]
+print(paste0("Significant gene sets for overlap (eeGenes, ABMS eeQTS, index): ", dim(overlap_fuma)[[1]][1]))
+
+overlap_fuma$log_adjP <- -log10(overlap_fuma$adjP)
+overlap_fuma$GeneSet <- factor(overlap_fuma$GeneSet, levels = overlap_fuma$GeneSet[order(overlap_fuma$log_adjP)])
+
+# Generate Barplot
+g <- ggplot(overlap_fuma, aes(y = log_adjP, x = GeneSet)) +
+    geom_bar(stat = "identity") +
+    coord_flip() +
+    theme_minimal() +
+    ylab(bquote("-log"["10"]*"(adjP)")) +
+    xlab("") +
+    ggtitle(paste0("KEGG gene sets of core set (N = ", length(overlap$`Gene Symbol`), ")")) +
+    scale_y_continuous(expand = c(0.02, 0.01)) +
+    theme(axis.ticks = element_line(colour = NA), text = element_text(size = 16), panel.background = element_rect(fill = NA), panel.grid.major.x = element_line(colour = "grey"), panel.grid.minor.x = element_line(colour = "grey"), strip.background = element_rect(fill = NA))
+ggsave(plot = g, file = paste0(out_path, "/2_barplot_overlap_eeGenes_ABMS_index_top_KEGG_pathways.pdf"), width = 11, height = 12)
+g
+dev.off()
+```
+
+## Heatplot of top pathway genes
+
+First, we need to get the genes of the top pathways.
+```{r}
+kegg_genes <- overlap_fuma[, c("GeneSet", "genes")]
+kegg_genes <- separate_rows(kegg_genes, genes, sep = ":")
+genes <- unique(kegg_genes[kegg_genes$GeneSet %in% c("ECM-receptor interaction", "Focal adhesion"), ]$genes)
+length(genes)
+```
+
+Then, we will generate the dataset, which we need to generate the heatplot. Therefore, we need three columns, with column 1 including the gene name and column 2 the ID or type the gene is found in, e.g. the pathway, eeGenes, etc.
+```{r}
+# We will start with the three pathways:
+plotting_data <- kegg_genes[kegg_genes$GeneSet %in% c("ECM-receptor interaction", "Focal adhesion"), ]
+plotting_data <- plotting_data[, c("genes", "GeneSet")]
+colnames(plotting_data) <- c("Gene", "Category")
+plotting_data$Category <- factor(plotting_data$Category, levels = c("ECM-receptor interaction", "Focal adhesion"))
+# Then, we add the eDEGenes
+eDEGenes_new <- as.data.frame(eDEGenes[eDEGenes$`Gene Symbol` %in% genes, "Gene Symbol"])
+colnames(eDEGenes_new) <- "Gene"
+eDEGenes_new$Category <- "eDEGenes"
+plotting_data <- rbind(plotting_data, eDEGenes_new)
+# Then, we add the tDEGenes => no hit
+tDEGenes_new <- as.data.frame(tDEGenes[tDEGenes$`Gene Symbol` %in% genes, "Gene Symbol"])
+# Then, we add the geGenes
+geGenes_new <- as.data.frame(eqtls_gene[eqtls_gene$`Gene Symbol` %in% genes, "Gene Symbol"])
+colnames(geGenes_new) <- "Gene"
+geGenes_new$Category <- "geGenes"
+plotting_data <- rbind(plotting_data, geGenes_new)
+# Then, we add the teGenes => no hit
+teGenes_new <- as.data.frame(unique(eqtls_transcript[eqtls_transcript$`Gene Symbol` %in% genes, "Gene Symbol"]))
+colnames(teGenes_new) <- "Gene"
+teGenes_new$Category <- "teGenes"
+plotting_data <- rbind(plotting_data, teGenes_new)
+# Then, we add the ADHD eeQTS genes => no hit
+adhd_new <- as.data.frame(adhd_symbols[adhd_symbols %in% genes])
+# Then, we add the BIP eeQTS genes => no hit
+bip_new <- as.data.frame(bip_symbols[bip_symbols %in% genes])
+# Then, we add the MDD eeQTS genes
+mdd_new <- as.data.frame(mdd_symbols[mdd_symbols %in% genes])
+colnames(mdd_new) <- "Gene"
+mdd_new$Category <- "MDD eeQTS"
+plotting_data <- rbind(plotting_data, mdd_new)
+# Then, we add the CDG eeQTS genes
+cdg_new <- as.data.frame(cdg_symbols[cdg_symbols %in% genes])
+colnames(cdg_new) <- "Gene"
+cdg_new$Category <- "MDD eeQTS"
+plotting_data <- rbind(plotting_data, cdg_new)
+# Then, we add the SCZ eeQTS genes
+scz_new <- as.data.frame(scz_symbols[scz_symbols %in% genes])
+colnames(scz_new) <- "Gene"
+scz_new$Category <- "SCZ eeQTS"
+plotting_data <- rbind(plotting_data, scz_new)
+# Then, we add the CMC gDEGenes/isoDEGene (same hit in both)
+cmc_gDEGenes_new <- as.data.frame(cmc_gDEGenes[cmc_gDEGenes %in% genes])
+colnames(cmc_gDEGenes_new) <- "Gene"
+cmc_gDEGenes_new$Category <- "CMC g/isoDEGene"
+plotting_data <- rbind(plotting_data, cmc_gDEGenes_new)
+# Then, we add the SCZ GWAS loci genes => no hit
+scz_gwas <- as.data.frame(scz_gwas[scz_gwas %in% genes])
+```
+
+Add VEP hits:
+```{r}
+# load VEP
+
+```
+
+
+
+Finally, we can generate the heatplot using ggplot:
+```{r}
+plotting_data$Category <- factor(plotting_data$Category, levels = names(table(plotting_data$Category)[order(table(plotting_data$Category), decreasing = T)]))
+plotting_data$Gene <- factor(plotting_data$Gene, levels = names(table(plotting_data$Gene)[order(table(plotting_data$Gene), decreasing = T)]))
+#plotting_data$Category <- factor(plotting_data$Category, levels = c("ECM-receptor interaction", "Focal adhesion", "ABC transporters", "Rare variants", "Joint eeQTS", "MDD eeQTS", "SCZ eeQTS", "eeGenes", "teGenes", "geGenes", "eDEGenes", "GWAS Catalog SCZ-related", "CMC g/isoDEGene"))
+g <- ggplot(plotting_data, aes_(~Gene, ~Category)) +
+  geom_tile(aes(width = 0.9, height = 0.9), color = "white") + 
+  xlab(NULL) + 
+  ylab(NULL) + 
+  theme_classic(base_size = 22) +
+  theme(axis.text.x = element_text(color = "black", angle = 60, hjust = 1), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) + 
+  scale_y_discrete(expand = c(0.05, 0)) +
+  scale_x_discrete(expand = c(0.02, 0)) 
+ggsave(plot = g, file = paste0(out_path, "/2_heatplot_overlap_eeGenes_ABMS_index_top_KEGG_pathway_genes.pdf"), width = 12, height = 5)
+g
+dev.off()
+```
+
+# Session Info
+
+```{r}
+sessionInfo()
+```

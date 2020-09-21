@@ -241,142 +241,6 @@ Then, we will check the number of found ABMS eQTS genes:
 | SCZ eQTS | `r length(scz)` |
 | ABMS eQTS | `r length(abms$V1)` |
 
-## Load rare variant genes
-
-We found out, that we have a huge overlap to rare variants that are gene damaging from schizophrenia index-patients. So, we need to load this dataset as well. 
-
-Therefore, we first need to load the list from Lisa and from Frederik and filter it for following criterias: 
-1. 5 or 2 or INS/DEL/INDEL
-2. CADD score > 20
-3. ExAC < 0.1% (ExAC < 0.001) or NA
-```{r}
-# 1. load Lisa's data
-lisa <- as.data.frame(read_excel(paste0(index_path, "/2020-08-13_alleVariantenLisa.xlsx"), sheet = "Tabelle1"))
-# filter for 1. 5 or 2
-lisa <- lisa[lisa$Anzahl...18 == 5 || lisa$Anzahl...21 == 2 || lisa$Anzahl...18 == "NA", ]
-# filter for 2. CADD > 20
-lisa <- lisa[lisa$CADD_07.10.2016 > 20, ]
-# filter for 3. ExAC < 0.1% (< 0.001)
-lisa <- lisa[lisa$`Frequenz Exac` <  0.001 || lisa$`Frequenz Exac` == "NA", ]
-# filter for Mutationstyp, Chromosom, Start, Stop, Gene Symbol, Ref and Alt
-lisa <- lisa[, c("Patienten-ID", "Mutationstyp", "Chromosom", "Start_neu", "Stop_neu", "Genname", "Ref_neu", "Allel_neu")]
-colnames(lisa) <- c("PatientID", "Type", "Chromosome", "Start", "End", "GeneSymbol", "Ref", "Alt")
-
-# 2. Load Fred's data
-fred <- as.data.frame(read_excel(paste0(index_path, "/2020-08-30_Frederick_Neukirch_Liste.xlsx"), sheet = "5 von 5 bzw. 2 von 2"))
-fred <- fred[!is.na(fred$Patient), ] # remove first row with NAs
-# filter for 1. 5 or 2
-fred <- fred[fred$Anzahl...16 == 5 || fred$Anzahl...19 == 2 || fred$Anzahl...16 == "NA", ]
-# filter for 2. CADD > 20
-fred <- fred[fred$`CADD_phred-Score` > 20, ]
-# filter for 3. ExAC < 0.1% (< 0.001)
-fred <- fred[is.numeric(fred$`Frequenz Exac`) <  0.001 || fred$`Frequenz Exac` == "NA", ]
-# filter for Mutationstyp, Chromosom, Start, Stop, Gene Symbol, Ref and Alt
-fred <- fred[, c("Patient", "Mutationstyp", "Chromosom", "Start", "Stop", "Genname", "Ref", "Allel")]
-colnames(fred) <- c("PatientID", "Type", "Chromosome", "Start", "End", "GeneSymbol", "Ref", "Alt")
-
-# 3. Merge Lisa's and Fred's dataset
-index <- rbind(lisa, fred)
-# remove duplicated rows
-index <- index[!duplicated(index), ]
-print(paste0("Index-patients (unique genes): ", length(unique(index$GeneSymbol))))  # 2,368
-# split multiple gene names
-index <- separate_rows(index, "GeneSymbol", sep = ";")
-rm(lisa, fred)
-```
-
-We need to update some gene symbols as they are old ones:
-```{r}
-# remove NA row
-index <- index[!(is.na(index$PatientID)), ]
-# load Ensembl gene ids?
-index[index$GeneSymbol == "39692", "GeneSymbol"] <- "SEPT8"  # excel reads SEPT8 as the date 8th September, so we need to change it back to gene symbol SEPT8
-index[index$GeneSymbol == "DNAH7 (§x)", "GeneSymbol"] <- "DNAH7" # DNAH7 (§x) <- remove the (§x) behind the gene symbol
-index[index$GeneSymbol == "MTBP (2x)", "GeneSymbol"] <- "MTBP" # MTBP (2x) <- remove the (2x) behind the gene symbol
-```
-
-Then, we map the gene symbols to Ensembl Gene IDs: 
-```{r, include = F, echo = F, eval = F}
-# load IntegraMent data (index-patients, families and trios)
-families <- fread("/storage/groups/ccm01/projects/KarolinaW_IntegraMent/Schizophrenia_Map/datasets/IntegraMent_families_DeNovoVariants_SCZ.csv", sep = ",")
-print(paste0("Families: ", length(unique(families$GeneSymbol))))  # 742
-
-# Load GENCODE .gtf file for gene symbol to Ensembl Gene ID mapping
-gencode <- import.gff("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/annotation_files/gencode.v19.annotation.gtf", format = "gtf")
-genes <- as.data.frame(gencode[gencode$type == "gene"])
-symbol_to_id <- genes[, c("gene_id", "gene_name")]
-symbol_to_id <- symbol_to_id[!duplicated(symbol_to_id), ]
-symbol_to_id$gene_id <- sapply(symbol_to_id$gene_id, function(x) strsplit(x, "\\.")[[1]][1])
-rm(gencode)
-
-# map 14 gene symbols to Ensembl Gene IDs
-index[index$GeneSymbol == "AC113191.1", "GeneSymbol"] <- "RP11-598P20.3"
-index[index$GeneSymbol == "AC226150.2", "GeneSymbol"] <- "ANHX"
-index[index$GeneSymbol == "GFY", "GeneSymbol"] <- "CTD-3148I10.1"
-index[index$GeneSymbol == "KIAA1797/FOCAD", "GeneSymbol"] <- "FOCAD"
-index[index$GeneSymbol == "RP11-123B3.6", "GeneSymbol"] <- "ERCC6-PGBD3"
-index[index$GeneSymbol == "RP11-240B13.2", "GeneSymbol"] <- "OC90"
-index[index$GeneSymbol == "RP11-332P22.1", "GeneSymbol"] <- "GMNC"
-index[index$GeneSymbol == "RP3-402G11.5", "GeneSymbol"] <- "SELO"
-
-# map Index patient data to Ensembl Gene IDs
-index <- merge(index, symbol_to_id, by.x = "GeneSymbol", by.y = "gene_name", all.x = T)
-library(limma)
-index[is.na(index$gene_id), "GeneSymbol"] <- unlist(lapply(index[is.na(index$gene_id), "GeneSymbol"], function(x) ifelse(length(alias2Symbol(x)) != 0, alias2Symbol(x), x)))
-index <- merge(index, symbol_to_id, by.x = "GeneSymbol", by.y = "gene_name", all.x = T)
-colnames(index) <- c(colnames(index)[1:length(index)-1], "gene_id")
-index[is.na(index$gene_id), "GeneSymbol"]
-index[index$GeneSymbol == "CFAP46", "gene_id"] <- "ENSG00000171811"
-index[index$GeneSymbol == "NPY4R2", "gene_id"] <- "ENSG00000264717"
-index[index$GeneSymbol == "TASOR", "gene_id"] <- "ENSG00000163946"
-index[index$GeneSymbol == "TEPSIN", "gene_id"] <- "ENSG00000167302"
-index$gene_id.x <- NULL
-index_genes <- index[, c("GeneSymbol", "gene_id")]
-colnames(index_genes) <- c("Gene Symbol", "Ensembl Gene ID")
-write.table(index_genes, file = paste0(index_path, "/Index_patients.txt"), sep = "\t", col.names = T, row.names = F, quote = F)
-```
-
-And we will plot the rare variants frequency:
-```{r}
-# get frequency for each gene ID
-index_new <- index[, c("PatientID", "gene_id")]
-index_new <- index_new[!duplicated(index_new), ] # remove genes duplicated in a patient
-index_freq <- get_duplicates(index_new$gene_id)
-
-# figure from lunch seminar!!!
-pdf(file = paste0(out_path, "/4_rare_variants_index-patients_mutation_counts.pdf"), width = 8, height = 6)
-barplot(table(index_freq$Freq), xlab = "Frequency", ylab = "# variants with this frequency", col = "black", cex.axis = 1.5, lwd = 2, cex.names = 1.5, cex.lab = 2, cex.main = 2)
-dev.off()
-```
-
-Now, we can load the dataset with Ensembl gene IDs.
-```{r, echo = F}
-# load IntegraMent data (index-patients, families and trios)
-index <- fread(paste0(index_path, "/Index_patients.txt"), header = T, data.table = F, stringsAsFactors = F)
-#index <- index[!duplicated(index), ]
-```
-Then, we will check the number of found index-patient genes:
-
-|      | hits |
-|------|------|
-| Index (Mutations) | `r length(index$"Ensembl Gene ID")` |
-| Index (Genes) | `r length(unique(index$"Ensembl Gene ID"))` |
-
-
-
-## Load DEGenes Cell Types
-
-```{r, echo = F}
-# Load DEGenes of CellTypes
-cell_types <- read.delim("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/diffExp_celltype.csv", sep = ",")
-# save all cell types into a list of lists
-cells <- c()
-for (ct in unique(cell_types$cell_type)) {
-   cells[[ct]] <- as.character(cell_types[cell_types$cell_type == ct, "names"])
-}
-print(table(cell_types$cell_type))
-```
-
 
 # Overlaps to other resources
 
@@ -391,24 +255,6 @@ eeGenes <- unique(as.vector(sapply(unlist(strsplit(eqtls_exon$`Ensembl Gene ID`,
 length(eeGenes)
 ```
 
-## Index-Patients
-
-Now, we can check all the overlaps to the index dataset:
-
-|      | Index |
-|------|------|
-| tDEGenes | `r length(intersect(tDEGenes$"Ensembl Gene ID", index$"Ensembl Gene ID"))` |
-| eDEGenes | `r length(intersect(eDEGenes$"Ensembl Gene ID", index$"Ensembl Gene ID"))` (`r round(length(intersect(eDEGenes$"Ensembl Gene ID", index$"Ensembl Gene ID")) / (length(eDEGenes$"Ensembl Gene ID") / 100), digits = 2)`%) |
-| geGenes | `r length(intersect(geGenes, index$"Ensembl Gene ID"))` (`r round(length(intersect(geGenes, index$"Ensembl Gene ID")) / (length(geGenes) / 100), digits = 2)`%) |
-| teGenes | `r length(intersect(teGenes, index$"Ensembl Gene ID"))` (`r round(length(intersect(teGenes, index$"Ensembl Gene ID")) / (length(teGenes) / 100), digits = 2)`%) |
-| eeGenes | `r length(intersect(eeGenes, index$"Ensembl Gene ID"))` (`r round(length(intersect(eeGenes, index$"Ensembl Gene ID")) / (length(eeGenes) / 100), digits = 2)`%) |
-| ADHD eQTS | `r length(intersect(adhd, index$"Ensembl Gene ID"))` (`r round(length(intersect(adhd, index$"Ensembl Gene ID")) / (length(adhd) / 100), digits = 2)`%) |
-| ASD eQTS | `r length(intersect(asd, index$"Ensembl Gene ID"))` (`r round(length(intersect(asd, index$"Ensembl Gene ID")) / (length(asd) / 100), digits = 2)`%) |
-| BIP eQTS | `r length(intersect(bip, index$"Ensembl Gene ID"))` (`r round(length(intersect(bip, index$"Ensembl Gene ID")) / (length(bip) / 100), digits = 2)`%) |
-| CDG eQTS | `r length(intersect(cdg, index$"Ensembl Gene ID"))` (`r round(length(intersect(cdg, index$"Ensembl Gene ID")) / (length(cdg) / 100), digits = 2)`%) |
-| MDD eQTS | `r length(intersect(mdd, index$"Ensembl Gene ID"))` (`r round(length(intersect(mdd, index$"Ensembl Gene ID")) / (length(mdd) / 100), digits = 2)`%) |
-| SCZ eQTS | `r length(intersect(scz, index$"Ensembl Gene ID"))` (`r round(length(intersect(scz, index$"Ensembl Gene ID")) / (length(scz) / 100), digits = 2)`%) |
-| ABMS eQTS | `r length(intersect(abms, index$"Ensembl Gene ID"))` (`r round(length(intersect(abms, index$"Ensembl Gene ID")) / (length(abms) / 100), digits = 2)`%) |
 
 ## CMC
 
@@ -695,56 +541,6 @@ draw.triple.venn(area1 = length(genes_cases_only), area2 = length(transcripts_ca
 dev.off()
 ```
 
-Then, we want to know the overlap between exon eQTL Genes (eeGenes), merged exon eQTS ABMS (ADHD + BIP + MDD + SCZ) genes and rare variant damaged genes from index-patients.
-```{r, echo = F}
-# overlap between exon eQTL genes, exon ABMS eQTS genes, eDEGenes and rare variant damaged genes from index patients
-abms <- unique(abms$V1)
-index2 <- unique(index$`Ensembl Gene ID`)
-eDEGenes2 <- unique(eDEGenes$`Ensembl Gene ID`)
-overlap <- intersect(eDEGenes2, intersect(eeGenes, intersect(abms, index2)))
-#overlap <- eDEGenes[eDEGenes$`Ensembl Gene ID` %in% overlap, c("Ensembl Gene ID", "Gene Symbol")]
-#write.table(overlap, file = "/home/icb/karolina.worf/Overlapping_genes_eDEGenes_eeGenes_ABMS_eQTS_index.txt", sep = "\t", col.names = T, row.names = F, quote = F)
-pdf(paste0(out_path, "/VENN_diagram_eeGenes_ABMS_index.pdf"))
-grid.newpage()
-overrideTriple=T
-test <- draw.triple.venn(area1 = length(eeGenes), area2 = length(abms),
-               area3 = length(index2), lty = "blank",  
-               n12 = length(intersect(eeGenes, abms)), 
-               n23 = length(intersect(abms, index2)), 
-               n13 = length(intersect(eeGenes, index2)),            
-               n123 = length(intersect(eeGenes, intersect(abms, index2))),
-               category = c(paste("eeGenes", length(eeGenes), sep = "\n"), 
-                            paste("ABMS eQTS", length(abms), sep = "\n"), 
-                            paste("Index", length(index2), sep = "\n")),
-               fill = viridis(3))
-grid.draw(test)
-dev.off()
-
-# generate datasets for Nathalie
-# 1. overlapping data
-overlap <- intersect(eeGenes, intersect(abms$`Ensembl Gene ID`, index2))
-length(overlap)  # 832
-overlap_new <- index[index$`Ensembl Gene ID` %in% overlap, ]
-overlap_new <- overlap_new[!duplicated(overlap_new), ]
-dim(overlap_new)  # 832
-write.table(overlap_new, file = "/home/icb/karolina.worf/1_overlapping_genes_eeGenes_ABMS_index.txt", sep = "\t", col.names = T, row.names = F, quote = F)
-# 2. index data
-length(index$`Gene Symbol`)
-index_new <- index[!duplicated(index), ]
-write.table(index_new, file = "/home/icb/karolina.worf/2_index_genes.txt", sep = "\t", col.names = T, row.names = F, quote = F)
-# 3. eeQTL genes
-exon_eGenes <- eqtls_exon[, c("Gene Symbol", "Ensembl Gene ID")]
-exon_eGenes <- exon_eGenes[!duplicated(exon_eGenes), ]  # remove duplicates
-exon_eGenes$`Ensembl Gene ID` <- unlist(lapply(exon_eGenes$`Ensembl Gene ID`, function(x) strsplit(x, "\\.")[[1]][1]))
-write.table(exon_eGenes, file = "/home/icb/karolina.worf/3_exon_eQTL_genes.txt", sep = "\t", col.names = T, row.names = F, quote = F)
-# 4. ABMS genes
-dim(abms)
-abms_new <- merge(abms, symbol_to_id, by.x = "V1", by.y = "gene_id")
-abms_new <- abms_new[, c("gene_name", "V1")]
-colnames(abms_new) <- c("Gene Symbol", "Ensembl Gene ID")
-dim(abms_new)
-write.table(abms_new, file = "/home/icb/karolina.worf/4_ABMS_eQTS_genes.txt", sep = "\t", col.names = T, row.names = F, quote = F)
-```
 
 ## Upset plots
 
@@ -900,37 +696,38 @@ dev.off()
 
 Box plots of rs34435097 and FEZ1 gene (ENSG00000149557.8; exon: ENSE00002189829.1, chr: 11) and using Gviz package to generate a plot including the chromosome, all transcripts and annotations for chromatin, vep, etc. (see DeepWAS plot): it is an eeSNP enrichment for stop gain, MDD3 & EA eQTS and it is a GTEX BA9 sQTL, but no eQTL! This SNP helps to argue for using only exon results.
 ```{r, include = F, eval = F, echo = F}
+library(Gviz)
 # get exons
 exons <- eqtls_exon[eqtls_exon$`Ensembl Exon ID` == "ENSE00002189829.1" & eqtls_exon$SNP == "rs34435097", ]
 
 # load necessary mapping and expression data
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_transcript_summaries_annotated.RData")
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_exon_summaries_annotated.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_transcript_summaries_annotated.RData")
+load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_exon_summaries_annotated.RData")
 huex <- fread("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/HuEx-1_0-st-v2/HuEx-1_0-st-v2.na36.hg19.probeset.csv", data.table = F, skip = 22)
 huex <- huex[huex$start != "---", ]  # remove ids with no start and stop information
-gene.code <- as.data.frame(import.gff("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/annotation_files/gencode.v19.annotation.gtf", format = "gtf"))
+gene_code <- as.data.frame(import.gff("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/annotation_files/gencode.v19.annotation.gtf", format = "gtf"))
 # get gene expression
-gene_id <- gene.code[gene.code$gene_name == "NCALD" & gene.code$type == "gene", "gene_id"]
+gene_id <- gene_code[gene_code$gene_name == "NCALD" & gene_code$type == "gene", "gene_id"]
 gene_exprs <- t(exprs(geneSummaries[featureNames(geneSummaries) %in% gene_id, ])) # get expression of gene
 # get transcript expression (only transcripts including the interesting exon)
-transcript.ids <- gene.code[gene.code$gene_name == "NCALD" & gene.code$type == "transcript" & gene.code$transcript_name %in% c("NCALD-201", "NCALD-011", "NCALD-013", "NCALD-008"), "transcript_id"] 
-transcript.exprs <- as.data.frame(204)
-for (i in transcript.ids) {
+transcript_ids <- gene_code[gene_code$gene_name == "NCALD" & gene_code$type == "transcript" & gene_code$transcript_name %in% c("NCALD-201", "NCALD-011", "NCALD-013", "NCALD-008"), "transcript_id"] 
+transcript_exprs <- as.data.frame(204)
+for (i in transcript_ids) {
   expr <- t(exprs(transcriptSummaries[grep(i, featureNames(transcriptSummaries)), ]))
-  transcript.exprs <- cbind(transcript.exprs, expr)
+  transcript_exprs <- cbind(transcript_exprs, expr)
 }
-transcript.exprs$`204` <- NULL
+transcript_exprs$`204` <- NULL
 # get exon expression (only interesting exon/s)
-exon.ids <- c("ENSE00001231633.1", "ENSE00002113070.1", "ENSE00002097865.1", "ENSE00002129643.1") # just take the interesting exon
-exon.exprs <- as.data.frame(204)
-for (i in exon.ids) {
-  expr <- t(exprs(exonSummaries[grep(i, featureNames(exonSummaries)), ]))
-  exon.exprs <- cbind(exon.exprs, expr)
+exon_ids <- c("ENSE00001231633.1", "ENSE00002113070.1", "ENSE00002097865.1", "ENSE00002129643.1") # just take the interesting exon
+exon_exprs <- as.data.frame(204)
+for (i in exon_ids) {
+  expr <- t(exprs(exonSummaries[grep(i, featureNames(exon_summaries)), ]))
+  exon_exprs <- cbind(exon_exprs, expr)
 }
-exon.exprs$`204` <- NULL
+exon_exprs$`204` <- NULL
 # merge all three data sets
-gt <- merge(gene_exprs, transcript.exprs, by = "row.names")
+gt <- merge(gene_exprs, transcript_exprs, by = "row.names")
 gte <- merge(gt, exon.exprs, by.x = "Row.names", by.y = "row.names")
 head(gte)
 save(gte, file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/NCALD_rs505460_gene_transcript_exon_expression.RData") 
@@ -940,15 +737,15 @@ system(paste0("/storage/groups/ccm01/tools/PLINK/plink --bfile /storage/groups/c
 snp <- read.delim("NCALD_SNPs.ped", head = T)
 pheno <- pData(geneSummaries)[, c("IID","Dx")]
 
-exp.p <- merge(gte, pheno, by.x = "Row.names", by.y = "row.names")
-exp.p.snp <- merge(exp.p, snp, by.x = "IID", by.y = "X1.1")
-save(exp.p.snp, file <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/NCALD_gene_transcript_exon_expression_snp.rda")
+exp_p <- merge(gte, pheno, by.x = "Row.names", by.y = "row.names")
+exp_p_snp <- merge(exp.p, snp, by.x = "IID", by.y = "X1.1")
+save(exp_p_snp, file <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/NCALD_gene_transcript_exon_expression_snp.rda")
 
 # Generate plot
-plot.data <- melt(exp.p.snp, id.vars = "A.A", measure.vars = c("ENSG00000104490.13", grep("ENS", colnames(exp.p.snp), value = T)))
-plot.data <- plot.data[plot.data$A.A != "0 0",]
+plot_data <- melt(exp_p_snp, id.vars = "A.A", measure.vars = c("ENSG00000104490.13", grep("ENS", colnames(exp_p_snp), value = T)))
+plot_data <- plot_data[plot_data$A.A != "0 0",]
 pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/03_boxplots_NCALD_rs505460_gene_transcript_exon_expression_snp.pdf")
-ggplot(na.omit(plot.data), aes(A.A, value)) +
+ggplot(na.omit(plot_data), aes(A.A, value)) +
   geom_boxplot() + facet_wrap(~variable, scales = "free") +
   theme(strip.text = element_text(size = 4.1), axis.text = element_text(size = 9), 
         axis.title.x = element_text(size = 16),
@@ -1247,7 +1044,7 @@ rm(results_path, clumping_path, tDEGenes, eDEGenes, eqtls_gene, eqtls_gene_cases
 
 First, we will load the gene set enrichment analysis datasets (as we only had results for teGenes and eeGenes, we will load only these datasets).
 ```{r, echo = F}
-hit_gene_sets <- list()  # get all unique gene set names of significantgene sets
+hit_gene_sets <- list()  # get all unique gene set names of significant gene sets
 # FUMA geGene results
 geGenes_fuma <- fread(paste0(fuma_path, "/7.2_gene_eQTLs/GS.txt"))
 geGenes_fuma <- geGenes_fuma[geGenes_fuma$Category == "4_kegg_entrez_no_disease_pathways.txt", ]

@@ -617,12 +617,12 @@ if(length(args) == 0){
                            or <- paste0(names(gwas_gw)[i], "_SNP_or")
                            gwas_selected <- gwas_gw[[i]]
                            background <- subsetByOverlaps(background_gr, gwas_selected)
-                           results[c(overlap, pval, or), "Gene"] <- AnnotatePublicData(eqtls_gene, gwas_selected, perm, background)
-                           results[c(overlap, pval, or), "Gene_cases"] <- AnnotatePublicData(eqtls_gene_cases, gwas_selected, perm, background)
-                           results[c(overlap, pval, or), "Transcript"] <- AnnotatePublicData(eqtls_transcript, gwas_selected, perm, background)
-                           results[c(overlap, pval, or), "Transcript_cases"] <- AnnotatePublicData(eqtls_transcript_cases, gwas_selected, perm, background)
-                           results[c(overlap, pval, or), "Exon"] <- AnnotatePublicData(eqtls_exon, gwas_selected, perm, background)
-                           results[c(overlap, pval, or), "Exon_cases"] <- AnnotatePublicData(eqtls_exon_cases, gwas_selected, perm, background)
+                           results[c(overlap, pval, or), "Gene"] <- AnnotatePublicData(eqtls_gene_gr, gwas_selected, perm, background)
+                           results[c(overlap, pval, or), "Gene_cases"] <- AnnotatePublicData(eqtls_gene_cases_gr, gwas_selected, perm, background)
+                           results[c(overlap, pval, or), "Transcript"] <- AnnotatePublicData(eqtls_transcript_gr, gwas_selected, perm, background)
+                           results[c(overlap, pval, or), "Transcript_cases"] <- AnnotatePublicData(eqtls_transcript_cases_gr, gwas_selected, perm, background)
+                           results[c(overlap, pval, or), "Exon"] <- AnnotatePublicData(eqtls_exon_gr, gwas_selected, perm, background)
+                           results[c(overlap, pval, or), "Exon_cases"] <- AnnotatePublicData(eqtls_exon_cases_gr, gwas_selected, perm, background)
                            write.table(results, file = paste0(gwas_outpath, "/pmb_cis-eQTL_annotation_results_10000_permutations_", names(gwas_gw)[i],"_p5e-8.tsv"), col.names = NA, quote = F, dec = ".", sep = "\t")
                            results
                          }
@@ -646,12 +646,12 @@ if(length(args) == 0){
                            or <- paste0(names(gwas)[i], "_SNP_or")
                            gwas_selected <- gwas[[i]]
                            background <- subsetByOverlaps(background_gr, gwas_selected)
-                           results[c(overlap, pval, or), "Gene"] <- AnnotatePublicData(eqtls_gene, gwas_selected, perm, background)
-                           results[c(overlap, pval, or), "Gene_cases"] <- AnnotatePublicData(eqtls_gene_cases, gwas_selected, perm, background)
-                           results[c(overlap, pval, or), "Transcript"] <- AnnotatePublicData(eqtls_transcript, gwas_selected, perm, background)
-                           results[c(overlap, pval, or), "Transcript_cases"] <- AnnotatePublicData(eqtls_transcript_cases, gwas_selected, perm, background)
-                           results[c(overlap, pval, or), "Exon"] <- AnnotatePublicData(eqtls_exon, gwas_selected, perm, background)
-                           results[c(overlap, pval, or), "Exon_cases"] <- AnnotatePublicData(eqtls_exon_cases, gwas_selected, perm, background)
+                           results[c(overlap, pval, or), "Gene"] <- AnnotatePublicData(eqtls_gene_gr, gwas_selected, perm, background)
+                           results[c(overlap, pval, or), "Gene_cases"] <- AnnotatePublicData(eqtls_gene_cases_gr, gwas_selected, perm, background)
+                           results[c(overlap, pval, or), "Transcript"] <- AnnotatePublicData(eqtls_transcript_gr, gwas_selected, perm, background)
+                           results[c(overlap, pval, or), "Transcript_cases"] <- AnnotatePublicData(eqtls_transcript_cases_gr, gwas_selected, perm, background)
+                           results[c(overlap, pval, or), "Exon"] <- AnnotatePublicData(eqtls_exon_gr, gwas_selected, perm, background)
+                           results[c(overlap, pval, or), "Exon_cases"] <- AnnotatePublicData(eqtls_exon_cases_gr, gwas_selected, perm, background)
                            write.table(results, file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/07_annotations/GWAS_CMC_GTEx/pmb_cis-eQTL_annotation_results_10000_permutations_", names(gwas)[i],"_p0.05.tsv"), col.names = NA, quote = F, dec = ".", sep = "\t")
                            results
                          }
