@@ -249,6 +249,14 @@ output_sumstats="${outpath_sumstats}/SCZ2-2014.sumstats"
 # Remove comment lines and change all SNP IDs in the GWAS summary statistic file to following example format: chr:pos, e.g. chr10:10001753 & leave first line untouched
 awk 'NR==1 {$1=$1}; NR>1 {$2=$1":"$5} 1' OFS="\t" ${sumstats} > ${output_sumstats}
 
+#################
+### SCZ3-2020 ### 
+#################
+sumstats="${sum_stats_path}/SCZ3-2020/PGC3_SCZ_wave3_public_without_frequencies.v1.tsv"
+output_sumstats="${outpath_sumstats}/SCZ3-2020.sumstats"
+# Change all SNP IDs in the GWAS summary statistic file to following example format: chr:pos, e.g. chr10:10001753 & leave first line untouched
+awk 'NR==1 {$1=$1}; NR>1 {$2="chr"$1":"$3} 1' OFS="\t" ${sumstats} > ${output_sumstats}
+
 ################
 ### T2D-2017 ###
 ################

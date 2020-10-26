@@ -73,6 +73,8 @@ Before we can start, we need to make sure that all necessary paths and folder na
 results_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/04_result_tables"
 # path to the clumped eQTL result tables
 clumping_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/05_clumping/03_result_tables"
+# path to SNP rdata GRanges files
+rdata_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/06_RData_files"
 # path to differentially expression analysis (DEA) hits
 dea_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_DEA_results"
 # path to expression data
@@ -85,9 +87,8 @@ gtex_path <- "/storage/groups/ccm01/datasets/2019_GTEx_v8"
 fuma_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/07_FUMA"
 # path to eQTS genes of ABMS
 eqts_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/04_FUMA/4.1_input_files/"
-# path to rare variants of index patients (from Bonn)
-#index_path <- "/storage/groups/ccm01/projects/KarolinaW_IntegraMent/"
-index_path <- "/storage/groups/ccm01/datasets/2018_IntegraMent_Mental_Disorders/Schizophrenia/Index-Patients"
+# path to SNP-annotation data
+anno_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/08_SNP-based_annotation"
 # path to store the output into
 out_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/09_figures"
 # generate ouput path if not existing already
@@ -98,8 +99,9 @@ system(paste0("mkdir -p ", out_path))
 # Functions
 
 To reduce code, we will generate some functions here. 
-```{r}
+```{r, echo = F}
 # function, to get all genes, that can be found two or more times in a data sets
+# @param genes    list of genes
 get_duplicates <- function(genes) {
   genes_freq <- as.data.frame(table(genes))
   names(genes_freq) <- c("Gene", "Freq")
@@ -410,7 +412,7 @@ rm(eqtls_all)
 ```{r}
 edegenes_all <- unique(eDEGenes$`Ensembl Gene ID`)
 eegenes_all <- unique(unlist(lapply(eqtls_exon$`Ensembl Gene ID`, function(x) strsplit(x, "\\.")[[1]][1])))
-pdf(paste0(out_path, "/1_VENN_diagram_eeGenes_vs_eDEGenes.pdf"))
+pdf(paste0(out_path, "/2_VENN_diagram_eeGenes_vs_eDEGenes.pdf"))
 grid.newpage()
 draw.pairwise.venn(area1 = length(edegenes_all), 
                    area2 = length(eegenes_all), scaled = T, lty = "blank",
@@ -429,15 +431,16 @@ First we will generate the VENN diagram for the cases and control datasets.
 genes_all <- unique(eqtls_gene$SNP)
 transcripts_all <- unique(eqtls_transcript$SNP)
 exons_all <- unique(eqtls_exon$SNP)
-pdf(paste0(out_path, "/1_VENN_diagram_eSNPs_cases_vs_controls.pdf"))
+pdf(paste0(out_path, "/2_VENN_diagram_eSNPs_cases_vs_controls.pdf"))
 grid.newpage()
 overrideTriple = T
 draw.triple.venn(area1 = length(genes_all), area2 = length(transcripts_all), 
-                 area3 = length(exons_all), euler.d = F, scaled = F, lty = "blank",  
+                 area3 = length(exons_all),  
                  n12 = length(intersect(genes_all, transcripts_all)), 
                  n23 = length(intersect(transcripts_all, exons_all)), 
                  n13 = length(intersect(genes_all, exons_all)), 
                  n123 = length(intersect(genes_all, intersect(transcripts_all, exons_all))),
+                 reverse = FALSE, euler.d = F, scaled = F, lty = "blank",
                  category = c(paste("geSNPs", length(genes_all), sep = "\n"), 
                               paste("teSNPs", length(transcripts_all), sep = "\n"), 
                               paste("eeSNPs", length(exons_all), sep = "\n")),
@@ -452,7 +455,7 @@ Now, we generate the VENN diagram for the case only dataset.
 genes_cases_only <- eqtls_gene_cases$SNP
 transcripts_cases_only <- eqtls_transcript_cases$SNP
 exons_cases_only <- eqtls_exon_cases$SNP
-pdf(paste0(out_path, "/1_VENN_diagram_eSNPs_cases_only.pdf"))
+pdf(paste0(out_path, "/2_VENN_diagram_eSNPs_cases_only.pdf"))
 grid.newpage()
 overrideTriple <- T
 draw.triple.venn(area1 = length(genes_cases_only), area2 = length(transcripts_cases_only), 
@@ -475,7 +478,7 @@ And again for cases & control dataset but with clumped SNPs.
 genes_clumped <- eqtls_gene_clumped$SNP
 transcripts_clumped <- eqtls_transcript_clumped$SNP
 exons_clumped <- eqtls_exon_clumped$SNP
-pdf(paste0(out_path, "/1_VENN_diagram_eSNPs_cases_vs_controls_clumped.pdf"))
+pdf(paste0(out_path, "/2_VENN_diagram_eSNPs_cases_vs_controls_clumped.pdf"))
 grid.newpage()
 overrideTriple <- T
 draw.triple.venn(area1 = length(genes_clumped), area2 = length(transcripts_clumped), 
@@ -500,7 +503,7 @@ First, generate the VENN for the cases and controls (all) dataset.
 genes_all <- unique(eqtls_gene$`Ensembl Gene ID`)
 transcripts_all <- unique(eqtls_transcript$`Ensembl Gene ID`)
 exons_all <- unique(eqtls_exon$`Ensembl Gene ID`)
-pdf(paste0(out_path, "/1_VENN_diagram_eGenes_cases_vs_controls.pdf"))
+pdf(paste0(out_path, "/2_VENN_diagram_eGenes_cases_vs_controls.pdf"))
 grid.newpage()
 overrideTriple <- T
 draw.triple.venn(area1 = length(genes_all), area2 = length(transcripts_all), 
@@ -523,7 +526,7 @@ Now, we generate the VENN diagram for the case only dataset.
 genes_cases_only = eqtls_gene_cases$Gene_symbol
 transcripts_cases_only = eqtls_transcript_cases$Gene_symbol
 exons_cases_only = eqtls_exon_cases$Gene_symbol
-pdf(paste0(out_path, "/1_VENN_diagram_eGenes_cases_only.pdf"))
+pdf(paste0(out_path, "/2_VENN_diagram_eGenes_cases_only.pdf"))
 grid.newpage()
 overrideTriple <- T
 draw.triple.venn(area1 = length(genes_cases_only), area2 = length(transcripts_cases_only), 
@@ -547,9 +550,9 @@ dev.off()
 ### SNP level
 
 Upset plots (like VENN) to compare the datasets with each other:
-```{r, include = F, eval = F, echo = F}
+```{r, echo = F}
 eqtl_snps <- list(geSNPs = eqtls_gene$SNP, geSNPs_cases = eqtls_gene_cases$SNP, teSNPs = eqtls_transcript$SNP, teSNPs_cases = eqtls_transcript_cases$SNP, eeSNPs = eqtls_exon$SNP, eeSNPs_cases = eqtls_exon_cases$SNP)
-pdf(paste0(out_path, "/1_Upset_plot_cis_eqtl_snps.pdf"), width = 20, height = 7, onefile = F)
+pdf(paste0(out_path, "/2_Upset_plot_cis_eqtl_snps.pdf"), width = 20, height = 7, onefile = F)
 upset(fromList(eqtl_snps), 
       sets = c("eeSNPs", "teSNPs", "geSNPs", "eeSNPs_cases", "teSNPs_cases", "geSNPs_cases"),
       nsets = 6, 
@@ -563,9 +566,9 @@ dev.off()
 
 ### Gene level
 
-```{r, include = F, eval = F, echo = F}
+```{r, echo = F}
 eqtls_genes <- list(geGenes = eqtls_gene$`Ensembl Gene ID`, teGenes = eqtls_transcript$`Ensembl Gene ID`, eeGenes = eqtls_exon$`Ensembl Gene ID`, tDEGenes = tDEGenes, eDEGenes = eDEGenes)
-pdf(paste0(out_path, "/1_Upset_plot_cis_eqtl_genes_with_DE_hits.pdf"), width = 20, height = 7, onefile = F)
+pdf(paste0(out_path, "/2_Upset_plot_cis_eqtl_genes_with_DE_hits.pdf"), width = 20, height = 7, onefile = F)
 upset(fromList(eqtls_genes), 
       sets = c("eDEGenes", "tDEGenes", "eeGenes", "teGenes", "geGenes"), 
       nsets = 5, 
@@ -587,7 +590,7 @@ eqtls_gene_manhattan <- separate(eqtls_gene_manhattan, "SNP Location", c("Chr", 
 eqtls_gene_manhattan$Chr <- as.numeric(eqtls_gene_manhattan$Chr)
 eqtls_gene_manhattan$BP <- as.numeric(eqtls_gene_manhattan$BP)
 # generate manhattan plot
-pdf(paste0(out_path, "/2_manhattan_plot_gene_eSNPs_FDR_0.05.pdf"), width = 21, height = 7)
+pdf(paste0(out_path, "/3_manhattan_plot_gene_eSNPs_FDR_0.05.pdf"), width = 21, height = 7)
 manhattan(eqtls_gene_manhattan, chr = "Chr", bp = "BP", snp = "SNP", p = "P-value", suggestiveline = F, genomewideline = F, ylim = c(3, 30), col = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), "gray"))
 dev.off()
 manhattan(eqtls_gene_manhattan, chr = "Chr", bp = "BP", snp = "SNP", p = "P-value", suggestiveline = F, genomewideline = F, ylim = c(3, 30), col = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), "gray"))
@@ -602,7 +605,7 @@ eqtls_transcript_manhattan <- separate(eqtls_transcript_manhattan, "SNP Location
 eqtls_transcript_manhattan$Chr <- as.numeric(eqtls_transcript_manhattan$Chr)
 eqtls_transcript_manhattan$BP <- as.numeric(eqtls_transcript_manhattan$BP)
 # generate manhattan plot
-pdf(paste0(out_path, "/2_manhattan_plot_transcript_eSNPs_FDR_0.05.pdf"), width = 21, height = 7)
+pdf(paste0(out_path, "/3_manhattan_plot_transcript_eSNPs_FDR_0.05.pdf"), width = 21, height = 7)
 manhattan(eqtls_transcript_manhattan, chr = "Chr", bp = "BP", snp = "SNP", p = "P-value", suggestiveline = F, genomewideline = F, ylim = c(2, 50), col = c(rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), "gray"))
 dev.off()
 manhattan(eqtls_transcript_manhattan, chr = "Chr", bp = "BP", snp = "SNP", p = "P-value", suggestiveline = F, genomewideline = F, ylim = c(2, 50), col = c(rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), "gray"))
@@ -617,7 +620,7 @@ eqtls_exon_manhattan <- separate(eqtls_exon_manhattan, "SNP Location", c("Chr", 
 eqtls_exon_manhattan$Chr <- as.numeric(eqtls_exon_manhattan$Chr)
 eqtls_exon_manhattan$BP <- as.numeric(eqtls_exon_manhattan$BP)
 # generate manhattan plot
-pdf(paste0(out_path, "/2_manhattan_plot_exon_eSNPs_FDR_0.05.pdf"), width = 21, height = 7)
+pdf(paste0(out_path, "/3_manhattan_plot_exon_eSNPs_FDR_0.05.pdf"), width = 21, height = 7)
 manhattan(eqtls_exon_manhattan, chr = "Chr", bp = "BP", snp = "SNP", p = "P-value", suggestiveline = F, genomewideline = F, ylim = c(2, 55), col = c(rgb(red = 158, green = 212, blue = 0, maxColorValue = 255), "gray"))
 dev.off()
 manhattan(eqtls_exon_manhattan, chr = "Chr", bp = "BP", snp = "SNP", p = "P-value", suggestiveline = F, genomewideline = F, ylim = c(2, 55), col = c(rgb(red = 158, green = 212, blue = 0, maxColorValue = 255), "gray"))
@@ -627,7 +630,7 @@ rm(eqtls_exon_manhattan)
 ## Combined boxplots of top exon eQTL
 
 Generate boxplot of gene, transcript and exon expression for one eQTL (SNP-gene pair). Top exon hit without a gene hit is SNP rs505460 with exon ENSE00001231633.1 of gene NCALD:
-```{r, include = F, eval = F, echo = F}
+```{r, echo = F}
 # unoverlapping genes
 no_overlap <- setdiff(eqtls_exon$`Gene Symbol`, eqtls_gene$`Gene Symbol`)
 length(no_overlap) # 5,646
@@ -684,14 +687,42 @@ save(exp_p_snp, file = paste0(out_path, "/NCALD_gene_transcript_exon_expression_
 # Generate plot
 plot_data <- melt(exp_p_snp, snp = "A.A", measure.vars = c("ENSG00000104490.13", grep("ENS", colnames(exp_p_snp), value = T)))
 plot_data <- plot_data[plot_data$A.A != "0 0",]
-pdf(paste0(out_path, "/03_boxplots_NCALD_rs505460_gene_transcript_exon.pdf"))
+plot_data$variable <- as.character(plot_data$variable)
+# rename variables
+plot_data[plot_data$variable == "ENSG00000104490.13", "variable"] <- "NCALD"
+plot_data[plot_data$variable == "ENST00000311028.3", "variable"] <- "NCALD-201"
+plot_data[plot_data$variable == "ENST00000521964.1|ENST00000524209.1|ENST00000518166.1|ENST00000517822.1|ENST00000523923.1", "variable"] <- "NCALD-010"
+plot_data[plot_data$variable == "ENST00000518727.1|ENST00000520425.1|ENST00000518661.1", "variable"] <- "NCALD-013"
+plot_data[plot_data$variable == "ENST00000517531.1|ENST00000522206.1|ENST00000522078.1|ENST00000518952.1", "variable"] <- "NCALD-025"
+plot_data[plot_data$variable == "ENSE00001231633.1", "variable"] <- "ENSE00001231633"
+plot_data[plot_data$variable == "ENSE00002113070.1", "variable"] <- "ENSE00002113070"
+plot_data[plot_data$variable == "ENSE00002097865.1", "variable"] <- "ENSE00002097865"
+plot_data[plot_data$variable == "ENSE00002129643.1", "variable"] <- "ENSE00002129643"
+plot_data$variable <- as.factor(plot_data$variable)
+plot_data$variable <- factor(plot_data$variable, levels = c("NCALD", "NCALD-201", "NCALD-010", "NCALD-013", "NCALD-025", "ENSE00001231633", "ENSE00002097865", "ENSE00002113070", "ENSE00002129643"))
+# plot figure
+pdf(paste0(out_path, "/4_boxplots_NCALD_rs505460_gene_transcript_exon.pdf"))
 ggplot(na.omit(plot_data), aes(A.A, value)) +
   geom_boxplot() + facet_wrap(~variable, scales = "free") +
-  theme(strip.text = element_text(size = 4.1), axis.text = element_text(size = 9), 
-        axis.title.x = element_text(size = 16),
-        axis.title.y = element_text(size = 16)) +
+  theme_minimal() +
+  theme(strip.text = element_text(size = 12), axis.text = element_text(size = 9), 
+        axis.title.x = element_text(size = 16), axis.title.y = element_text(size = 16), 
+        plot.title = element_text(hjust = 0.5, size = 20), strip.background = element_rect(
+     color = "black", fill = viridis(3, option = "D", begin = 0.15, end = 0.9)[2], size = 1.5, linetype = "solid"
+     ), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+     panel.border = element_rect(fill = NA, color = "black")) +
   xlab("rs505460") + ylab("expression") + ggtitle("NCALD - rs505460")
 dev.off()
+ggplot(na.omit(plot_data), aes(A.A, value)) +
+  geom_boxplot() + facet_wrap(~variable, scales = "free") +
+  theme_minimal() +
+  theme(strip.text = element_text(size = 12), axis.text = element_text(size = 9), 
+        axis.title.x = element_text(size = 16), axis.title.y = element_text(size = 16), 
+        plot.title = element_text(hjust = 0.5, size = 20), strip.background = element_rect(
+     color = "black", fill = viridis(3, option = "D", begin = 0.15, end = 0.9)[2], size = 1.5, linetype = "solid"
+     ), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+     panel.border = element_rect(fill = NA, color = "black")) +
+  xlab("rs505460") + ylab("expression") + ggtitle("NCALD - rs505460")
 ```
 
 Box plots of rs34435097 and FEZ1 gene (ENSG00000149557.8; exon: ENSE00002189829.1, chr: 11) and using Gviz package to generate a plot including the chromosome, all transcripts and annotations for chromatin, vep, etc. (see DeepWAS plot): it is an eeSNP enrichment for stop gain, MDD3 & EA eQTS and it is a GTEX BA9 sQTL, but no eQTL! This SNP helps to argue for using only exon results.
@@ -744,7 +775,7 @@ save(exp_p_snp, file <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_br
 # Generate plot
 plot_data <- melt(exp_p_snp, id.vars = "A.A", measure.vars = c("ENSG00000104490.13", grep("ENS", colnames(exp_p_snp), value = T)))
 plot_data <- plot_data[plot_data$A.A != "0 0",]
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/03_boxplots_NCALD_rs505460_gene_transcript_exon_expression_snp.pdf")
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/5_boxplots_NCALD_rs505460_gene_transcript_exon_expression_snp.pdf")
 ggplot(na.omit(plot_data), aes(A.A, value)) +
   geom_boxplot() + facet_wrap(~variable, scales = "free") +
   theme(strip.text = element_text(size = 4.1), axis.text = element_text(size = 9), 
@@ -848,28 +879,28 @@ dist.exon.cases <- unlist(lapply(1:length(eqtls_exon_cases$SNP), function(x) if(
 
 # 3. generate distance plot
 ### GENE
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/04_distance_plot_gene_eqtls.pdf", height = 5)
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/6_distance_plot_gene_eqtls.pdf", height = 5)
 plot(density(dist.gene[dist.gene != 0 & dist.gene > -1000000 & dist.gene < 1000000]), xlab = "Distance of gene eQTL-variant to TSS and TES", ylab = "Density", main = "", col = viridis(3)[1], ylim = c(0, 8e-06))
 lines(density(dist.gene.cases[dist.gene.cases != 0 & dist.gene.cases > -1000000 & dist.gene.cases < 1000000]), col = viridis(3)[2])
 legend("topright", legend = c("genes all", "genes cases only"), fill = c(viridis(3)[1],viridis(3)[2]))
 dev.off()
 
 ### Transcript
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/04_distance_plot_transcript_eqtls.pdf", height = 5)
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/6_distance_plot_transcript_eqtls.pdf", height = 5)
 plot(density(dist.transcript[dist.transcript != 0 & dist.transcript > -1000000 & dist.transcript < 1000000]), xlab = "Distance of transcript eQTL-variant to TSS and TES", ylab = "Density", main = "", col = viridis(3)[1], ylim = c(0, 6e-06))
 lines(density(dist.transcript.cases[dist.transcript.cases != 0 & dist.transcript.cases > -1000000 & dist.transcript.cases < 1000000]), col = viridis(3)[2])
 legend("topright", legend = c("transcripts all", "transcripts cases only"), fill = c(viridis(3)[1],viridis(3)[2]))
 dev.off()
 
 ### Exon
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/04_distance_plot_exon_eqtls.pdf", height = 5)
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/6_distance_plot_exon_eqtls.pdf", height = 5)
 plot(density(dist.exon[dist.exon != 0 & dist.exon > -1000000 & dist.exon < 1000000]), xlab = "Distance of exon eQTL-variant to ESS and EES", ylab = "Density", main = "", col = viridis(3)[1], ylim = c(0, 7e-06))
 lines(density(dist.exon.cases[dist.exon.cases != 0]), col = viridis(3)[2])
 legend("topright", legend = c("exons all", "exons cases only"), fill = c(viridis(3)[1], virids(3)[2]))
 dev.off()
 
 # all combined
-pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/04_distance_plot_gene_transcript_exon_eqtls.pdf", height = 5)
+pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/6_distance_plot_gene_transcript_exon_eqtls.pdf", height = 5)
 plot(density(dist.gene[dist.gene != 0 & dist.gene > -1000000 & dist.gene < 1000000]), xlab = "Distance to TSS/ESS and TES/EES", ylab = "Density", main = "", col = viridis(6)[1], ylim = c(0, 8e-06))
 lines(density(dist.gene.cases[dist.gene.cases != 0 & dist.gene.cases > -1000000 & dist.gene.cases < 1000000]), col = viridis(6)[2])
 lines(density(dist.transcript[dist.transcript != 0 & dist.transcript > -1000000 & dist.transcript < 1000000]), col = viridis(6)[3])
@@ -890,151 +921,199 @@ dev.off()
 | median distance          | `r median(dist.scz)` | `r median(dist.ctl)` | `r median(dist.all)` |
 ```
 
-
-```{r, include = F, eval = F, echo = F}
-eqtls_exon <- read.table("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results/pmb_cis-eQTL_exon_hits_cases_vs_controls.txt", header = TRUE)
-eqtls_exon <- eqtls_exon[eqtls_exon$Gene_symbol == "NCALD", ]
-head(eqtls_exon)
-snps <- GRanges(seqnames = eqtls_exon$SNP_location)
-genes <- GRanges(seqnames = eqtls_exon$Gene_location)
-
-```
-
-------
- TODO
-------
-
-## Boxplot of top eQTL with gene expression
-
-Best hit is an eQTL with SNP ID rs151095999 and gene symbol ADGRG7. Now, we will plot the gene expression of this gene in the different alleles. 
-
-```{r, include = F, eval = F, echo = F}
-#plot the top 2
-system(paste0("/storage/groups/ccm01/tools/PLINK/plink --bfile /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/preprocessed_genotypes/1.2_merged_chr/pmb_info06_all_chr_maf0.05_merged_noDup_final --snps rs1133328 --recodeA --tab --out /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/eqtl-gex"))
-snp <- read.delim("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/eqtl-gex.raw",head=T)
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEX/RData_Files/4_affymetrix_exon_microarray_data_after_rma_core_gene_summaries_annotated_combat_batch_corrected.RData")
-
-snp <- snp[, c("IID", "rs1133328_T")]
-exp <- as.data.frame(cbind(t(exprs(geneSummaries[fData(geneSummaries)[fData(geneSummaries)$SYMBOL == "EFHB", "PROBEID"], ])), geneSummaries@phenoData@data$Dx, as.character(geneSummaries@phenoData@data$IID)))
-colnames(exp) <- c("EFHB", "Dx", "IID")
-eqtl <- merge(snp, exp, by = "IID")
-# remove NA's
-eqtl <- eqtl[complete.cases(eqtl), ]
-dex0 <- eqtl[eqtl$Dx == 1, ]
-dex1 <- eqtl[eqtl$Dx == 2 | eqtl$Dx == 3 | eqtl$Dx == 4, ]
-
-a <- cbind(as.numeric(as.character(dex0$EFHB)), as.character(dex0$rs1133328_T), rep("Controls",16))
-b <- cbind(as.numeric(as.character(dex1$EFHB)), as.character(dex1$rs1133328_T), rep("Cases",143))
-colnames(a) <- c("EFHB", "rs1133328", "dx")
-colnames(b) <- c("EFHB", "rs1133328", "dx")
-c <- as.data.frame(rbind(a,b))
-c$EFHB <- as.numeric(as.character(c$EFHB))
-
-pdf("ILMN_1805449_fe.pdf")
-ggplot(na.omit(c), aes(rs1133328, EFHB, fill = factor(dx))) +
-  geom_boxplot() + facet_wrap(~ dx) + theme_classic()
-dev.off()
-```
-
 ## Scatterplots
 
 ### eQTLs vs. own GWAS
 
-```{r, include = F, eval = F, echo = F}
-
-# Load eQTLs
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/results_old/01_pmb_SCZ_CTL_matrixEQTL.RData")
-me_all_gene <- me.all
-eqtls_gene <- me_all_gene$cis$eqtls[me_all_gene$cis$eqtls$FDR < 0.05, c("snps", "pvalue")] # filter for significant eQTLs
-rm(me.all, me_all_gene)
-# Load GWAS
-gwas_results <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/01.GWAS/GWAS_results/pmb_info06_all_chr_maf0.01_merged_GEX_filtered_GWAS.assoc.logistic", header = T, stringsAsFactors = F, data.table = F, select =  c("SNP", "P"))
+Gene eQTLs vs. own GWAS:
+```{r, echo = F}
+# Load GWAS results
+gwas_results <- fread("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/01.GWAS/02_GWAS_results/pmb_info06_all_chr_maf0.01_merged_samples_filtered_GWAS_with_covar.assoc.logistic", header = T, stringsAsFactors = F, data.table = F, select =  c("SNP", "P"))
 gwas_results <- gwas_results[!is.na(gwas_results$P), ]  # remove NA values
-gwas_eqtl_snps <- merge(eqtls_gene, gwas_results, by.x = "snps", by.y = "SNP") # merge the two datasets (not overlapping SNPs will be removed from the dataset)
-gwas_eqtl_snps$log_pvalue <- -log10(gwas_eqtl_snps$pvalue)
+gesnps <- eqtls_gene[, c("SNP", "P-value")]
+gwas_eqtl_snps <- merge(gesnps, gwas_results, by = "SNP") # merge the two datasets (not overlapping SNPs will be removed from the dataset)
+gwas_eqtl_snps$log_Pvalue <- -log10(gwas_eqtl_snps$`P-value`)
 gwas_eqtl_snps$log_P <- -log10(gwas_eqtl_snps$P)
-ggplot(gwas_eqtl_snps, aes(x = log_pvalue, y = log_P)) + 
+ggplot(gwas_eqtl_snps, aes(x = log_Pvalue, y = log_P)) + 
   geom_point(alpha = 0.3) +
-  ylab("-log10(P) of GWAS") +
-  xlab("-log10(P) of eQTLs")
+  ylab("-log10(P) of GWAS SNPs") +
+  xlab("-log10(P) of gene eQTL SNPs")
+ggsave(file = paste0(out_path, "/7_scatterplot_geSNPs_own_GWAS.pdf"), width = 10, height = 6)
 ```
 
-### eqTLs vs. SCZ GWAS
+Transcript eQTLs vs. own GWAS:
+```{r, echo = F}
+tesnps <- eqtls_transcript[, c("SNP", "P-value")]
+gwas_eqtl_snps <- merge(tesnps, gwas_results, by = "SNP") # merge the two datasets (not overlapping SNPs will be removed from the dataset)
+gwas_eqtl_snps$log_Pvalue <- -log10(gwas_eqtl_snps$`P-value`)
+gwas_eqtl_snps$log_P <- -log10(gwas_eqtl_snps$P)
+ggplot(gwas_eqtl_snps, aes(x = log_Pvalue, y = log_P)) + 
+  geom_point(alpha = 0.3) +
+  ylab("-log10(P) of GWAS SNPs") +
+  xlab("-log10(P) of transcript eQTL SNPs")
+ggsave(file = paste0(out_path, "/7_scatterplot_teSNPs_own_GWAS.pdf"), width = 10, height = 6)
+```
 
-```{r, include = F, eval = F, echo = F}
+Exon eQTLs vs. own GWAS:
+```{r, echo = F}
+eesnps <- eqtls_exon[, c("SNP", "P-value")]
+gwas_eqtl_snps <- merge(eesnps, gwas_results, by = "SNP") # merge the two datasets (not overlapping SNPs will be removed from the dataset)
+gwas_eqtl_snps$log_Pvalue <- -log10(gwas_eqtl_snps$`P-value`)
+gwas_eqtl_snps$log_P <- -log10(gwas_eqtl_snps$P)
+ggplot(gwas_eqtl_snps, aes(x = log_Pvalue, y = log_P)) + 
+  geom_point(alpha = 0.3) +
+  ylab("-log10(P) of GWAS SNPs") +
+  xlab("-log10(P) of exon eQTL SNPs")
+ggsave(file = paste0(out_path, "/7_scatterplot_eeSNPs_own_GWAS.pdf"), width = 10, height = 6)
+```
+
+### eQTLs vs. SCZ GWAS
+
+Gene eQTL SNPs vs. SCZ GWAS:
+```{r, echo = F}
 # Load GWAS
-gwas_results <- fread("/storage/groups/ccm01/datasets/2018_GWAS_summary_statistics//SCZ2/scz2.snp.results.txt", header = T, stringsAsFactors = F, data.table = F, select = c("snpid", "p"))
-gwas_eqtl_snps <- merge(eqtls_gene, gwas_results, by.x = "snps", by.y = "snpid") # merge the two datasets (not overlapping SNPs will be removed from the dataset)
-gwas_eqtl_snps$log_pvalue <- -log10(gwas_eqtl_snps$pvalue)
+gwas_results <- fread("/storage/groups/ccm01/datasets/2018_GWAS_summary_statistics/SCZ2-2014/scz2.snp.results.txt", header = T, stringsAsFactors = F, data.table = F, select = c("snpid", "p"))
+gwas_eqtl_snps <- merge(gesnps, gwas_results, by.x = "SNP", by.y = "snpid") # merge the two datasets (not overlapping SNPs will be removed from the dataset)
+gwas_eqtl_snps$log_pvalue <- -log10(gwas_eqtl_snps$`P-value`)
 gwas_eqtl_snps$log_p <- -log10(gwas_eqtl_snps$p)
 ggplot(gwas_eqtl_snps, aes(x = log_pvalue, y = log_p)) + 
   geom_point(alpha = 0.3) +
-  ylab("-log10(P) of GWAS") +
-  xlab("-log10(P) of eQTLs")
+  ylab("-log10(P) of GWAS SNPs") +
+  xlab("-log10(P) of gene eQTL SNPs")
+ggsave(file = paste0(out_path, "/7_scatterplot_geSNPs_SCZ2_GWAS.pdf"), width = 10, height = 8)
 ```
 
-### eQTLs and GWAS
-
-```{r, include = F, eval = F, echo = F}
-# load SCZ2 GWAS
-gwas_scz <- fread("/storage/groups/ccm01/datasets/2018_GWAS_summary_statistics/SCZ2/scz2.snp.results.txt")
-gwas_scz <- gwas_scz[gwas_scz$p < 0.05, ]
-gwas_scz_gr <- GRanges(seqnames = gwas_scz$hg19chrc, 
-                       ranges = IRanges(start = as.numeric(as.character(gwas_scz$bp)), 
-                                        end = as.numeric(as.character(gwas_scz$bp))),
-                       snp_id = gwas_scz$snpid)  # generate GRanges object only with gene ID, name and location
-gwas_scz_gr <- gwas_scz_gr[!duplicated(gwas_scz_gr)]  # remove duplicated rows: 8,663 genes (no duplicates)
-seqlevelsStyle(gwas_scz_gr) <- "NCBI"
-rm(gwas_scz)
-
-sum(overlapsAny(eqtls_exon_cases_gr, gwas_scz_gr))
-sum(overlapsAny(eqtls_exon_cases_gr, gwas_scz_gr))/(length(eqtls_exon_cases_gr) / 100)
-
-
-# load BIP-2018 GWAS
-gwas_bpd <- fread("/storage/groups/ccm01/datasets/2018_GWAS_summary_statistics/BIP-2018/daner_PGC_BIP32b_mds7a_0416a")
-gwas_bpd <- gwas_bpd[gwas_bpd$P < 0.05, ]
-gwas_bpd_gr <- GRanges(seqnames = gwas_bpd$CHR, 
-                       ranges = IRanges(start = as.numeric(as.character(gwas_bpd$BP)), 
-                                        end = as.numeric(as.character(gwas_bpd$BP))),
-                       snp_id = gwas_bpd$SNP)  # generate GRanges object only with gene ID, name and location
-gwas_bpd_gr <- gwas_bpd_gr[!duplicated(gwas_bpd_gr)]  # remove duplicated rows: 8,663 genes (no duplicates)
-rm(gwas_bpd)
-
-sum(overlapsAny(eqtls_exon_cases_gr, gwas_bpd_gr))
-sum(overlapsAny(eqtls_exon_cases_gr, gwas_bpd_gr))/(length(eqtls_exon_cases_gr) / 100)
-
-
-# load MDD2 GWAS
-gwas_mdd <- fread("/storage/groups/ccm01/datasets/2018_GWAS_summary_statistics/MDD2/daner_pgc_mdd_meta_align_170228_filtered_incl23andMe")
-gwas_mdd <- gwas_mdd[gwas_mdd$P < 0.05, ]
-gwas_mdd_gr <- GRanges(seqnames = gwas_mdd$CHR, 
-                       ranges = IRanges(start = as.numeric(as.character(gwas_mdd$BP)), 
-                                        end = as.numeric(as.character(gwas_mdd$BP))),
-                       snp_id = gwas_mdd$SNP)  # generate GRanges object only with gene ID, name and location
-gwas_mdd_gr <- gwas_mdd_gr[!duplicated(gwas_mdd_gr)]  # remove duplicated rows: 8,663 genes (no duplicates)
-rm(gwas_mdd)
-
-sum(overlapsAny(eqtls_exon_cases_gr, gwas_mdd_gr))
-sum(overlapsAny(eqtls_exon_cases_gr, gwas_mdd_gr))/(length(eqtls_exon_cases_gr) / 100)
-
-
-# load Cross-disorder GWAS
-gwas_cd <- fread("/storage/groups/ccm01/datasets/2018_GWAS_summary_statistics/Cross_Disorder_Full/pgc.cross.full.2013-03.txt")
-gwas_cd <- gwas_cd[gwas_cd$pval < 0.05, ]
-gwas_cd.gr <- GRanges(seqnames = gwas_cd$hg18chr, 
-                       ranges = IRanges(start = as.numeric(as.character(gwas_cd$bp)), 
-                                        end = as.numeric(as.character(gwas_cd$bp))),
-                       snp_id = gwas_cd$snpid)  # generate GRanges object only with gene ID, name and location
-gwas_cd.gr <- gwas_cd.gr[!duplicated(gwas_cd.gr)]  # remove duplicated rows: 8,663 genes (no duplicates)
-rm(gwas_cd)
-
-sum(overlapsAny(eqtls_exon_gr, gwas_cd.gr))
-sum(overlapsAny(eqtls_exon_gr, gwas_cd.gr))/(length(eqtls_exon_gr) / 100)
+Transcript eQTL SNPs vs. SCZ GWAS:
+```{r, echo = F}
+gwas_eqtl_snps <- merge(tesnps, gwas_results, by.x = "SNP", by.y = "snpid") # merge the two datasets (not overlapping SNPs will be removed from the dataset)
+gwas_eqtl_snps$log_pvalue <- -log10(gwas_eqtl_snps$`P-value`)
+gwas_eqtl_snps$log_p <- -log10(gwas_eqtl_snps$p)
+ggplot(gwas_eqtl_snps, aes(x = log_pvalue, y = log_p)) + 
+  geom_point(alpha = 0.3) +
+  ylab("-log10(P) of GWAS SNPs") +
+  xlab("-log10(P) of transcript eQTL SNPs")
+ggsave(file = paste0(out_path, "/7_scatterplot_teSNPs_SCZ2_GWAS.pdf"), width = 10, height = 8)
 ```
+
+Exon eQTL SNPs vs. SCZ GWAS:
+```{r, echo = F}
+gwas_eqtl_snps <- merge(eesnps, gwas_results, by.x = "SNP", by.y = "snpid") # merge the two datasets (not overlapping SNPs will be removed from the dataset)
+gwas_eqtl_snps$log_pvalue <- -log10(gwas_eqtl_snps$`P-value`)
+gwas_eqtl_snps$log_p <- -log10(gwas_eqtl_snps$p)
+ggplot(gwas_eqtl_snps, aes(x = log_pvalue, y = log_p)) + 
+  geom_point(alpha = 0.3) +
+  ylab("-log10(P) of GWAS SNPs") +
+  xlab("-log10(P) of exon eQTL SNPs")
+ggsave(file = paste0(out_path, "/7_scatterplot_eeSNPs_SCZ2_GWAS.pdf"), width = 10, height = 8)
+```
+
+## Barplot: VEP SNP-annotation
 
 ```{r}
-rm(results_path, clumping_path, tDEGenes, eDEGenes, eqtls_gene, eqtls_gene_cases, eqtls_gene_clumped, eqtls_gene_cases_clumped, eqtls_transcript, eqtls_transcript_cases, eqtls_transcript_clumped, eqtls_transcript_cases_clumped, eqtls_exon, eqtls_exon_cases, eqtls_exon_clumped, eqtls_exon_cases_clumped)
+dat <- fread(paste0(anno_path, "/01_VEP/pmb_cis-eQTL_annotation_results_10000_permutations_VEP_all_states.tsv"), header = T, data.table = F)  # read in data
+row.names(dat) <- dat$V1  # change rownames
+dat <- dat[,  c("Gene", "Transcript", "Exon")]  # get cases vs. control data
+dat$V1 <- NULL# remove rowname column
+dat[dat == "<= 1e-04"] <- "0.0001"
+dat[] <- lapply(dat, function(x) as.numeric(as.character(x)))
+# get all OR
+dat_or <- dat[endsWith(rownames(dat), "_or"), ]
+dat_or$element <- lapply(rownames(dat_or), function(x) substr(x, 1 , nchar(x) - 7))
+dat_or <- melt(dat_or, id = "element") 
+colnames(dat_or) <- c("element", "variable", "or")
+# get all p-values
+dat_pval <- dat[endsWith(rownames(dat), "_pVal"), ] 
+dat_pval$element <- lapply(rownames(dat_pval), function(x) substr(x, 1 , nchar(x) - 9))  
+dat_pval <- melt(dat_pval, id = "element") 
+dat_pval$value <- -log10(dat_pval$value)
+colnames(dat_pval) <- c("element", "variable", "-log10(p-value)")
+# get all overlaps
+dat_overlap <- dat[endsWith(rownames(dat), "_overlap"), ]
+dat_overlap$element <- lapply(rownames(dat_overlap), function(x) substr(x, 1 , nchar(x) - 12))
+dat_overlap <- melt(dat_overlap, id = "element") 
+colnames(dat_overlap) <- c("element", "variable", "overlap")
+# get proportion of SNPs found in the states
+snp_counts <- rbind("Gene" = 41352, "Transcript" = 99009, "Exon" = 260462)
+dat_overlap$percentdt <- sapply(1:length(dat_overlap$overlap), function(x) dat_overlap[x, "overlap"] / snp_counts[unlist(dat_overlap[x, "variable"]), 1])
+# merge all 
+dat_all <- merge(dat_or, dat_overlap, by = c("element", "variable"))
+dat_all <- melt(dat_all, id = c("element", "variable"))
+colnames(dat_all) <- c("element", "type", "variable", "value")
+dat_all <- dat_all[dat_all$element != "Quies", ]
+dat_all <- dat_all[dat_all$variable == "or" | dat_all$variable == "percentdt" | dat_all$variable == "percentcmc" | dat_all$variable == "percentgtex", ]
+# generate barplot
+ggplot(dat_all, aes(x = as.character(element), y = as.numeric(value), fill = type)) + theme_minimal() +
+  geom_bar(stat = "identity", position = position_dodge()) + ylab("") + xlab("") + coord_flip() + 
+  scale_fill_manual(values = viridis(3, option = "D", begin = 0.15, end = 0.9)) + ggtitle("Variant Effect Predictor (VEP)") + theme(plot.title = element_text(hjust = 0.5)) +
+  facet_wrap(~variable, scales = "free_x", labeller = as_labeller(c(`or` = "Odds ratio", `percentdt` = "Proportion")))
+ggsave(paste0(out_path, "/8_Brain_resampling_VEP_pmb_or_and_proportion.pdf"), width = 6, height = 4)
+
+# get proportions to CMC and GTEx
+dat <- fread(paste0(anno_path, "/01_VEP/CMC_GTEx_SNP_overlap_to_VEP_all_states.tsv"), header = T, data.table = F) 
+# read in data
+row.names(dat) <- dat$V1  # change rownames
+dat <- dat[,  c("CMC_eQTL", "CMC_isoQTL", "GTEx_eQTL_brain", "GTEx_sQTL_brain")]  # getcases vs. control data
+dat$V1 <- NULL# remove rowname column
+# get all CMC
+dat_cmc <- dat[, startsWith(colnames(dat), "CMC_")]
+dat_cmc$element <- rownames(dat_cmc)
+dat_cmc <- melt(dat_cmc, id = "element") 
+colnames(dat_cmc) <- c("element", "variable", "percentcmc")
+dat_cmc <- melt(dat_cmc, id = c("element", "variable"))
+colnames(dat_cmc) <- c("element", "type", "variable", "value")
+snp_counts <- rbind("CMC_eQTL" = 1317289, "CMC_isoQTL" = 1397198)
+dat_cmc$percentcmc <- sapply(1:length(dat_cmc$value), function(x) dat_cmc[x, "value"] / snp_counts[unlist(dat_cmc[x, "type"]), 1])
+dat_cmc$value <- NULL
+colnames(dat_cmc) <- c("element", "type", "variable", "value")
+# get all GTEx Brain
+dat_gtex <- dat[, endsWith(colnames(dat), "_brain")]
+dat_gtex$element <- rownames(dat_gtex)
+#dat_gtex$element <- lapply(rownames(dat_gtex), function(x) strsplit(x, "_")[[1]][2])
+dat_gtex <- melt(dat_gtex, id = "element") 
+colnames(dat_gtex) <- c("element", "variable", "percentgtex")
+dat_gtex <- melt(dat_gtex, id = c("element", "variable"))
+colnames(dat_gtex) <- c("element", "type", "variable", "value")
+snp_counts <- rbind("GTEx_eQTL" = 59928, "GTEx_sQTL" = 11793)
+dat_gtex$percentgtex <- sapply(1:length(dat_gtex$value), function(x) dat_gtex[x, "value"] / snp_counts[unlist(dat_gtex[x, "type"]), 1])
+dat_gtex$value <- NULL
+colnames(dat_gtex) <- c("element", "type", "variable", "value")
+# merge CMC and GTEx
+dat_all <- rbind(dat_cmc, dat_gtex)
+dat_all <- dat_all[dat_all$element != "Quies", ]
+dat_all <- dat_all[dat_all$variable == "or" | dat_all$variable == "percentdt" | dat_all$variable == "percentcmc" | dat_all$variable == "percentgtex", ]
+# generate barplot
+ggplot(dat_all, aes(x = as.character(element), y = as.numeric(value), fill = type)) + theme_minimal() +
+  geom_bar(stat = "identity", position = position_dodge()) + ylab("") + xlab("") + coord_flip() + 
+  scale_fill_manual(values = c("#0088aa", "#80e5ff", "#4400aa", "#ccaaff")) + ggtitle("Variant Effect Predictor (VEP)") + theme(plot.title = element_text(hjust = 0.5)) + facet_wrap(~variable, scales = "free_x", labeller = as_labeller(c(`or` = "Odds ratio", `percentdt` = "Proportion", `percentcmc` = "CMC: Proportion of variants", `percentgtex` = "GTEx: Proportion of variants")))
+ggsave(paste0(out_path, "/8_Brain_resampling_VEP_CMC_GTEx_proportions.pdf"), width = 6, height = 4)
+```
+
+# SNP overlap
+
+Now, we will check, how many of our exon eQTL SNPs (eeSNPs) overlap to the GWAS SNPs < 0.05:
+```{r, echo = F}
+# load SCZ2 GWAS
+gwas_scz_gr <- readRDS(paste0(rdata_path, "/GWAS_sumstats_SCZ2-2014_p0.05.rds"))
+eqtls_exon_gr <- readRDS(paste0(rdata_path, "/01_pmb_exon_hits_cases_vs_controls_cis_eQTL_SNPs.rds"))
+print(paste0("Overlap eeSNPs & SCZ2-2014 SNPs: ", sum(overlapsAny(eqtls_exon_gr, gwas_scz_gr)), " (", round(sum(overlapsAny(eqtls_exon_gr, gwas_scz_gr))/(length(eqtls_exon_gr) / 100), 2), "%)"))
+
+# load BIP-2018 GWAS
+gwas_bip_gr <- readRDS(paste0(rdata_path, "/GWAS_sumstats_BIP-2019_p0.05.rds"))
+print(paste0("Overlap eeSNPs & BIP-2018 SNPs: ", sum(overlapsAny(eqtls_exon_gr, gwas_bip_gr)), " (", round(sum(overlapsAny(eqtls_exon_gr, gwas_bip_gr))/(length(eqtls_exon_gr) / 100), 2), "%)"))
+
+# load MDD2 GWAS
+gwas_mdd2_gr <- readRDS(paste0(rdata_path, "/GWAS_sumstats_MDD2-2018_p0.05.rds"))
+print(paste0("Overlap eeSNPs & MDD2-2018 SNPs: ", sum(overlapsAny(eqtls_exon_gr, gwas_mdd2_gr)), " (", round(sum(overlapsAny(eqtls_exon_gr, gwas_mdd2_gr))/(length(eqtls_exon_gr) / 100), 2), "%)"))
+
+# load MDD3 GWAS
+gwas_mdd3_gr <- readRDS(paste0(rdata_path, "/GWAS_sumstats_MDD3-2019_p0.05.rds"))
+print(paste0("Overlap eeSNPs & MDD3-2019 SNPs: ", sum(overlapsAny(eqtls_exon_gr, gwas_mdd3_gr)), " (", round(sum(overlapsAny(eqtls_exon_gr, gwas_mdd3_gr))/(length(eqtls_exon_gr) / 100), 2), "%)"))
+
+# load Cross-disorder GWAS
+gwas_cdg_gr <- readRDS(paste0(rdata_path, "/GWAS_sumstats_CDG2-2019_p0.05.rds"))
+print(paste0("Overlap eeSNPs & CDG2-2019 SNPs: ", sum(overlapsAny(eqtls_exon_gr, gwas_cdg_gr)), " (", round(sum(overlapsAny(eqtls_exon_gr, gwas_cdg_gr))/(length(eqtls_exon_gr) / 100), 2), "%)"))
+
+rm(eqtls_exon_gr, gwas_scz_gr, gwas_bip_gr, gwas_mdd2_gr, gwas_mdd3_gr, gwas_cdg_gr)
 ```
 
 

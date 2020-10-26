@@ -588,9 +588,9 @@ rm(logfc, g)
 Now, we generate violin plots for all gene hits.
 ```{r, echo = F}
 for (hit in top_hits$`Ensembl Transcript ID`) {
-  name <- top_hits[hit, "Gene Symbol"]
+  name <- top_hits[top_hits$`Ensembl Transcript ID` == hit, "Gene Symbol"]
   # get exprs of top hit
-  data <- as.data.frame(exprs(transcript_summaries)[top_hits[hit, "Ensembl Transcript ID"], ])
+  data <- as.data.frame(exprs(transcript_summaries)[hit, ])
   colnames(data) <- "expression"
   data <- merge(data, pData(transcript_summaries)[, c("ShortName", "Dx")], by.x = "row.names", by.y = "ShortName")
   g <- ggplot(data, aes(x = Dx, y = expression, fill = Dx)) + 
@@ -598,10 +598,10 @@ for (hit in top_hits$`Ensembl Transcript ID`) {
     geom_boxplot(width = 0.2) +
     theme_classic(base_size = 22) +
     theme(text = element_text(size = 20), plot.title = element_text(hjust = 0.5), panel.border = element_rect(fill = NA, size = 2), axis.text.x = element_text(color = "black"), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) +
-    labs(title = paste0(top_hits[hit, "Ensembl Gene ID"], ": ", top_hits[hit, "Gene Symbol"]), x = element_blank(), y = "Expression values") +
+    labs(title = paste0(hit, ": ", top_hits[top_hits$`Ensembl Transcript ID` == hit, "Gene Symbol"]), x = element_blank(), y = "Expression values") +
     scale_x_discrete(labels = c("Controls", "Cases")) + 
     scale_fill_manual(values = c("gray", col_tdegene), guide = FALSE, name = "", labels = c("Controls", "Cases"))
-  ggsave(plot = g, file = paste0(outpath, "/2.4_violinplot_significant_DEA_hits_transcripts_new_pvalue_and_fdr_", top_hits[hit, "Gene Symbol"],".pdf"), width = 8, height = 6, units = "in")
+  ggsave(plot = g, file = paste0(outpath, "/2.4_violinplot_significant_DEA_hits_transcripts_new_pvalue_and_fdr_", top_hits[top_hits$`Ensembl Transcript ID` == hit, "Gene Symbol"],".pdf"), width = 8, height = 6, units = "in")
   g
 }
 rm(design, fit, name, data, top_hits, g)
@@ -615,7 +615,7 @@ We will generate a barplot of the number of hits, we get using the different cal
 
 We need to load all PRS transcript DEA hits and save only the number of found hits (FDR < 10% and FDR < 5%) into a table.
 ```{r, echo = F}
-prs_all <- c("ADHD-2019", "ASD-2019", "BIP-2019", "BMI-2015", "CAD-2017", "CDG1-2013", "CDG2-2019", "EA-2018", "HE-2014", "IN-2018", "MDD1-2012", "MDD2-2018", "MDD3-2019", "SCZ2-2014", "T2D-2017")
+prs_all <- c("ADHD-2019", "ASD-2019", "BIP-2019", "BMI-2015", "CAD-2017", "CDG1-2013", "CDG2-2019", "EA-2018", "HE-2014", "IN-2018", "MDD1-2012", "MDD2-2018", "MDD3-2019", "SCZ2-2014", "T2D-2017", "SCZ3-2020")
 prs_transcripts <- data.frame("PRS" = character(), "FDR_0.1" = numeric(), "FDR_0.05" = numeric())
 count = 1
 for (p in prs_all) {
@@ -908,9 +908,9 @@ rm(logfc, g)
 Now, we generate violin plots for the top six eDEGene hits.
 ```{r, echo = F}
 for (hit in top_hits$`Ensembl Exon ID`[1:6]) {
-  name <- top_hits[hit, "Gene Symbol"]
+  name <- top_hits[top_hits$`Ensembl Exon ID` == hit, "Gene Symbol"]
   # get exprs of top hit
-  data <- as.data.frame(exprs(exon_summaries)[top_hits[hit, "Ensembl Exon ID"], ])
+  data <- as.data.frame(exprs(exon_summaries)[hit, ])
   colnames(data) <- "expression"
   data <- merge(data, pData(exon_summaries)[, c("ShortName", "Dx")], by.x = "row.names", by.y = "ShortName")
   g <- ggplot(data, aes(x = Dx, y = expression, fill = Dx)) + 
@@ -918,10 +918,10 @@ for (hit in top_hits$`Ensembl Exon ID`[1:6]) {
     geom_boxplot(width = 0.2) +
     theme_classic(base_size = 22) +
     theme(text = element_text(size = 20), plot.title = element_text(hjust = 0.5), panel.border = element_rect(fill = NA, size = 2), axis.text.x = element_text(color = "black"), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) +
-    labs(title = top_hits[hit, "Gene Symbol"], x = element_blank(), y = "Expression values") +
+    labs(title = paste0(hit, ":", top_hits[top_hits$`Ensembl Exon ID` == hit, "Gene Symbol"]), x = element_blank(), y = "Expression values") +
     scale_x_discrete(labels = c("Controls", "Cases")) + 
     scale_fill_manual(values = brewer.pal(11, "RdBu")[c(9, 3)], guide = FALSE, name = "", labels = c("Controls", "Cases"))
-  ggsave(plot = g, file = paste0(outpath, "/3.4_violinplot_significant_DEA_hits_exons_new_pvalue_and_fdr_", top_hits[hit, "Gene Symbol"],".pdf"), width = 8, height = 6, units = "in")
+  ggsave(plot = g, file = paste0(outpath, "/3.4_violinplot_significant_DEA_hits_exons_new_pvalue_and_fdr_", top_hits[top_hits$`Ensembl Exon ID` == hit, "Gene Symbol"],".pdf"), width = 8, height = 6, units = "in")
   g
 }
 rm(name, data)
@@ -935,7 +935,7 @@ We will generate a barplot of the number of hits, we get using the different cal
 
 We need to load all PRS exon DEA hits and save only the number of found hits (FDR < 10% and FDR < 5%) into a table.
 ```{r, echo = F}
-prs_all <- c("ADHD-2019", "ASD-2019", "BIP-2019", "BMI-2015", "CAD-2017", "CDG1-2013", "CDG2-2019", "EA-2018", "HE-2014", "IN-2018", "MDD1-2012", "MDD2-2018", "MDD3-2019", "SCZ2-2014", "T2D-2017")
+prs_all <- c("ADHD-2019", "ASD-2019", "BIP-2019", "BMI-2015", "CAD-2017", "CDG1-2013", "CDG2-2019", "EA-2018", "HE-2014", "IN-2018", "MDD1-2012", "MDD2-2018", "MDD3-2019", "SCZ2-2014", "T2D-2017", "SCZ3-2020")
 prs_exons <- data.frame("PRS" = character(), "FDR_0.1" = numeric(), "FDR_0.05" = numeric())
 count = 1
 for (p in prs_all) {
@@ -988,7 +988,33 @@ g <- ggplot(prs_both, aes(x = PRS, y = FDR_0.1, fill = Type)) +
 ggsave(plot = g, file = paste0(outpath, "/4_barplot_ALL_PRS_transcript_and_exon_eQTS_new_pvalue_and_fdr.pdf"))
 g
 
-# Graph only with ADHD, ASD, BIP, CDG2, EA, MDD2, MDD3, SCZ, T2D
+# Graph only with ADHD, ASD, BIP, CDG2, EA, MDD2, MDD3, SCZ2, SCZ3, T2D
+prs_both <- prs_both[prs_both$PRS %in% c("ADHD-2019", "BIP-2019", "CDG2-2019", "EA-2018", "MDD2-2018", "MDD3-2019", "SCZ2-2014", "SCZ3-2020", "T2D-2017"), ]
+prs_both$PRS <- factor(prs_both$PRS, levels = c("ADHD-2019", "BIP-2019", "CDG2-2019", "MDD2-2018", "MDD3-2019", "SCZ2-2014", "SCZ3-2020", "EA-2018", "T2D-2017"))
+prs_both$Label <- prs_both$FDR_0.1
+prs_both[prs_both$Type == "Transcript", "FDR_0.1"] <- prs_both[prs_both$Type == "Transcript", "FDR_0.1"] * 330
+g <- ggplot(prs_both, aes(x = PRS, y = FDR_0.1, fill = Type)) + 
+  geom_bar(stat = "identity", position = position_dodge()) +
+  geom_text(aes(label = Label), vjust = -0.25, position = position_dodge(0.9), size = 2.5) +
+  scale_fill_manual(values = brewer.pal(11, "RdBu")[c(9, 3)]) +
+  theme_classic(base_size = 22) +
+  theme(legend.position = c(0.07, 0.88), legend.box.background = element_rect(colour = "black"), legend.title = element_blank(), panel.border = element_rect(fill = NA, size = 2), axis.text.x = element_text(angle = 60, hjust = 1, vjust = 1, color = "black"), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) +
+  scale_y_continuous(sec.axis = sec_axis(~ . * 1 / 330, name = "Number of transcript eQTS")) +
+  xlab("") +
+  ylab("Number of exon eQTS")
+ggsave(plot = g, file = paste0(outpath, "/4_barplot_ADHD_BIP_CDG2_EA_MDD2_MDD3_SCZ2_SCZ3_T2D_transcript_and_exon_eQTS_new_pvalue_and_fdr.pdf"))
+# only exon hits
+g <- ggplot(prs_both[prs_both$Type != "Transcript", ], aes(x = PRS, y = FDR_0.1)) + 
+  geom_bar(stat = "identity", position = position_dodge()) +
+  geom_text(aes(label = Label), vjust = -0.25, position = position_dodge(0.9), size = 2.5) +
+  theme_classic(base_size = 22) +
+  theme(legend.position = c(0.07, 0.88), legend.box.background = element_rect(colour = "black"), legend.title = element_blank(), panel.border = element_rect(fill = NA, size = 2), axis.text.x = element_text(angle = 60, hjust = 1, vjust = 1, color = "black"), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) +
+  xlab("") +
+  ylab("Number of exon eQTS genes")
+ggsave(plot = g, file = paste0(outpath, "/4_barplot_ADHD_BIP_CDG2_EA_MDD2_MDD3_SCZ2_SCZ3_T2D_exons_eQTS_new_pvalue_and_fdr.pdf"))
+g
+
+# Graph only with ADHD, ASD, BIP, CDG2, EA, MDD2, MDD3, SCZ2, T2D
 prs_both <- prs_both[prs_both$PRS %in% c("ADHD-2019", "BIP-2019", "CDG2-2019", "EA-2018", "MDD2-2018", "MDD3-2019", "SCZ2-2014", "T2D-2017"), ]
 prs_both$PRS <- factor(prs_both$PRS, levels = c("ADHD-2019", "BIP-2019", "CDG2-2019", "MDD2-2018", "MDD3-2019", "SCZ2-2014", "EA-2018", "T2D-2017"))
 prs_both$Label <- prs_both$FDR_0.1
@@ -1287,7 +1313,7 @@ plot_data <- merge(plot_data, prs, by.x = "ShortName", by.y = "row.names")
 
 ## Scatterplot
 
-Now, we can generate scatterplots, where each of the four PRSs is plotted against the correpsonding residuals of the exon expression. 
+Now, we can generate scatterplots, where each of the four PRSs is plotted against the corresponding residuals of the exon expression. 
 ```{r}
 # 1. Coloring Dx (CASE vs. CTL)
 g1 <- ggplot(plot_data, aes(x = ENSE00003249902_BIP, y = PRS.BIP, col = Dx)) + geom_point() + xlab("Exon expression (residuals)") + ylab("Polygenic risk score") + ggtitle("BIP-2019 PRS vs. ENSE00003249902 expression")  + geom_smooth(method = "lm", se = F) + scale_color_manual(values = brewer.pal(11, "RdBu")[c(9, 3)], name = "Diagnosis", labels = c("Controls", "Cases")) + theme_bw()
@@ -1749,7 +1775,7 @@ eDEGenes_fuma_gtex <- eDEGenes_fuma_gtex[eDEGenes_fuma_gtex$adjP < 0.05, ]
 eDEGenes_fuma_gtex$log_adjP <- -log10(eDEGenes_fuma_gtex$adjP)
 eDEGenes_fuma_gtex <- eDEGenes_fuma_gtex[eDEGenes_fuma_gtex$Category == "DEG.twoside", ]
 eDEGenes_fuma_gtex <- eDEGenes_fuma_gtex[order(eDEGenes_fuma_gtex$GeneSet, decreasing = T), ]
-eDEGenes_fuma_gtex <- separate_rows(eDEGenes_fuma_gtex, genes, sep = ":")
+eDEGenes_fuma_gtex <- as.data.frame(separate_rows(eDEGenes_fuma_gtex, genes, sep = ":"))
 ```
 
 As we also want to know, how many genes are up and down-regulated, we also need to load the eDEGene results from the differential expression analysis:
@@ -1763,14 +1789,14 @@ top_hits$`Ensembl Gene ID` <- sapply(top_hits$`Ensembl Gene ID`, function(x) str
 Now, we can calculate how many of the genes were up-/down-regulated and add it to the dataset. Then, we will transform the data into a ggplot readable format. 
 ```{r}
 gtex_genes <- merge(eDEGenes_fuma_gtex, top_hits[, c("Ensembl Gene ID", "Reg")], by.x = "genes", by.y = "Ensembl Gene ID")
-gtex_genes <- aggregate(Reg ~ GeneSet, data = gtex_genes, FUN = function(x){table(x)})
+gtex_genes <- as.data.table(aggregate(Reg ~ GeneSet, data = gtex_genes, FUN = function(x){table(x)}))
 eDEGenes_fuma_gtex <- merge(eDEGenes_fuma_gtex, gtex_genes, by = "GeneSet")[, c("GeneSet", "N_overlap", "log_adjP", "Reg.Down", "Reg.Up")]
 eDEGenes_fuma_gtex <- eDEGenes_fuma_gtex[!duplicated(eDEGenes_fuma_gtex), ]
 # Now, we need the percentage of up/down regulated genes for log_adjP
 eDEGenes_fuma_gtex$Reg.Down <- (eDEGenes_fuma_gtex$log_adjP / eDEGenes_fuma_gtex$N_overlap) * eDEGenes_fuma_gtex$Reg.Down
 eDEGenes_fuma_gtex$Reg.Up <- (eDEGenes_fuma_gtex$log_adjP / eDEGenes_fuma_gtex$N_overlap) * eDEGenes_fuma_gtex$Reg.Up
 # And we need to form the data into ggplot format
-eDEGenes_fuma_gtex_reg <- melt(data = eDEGenes_fuma_gtex, id.vars = "GeneSet", measure.vars = c("Reg.Down", "Reg.Up"))
+eDEGenes_fuma_gtex_reg <- reshape2::melt(data = eDEGenes_fuma_gtex, id.vars = "GeneSet", measure.vars = c("Reg.Down", "Reg.Up"))
 ```
 
 ### Barplot
@@ -1822,14 +1848,14 @@ eDEGenes_fuma_kegg <- eDEGenes_fuma_kegg[eDEGenes_fuma_kegg$adjP < 0.05, ]
 eDEGenes_fuma_kegg$log_adjP <- -log10(eDEGenes_fuma_kegg$adjP)
 # get only pathway name and all overlapping genes + separate genes
 kegg_genes <- eDEGenes_fuma_kegg[, c("GeneSet", "genes")]
-kegg_genes <- separate_rows(kegg_genes, genes, sep = ":")
+kegg_genes <- as.data.frame(separate_rows(kegg_genes, genes, sep = ":"))
 ```
 
 Now, we can calculate how many of the genes were up/downregulated using the top hits loaded in the tissue enrichment and add it to the dataset. Then, we will transform the data into a ggplot readable format. 
 ```{r}
 kegg_genes <- merge(kegg_genes, top_hits[, c("Gene Symbol", "Reg")], by.x = "genes", by.y = "Gene Symbol")
-kegg_genes <- kegg_genes[!duplicated(kegg_genes)]
-kegg_genes <- aggregate(Reg ~ GeneSet, data = kegg_genes, FUN = function(x){table(x)})
+kegg_genes <- kegg_genes[!duplicated(kegg_genes), ]
+kegg_genes <- as.data.table(aggregate(Reg ~ GeneSet, data = kegg_genes, FUN = function(x){table(x)}))
 eDEGenes_fuma_kegg <- merge(eDEGenes_fuma_kegg, kegg_genes, by = "GeneSet")[, c("GeneSet", "N_overlap", "log_adjP", "Reg.Down", "Reg.Up")]
 # Now, we need the percentage of up/down regulated genes for log_adjP
 eDEGenes_fuma_kegg$Reg.Down <- (eDEGenes_fuma_kegg$log_adjP / eDEGenes_fuma_kegg$N_overlap) * eDEGenes_fuma_kegg$Reg.Down
@@ -2052,7 +2078,7 @@ Now, we will plot the distribution of Ensembl Transcript IDs per Ensembl Gene ID
 ```{r, echo = F}
 # get transcript per gene info for own data
 features <- fData(transcript_summaries)[, c("transcript_id", "gene_id")]
-features <- separate_rows(features, transcript_id, gene_id, sep = "\\|")
+features <- as.data.frame(separate_rows(features, transcript_id, gene_id, sep = "\\|"))
 features <- features[!duplicated(features), ]
 freqs <- as.data.frame(table(as.data.frame(table(features$gene_id))$Freq))
 
@@ -2065,7 +2091,7 @@ freqs2 <- as.data.frame(table(as.data.frame(table(genes$gene_id))$Freq))
 # get tDEGenes freq
 ids <- features[features$transcript_id %in% tDEGenes$`Ensembl Transcript ID`, "gene_id"]
 tfeatures <- features[features$gene_id %in% ids, ]
-tfeatures <- separate_rows(tfeatures, transcript_id, gene_id, sep = "\\|")
+tfeatures <- as.data.frame(separate_rows(tfeatures, transcript_id, gene_id, sep = "\\|"))
 tfeatures <- tfeatures[!duplicated(tfeatures), ]
 freqs3 <- as.data.frame(table(as.data.frame(table(tfeatures$gene_id))$Freq))
 freqs3$Var1 <- as.numeric(freqs3$Var1)
@@ -2108,7 +2134,7 @@ rm(features, genes, freqs, freqs2, freqs3, tfreq)
 Now, we will plot the distribution of Ensembl Exon IDs per Ensembl Gene ID. We will plot the distribution in our filtered expression dataset as well as the original exons per gene found in GENCODE (for hg19). 
 ```{r, echo = F}
 features <- fData(exon_summaries)[, c("exon_id", "gene_id")]
-features <- separate_rows(features, exon_id, gene_id, sep = "\\|")
+features <- as.data.frame(separate_rows(features, exon_id, gene_id, sep = "\\|"))
 features <- features[!duplicated(features), ]
 freqs <- as.data.frame(table(as.data.frame(table(features$gene_id))$Freq))
 
@@ -2124,7 +2150,7 @@ freqs2 <- as.data.frame(table(as.data.frame(table(genes$gene_id))$Freq))
 # get eDEGenes freq
 ids <- features[features$exon_id %in% eDEGenes$`Ensembl Exon ID`, "gene_id"]
 efeatures <- features[features$gene_id %in% ids, ]
-efeatures <- separate_rows(efeatures, exon_id, gene_id, sep = "\\|")
+efeatures <- as.data.frame(separate_rows(efeatures, exon_id, gene_id, sep = "\\|"))
 efeatures <- efeatures[!duplicated(efeatures), ]
 freqs3 <- as.data.frame(table(as.data.frame(table(efeatures$gene_id))$Freq))
 freqs3$Var1 <- as.numeric(freqs3$Var1)

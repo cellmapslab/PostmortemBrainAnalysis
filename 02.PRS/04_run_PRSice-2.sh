@@ -180,6 +180,12 @@ Rscript --slave ${script_path}/PRSice.R --prsice ${script_path}/PRSice_linux --b
 wait
 echo "Done SCZ2-2014"
 
+### SCZ3-2020 ### 
+mkdir -p ${outpath_prsice}/SCZ3-2020  # generate output path if not existing already
+Rscript --slave ${script_path}/PRSice.R --prsice ${script_path}/PRSice_linux --base ${sumstats_path}/SCZ3-2020.sumstats --target ${target} --ld ${ld_reference} --pheno ${phenotypes} --cov ${covariates} --cov-factor Sex --thread 3 --A1 A1 --A2 A2 --stat OR --pvalue P --snp SNP --binary-target T --print-snp --pheno-col Dx --clump-kb 1000 --clump-r2 0.2 --score avg --all-score --out ${outpath_prsice}/SCZ3-2020/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_SCZ3-2020_PRSice-2_PRS &> ${outpath_prsice}/SCZ3-2020/PRSice-2
+wait
+echo "Done SCZ3-2020"
+
 ### T2D-2017 ###
 mkdir -p ${outpath_prsice}/T2D-2017  # generate output path if not existing already
 Rscript --slave ${script_path}/PRSice.R --prsice ${script_path}/PRSice_linux --base ${sumstats_path}/T2D-2017.sumstats --target ${target} --ld ${ld_reference} --pheno ${phenotypes} --cov ${covariates} --cov-factor Sex --thread 3 --A1 Allele1 --A2 Allele2 --stat Effect --pvalue P-value --snp Chr:Position --binary-target F --print-snp --beta --pheno-col Dx --clump-kb 1000 --clump-r2 0.2 --score avg --all-score --out ${outpath_prsice}/T2D-2017/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_T2D-2017_PRSice-2_PRS &> ${outpath_prsice}/T2D-2017/PRSice-2
