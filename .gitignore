@@ -5,6 +5,9 @@
 05.eQTLs/eQTL/**/
 05.eQTLs/functional_annotations/*
 05.eQTLs/functional_annotations/**/
+06.Index/**/
+*.map
+*.ped
 *.zip
 *.txt
 *.tex
