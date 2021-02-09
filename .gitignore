@@ -6,6 +6,8 @@
 05.eQTLs/functional_annotations/*
 05.eQTLs/functional_annotations/**/
 06.Index/**/
+05.eQTLs/09_eQTL_figures_cache/*
+05.eQTLs/09_eQTL_figures_cache/**
 *.map
 *.ped
 *.zip
