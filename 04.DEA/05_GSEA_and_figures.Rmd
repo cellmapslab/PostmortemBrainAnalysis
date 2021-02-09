@@ -759,7 +759,7 @@ Now, we will regenerate the volcano plots for the gene and transcript level diff
 # get eDEGene hits (Ensembl gene IDs)
 eDEGene_hits <- topTable(fit, coef = "DxCASE", number = Inf, adjust.method = "BH")
 eDEGene_hits <- eDEGene_hits[eDEGene_hits$adj.P.Val < 0.1, ]
-eDEGene_hits <- unique(separate_rows(eDEGene_hits, `gene_id`, sep = "\\|")$gene_id)  # separate if gene IDs were merged
+eDEGene_hits <- unique(as.data.frame(separate_rows(eDEGene_hits, `gene_id`, sep = "\\|")))  # separate if gene IDs were merged
 # gDEGenes
 load(paste0(results_path, "/1.1_diff_expr_genes_for_diagnosis.RData"))
 GenerateVolcanoPlot2(fit, variable = "DxCASE", cols = col_gdegene, highlight = eDEGene_hits, file = "1.1_volcano_plot_diff_expr_genes_for_diagnosis_eDEGenes_colored.pdf")
@@ -1064,6 +1064,40 @@ upset(fromList(eqts_genes),
       text.scale = 2, 
       keep.order = F)
 dev.off()
+
+# get upregulated genes per exon eQT-Score
+adhd <- fread(paste0(results_path, "/3.5.1_diff_expr_exons_for_ADHD-2019_PRS_new_pvalue_and_fdr.csv"), select = c("Ensembl Gene ID", "T-statistic"), stringsAsFactors = F)
+bd <- fread(paste0(results_path, "/3.5.3_diff_expr_exons_for_BIP-2019_PRS_new_pvalue_and_fdr.csv"), select = c("Ensembl Gene ID", "T-statistic"), stringsAsFactors = F)
+scz <- fread(paste0(results_path, "/3.5.14_diff_expr_exons_for_SCZ2-2014_PRS_new_pvalue_and_fdr.csv"), select = c("Ensembl Gene ID", "T-statistic"), stringsAsFactors = F)
+cdg <- fread(paste0(results_path, "/3.5.7_diff_expr_exons_for_CDG2-2019_PRS_new_pvalue_and_fdr.csv"), select = c("Ensembl Gene ID", "T-statistic"), stringsAsFactors = F)
+mdd <- fread(paste0(results_path, "/3.5.13_diff_expr_exons_for_MDD3-2019_PRS_new_pvalue_and_fdr.csv"), select = c("Ensembl Gene ID", "T-statistic"), stringsAsFactors = F)
+
+get_upregulated_genes <- function(prs, gwas){
+  upreg <- cbind(unlist(prs_exons[gwas]), FALSE)
+  for(gene in upreg[, 1]) {
+    if(prs[prs$`Ensembl Gene ID` == gene, ]$`T-statistic`[[1]] > 0){
+      upreg[upreg[, 1] == gene, 2] <- TRUE
+    }
+  }
+  return(upreg)
+}
+upreg_adhd <- get_upregulated_genes(adhd, "ADHD-2019")
+upreg_bd <- get_upregulated_genes(bip, "BIP-2019")
+upreg_cdg <- get_upregulated_genes(cdg, "CDG2-2019")
+upreg_mdd <- get_upregulated_genes(mdd, "MDD3-2019")
+upreg_scz <- get_upregulated_genes(scz, "SCZ2-2014")
+upreg_all <- list("MDD" = sum(as.logical(upreg_mdd[, 2])), "CDG" = sum(as.logical(upreg_cdg[, 2])), "SCZ" = sum(as.logical(upreg_scz[, 2])), "BD" = sum(as.logical(upreg_bd[, 2])), "ADHD" = sum(as.logical(upreg_adhd[, 2])))
+
+# without MDD2
+eqts_genes <- list("ADHD-2019" = unlist(prs_exons$`ADHD-2019`), "BIP-2019" = unlist(prs_exons$`BIP-2019`), "SCZ2-2014" = unlist(prs_exons$`SCZ2-2014`), "CDG2-2019" = unlist(prs_exons$`CDG2-2019`), "MDD3_2019" = unlist(prs_exons$`MDD3-2019`))
+pdf(paste0(outpath, "/4_upset_plot__ADHD_BIP_CDG2_MDD3_SCZ2_exons_eQTS_new_pvalue_and_fdr.pdf"), width = 14, height = 7, onefile = F)
+upset(fromList(eqts_genes), 
+      sets = c("ADHD-2019", "BIP-2019", "CDG2-2019", "MDD3_2019", "SCZ2-2014"),
+      nsets = 6, 
+      mainbar.y.label = "# genes", 
+      text.scale = 2, 
+      keep.order = F)
+dev.off()
 ```
 
 
@@ -1222,10 +1256,21 @@ fndc3a <- merge(fndc3a, fndc3a_exon_expr, by.x = "Row.names", by.y = "row.names"
 #fndc3a <- merge(fndc3a, pData, by.x = "Row.names", by.y = "row.names")
 colnames(fndc3a)[1] <- "SampleID"
 dim(fndc3a)  # should be 169 rows (samples)
+
+# calculate the difference as the median expression of cases substracted by the median expression of controls
+differences <- data.frame()
+for(id in unique(fndc3a_plot_data$EnsemblID)) {
+  diff <- median(fndc3a_plot_data[fndc3a_plot_data$EnsemblID == id & fndc3a_plot_data$SampleType == "Cases",]$Expression) - median(fndc3a_plot_data[fndc3a_plot_data$EnsemblID == id & fndc3a_plot_data$SampleType == "Controls",]$Expression)
+  row <- cbind(id, diff)
+  differences <- rbind(differences, row)
+}
+differences$diff <- as.numeric(levels(differences$diff))[differences$diff]
+differences <- differences[order(differences$diff, decreasing = T), ]
+as.vector(differences$id)
+
 # 3.6 Form data into right order
-fndc3a <- fndc3a[, c("SampleID", "ENSG00000102531.12", "ENST00000378383.1", "ENST00000398316.3", "ENST00000492622.2", "ENST00000541916.1|ENST00000484074.1", "ENST00000497644.1", "ENSE00001422888.3", "ENSE00003553418.1|ENSE00003591878.1", "ENSE00003488149.1|ENSE00003524858.1", "ENSE00003537609.1|ENSE00003598917.1", "ENSE00003676028.1|ENSE00003632112.1", "ENSE00003618072.1|ENSE00003538992.1", "ENSE00001335285.2", "ENSE00001129152.1", "ENSE00001342704.1", "ENSE00000939645.1", "ENSE00001342700.1", "ENSE00001129140.1", "ENSE00000682481.1", "ENSE00000682482.1", "ENSE00001129131.1", "ENSE00001129122.1", "ENSE00001378011.1|ENSE00001934521.1", "ENSE00003657943.1|ENSE00003595023.1", "ENSE00003610694.1|ENSE00003685468.1", "ENSE00003561019.1|ENSE00003616958.1", "ENSE00003535624.1|ENSE00003689909.1", "ENSE00003479083.1|ENSE00003595348.1|ENSE00003582104.1", "ENSE00003647569.1|ENSE00003636520.1", "ENSE00003532194.1|ENSE00001896523.1|ENSE00003662779.1", "ENSE00001922094.2")]
-colnames(fndc3a) <- c("SampleID", "FNDC3A", "FNDC3A-001", "FNDC3A-002", "FNDC3A-003", "FNDC3A-004", "FNDC3A-006", "ENSE00001422888.3", "ENSE00003553418.1", "ENSE00003488149.1", "ENSE00003537609.1", "ENSE00003632112.1", "ENSE00003618072.1", "ENSE00001335285.2", "ENSE00001129152.1", "ENSE00001342704.1", "ENSE00000939645.1", "ENSE00001342700.1", "ENSE00001129140.1", "ENSE00000682481.1", "ENSE00000682482.1", "ENSE00001129131.1", "ENSE00001129122.1", "ENSE00001378011.1", "ENSE00003657943.1", "ENSE00003685468.1", "ENSE00003561019.1", "ENSE00003689909.1", "ENSE00003479083.1", "ENSE00003636520.1", "ENSE00003532194.1", "ENSE00001922094.2")
-head(fndc3a)
+fndc3a <- fndc3a[, c("SampleID", "ENSG00000102531.12", "ENST00000378383.1", "ENST00000497644.1", "ENST00000541916.1|ENST00000484074.1", "ENST00000492622.2", "ENST00000398316.3", "ENSE00000682482.1", "ENSE00003553418.1|ENSE00003591878.1", "ENSE00000682481.1", "ENSE00001335285.2", "ENSE00003618072.1|ENSE00003538992.1", "ENSE00001342704.1", "ENSE00001422888.3", "ENSE00003657943.1|ENSE00003595023.1", "ENSE00003647569.1|ENSE00003636520.1", "ENSE00003532194.1|ENSE00001896523.1|ENSE00003662779.1", "ENSE00003537609.1|ENSE00003598917.1", "ENSE00001129140.1", "ENSE00001129131.1", "ENSE00003488149.1|ENSE00003524858.1", "ENSE00003479083.1|ENSE00003595348.1|ENSE00003582104.1", "ENSE00001922094.2", "ENSE00001342700.1", "ENSE00001129122.1", "ENSE00001129152.1", "ENSE00003561019.1|ENSE00003616958.1", "ENSE00000939645.1", "ENSE00001378011.1|ENSE00001934521.1", "ENSE00003676028.1|ENSE00003632112.1", "ENSE00003610694.1|ENSE00003685468.1", "ENSE00003535624.1|ENSE00003689909.1")]
+colnames(fndc3a) <- c("SampleID", "FNDC3A", "FNDC3A-001", "FNDC3A-006", "FNDC3A-004", "FNDC3A-003", "FNDC3A-002", "ENSE00000682482.1", "ENSE00003553418.1", "ENSE00000682481.1", "ENSE00001335285.2", "ENSE00003618072.1", "ENSE00001342704.1", "ENSE00001422888.3", "ENSE00003657943.1", "ENSE00003636520.1", "ENSE00003532194.1", "ENSE00003537609.1", "ENSE00001129140.1", "ENSE00001129131.1", "ENSE00003488149.1", "ENSE00003479083.1", "ENSE00001922094.2", "ENSE00001342700.1", "ENSE00001129122.1", "ENSE00001129152.1", "ENSE00003561019.1", "ENSE00000939645.1", "ENSE00001378011.1", "ENSE00003632112.1", "ENSE00003685468.1", "ENSE00003689909.1")
 
 # 3.7 Change FNDC3A data into ggplot long format
 fndc3a_plot_data <- reshape2::melt(fndc3a, id.vars = "SampleID", value.name = "Expression", variable.name = "EnsemblID" )
@@ -1257,9 +1302,9 @@ dev.off()
 ```
 
 
-# Exon expression quantitative trait score (eeQTS)
+# Exon expression quantitative trait score (exon eQT-Scores)
 
-For gene HKDC1 (ENSG00000156510.11), which has two protein-coding transcripts, we have an eeQTS hit for BIP-2019, CDG2-2019 GWAS, MDD3-2019 and SCZ2-2014. With all, except BIP-2019 (exon ENSE00003249902.1, 6th exon in both transcripts), having a hit with exon ENSE00001096309.1, which is the second-last exon of the longest (18 exons) transcript of HKDC1. To plot the polygenic risk scores (PRS) for the four mentioned GWASs against exon expression we need to load the PRS and merge them to the phenotype dataset. 
+For gene HKDC1 (ENSG00000156510.11), which has two protein-coding transcripts, we have an exon eQT-Score hit for BIP-2019, CDG2-2019 GWAS, MDD3-2019 and SCZ2-2014. With all, except BIP-2019 (exon ENSE00003249902.1, 6th exon in both transcripts), having a hit with exon ENSE00001096309.1, which is the second-last exon of the longest (18 exons) transcript of HKDC1. To plot the polygenic risk scores (PRS) for the four mentioned GWASs against exon expression we need to load the PRS and merge them to the phenotype dataset. 
 ```{r, echo = F}
 # BIP-2019 PRS
 prs_bip <- GetPRS(paste0(prs_path, "/BIP-2019/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_BIP-2019_PRSice-2_PRS.all.score"))

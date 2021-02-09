@@ -71,7 +71,7 @@ library(psych)
 library(pvca)
 
 # Data transformation packages
-library(oligo) # to read in oligo data
+library(oligo) # to read in oligo data (works only with ff package v2.2-14)
 library(plyr)
 library(devtools)
 library(reshape2)
@@ -82,9 +82,9 @@ library(tidyr)
 library(data.table)
 
 # Plotting and colour option packages
-library(ggplot2) # for (PCA) plots
+library(ggplot2) # for (PCA) plots (v3.3.0)
 library(ggrepel) # add nicer text to ggplots
-library(GGally) # for mds plot
+library(GGally) # for mds plot (v1.5.0)
 library(ggpubr) # multiple ggplots on one page
 library(corrplot)
 library(cowplot)
@@ -310,9 +310,9 @@ rm(plot_data)
 ```
 We can see, that most of the major depression disorder (MDD) patients were doing suicide, whereas only half of the schizophrenia and bipolar disorder patients were performing suicide. All healthy controls died on a natural cause.
 
-### Type of Death 
+### Cause of Death 
 
-As Suicide was only performed in cases, we also wanted to distribute the type of death into natural, violent (e.g. hanging, choking from food) and non-violent (e.g. poison) type of death.
+As Suicide was only performed in cases, we also wanted to distribute the cause of death into natural, violent (e.g. hanging, choking from food) and non-violent (e.g. poison) cause of death.
 ```{r, echo = F}
 plot_data <- rbind(as.data.frame(table(pheno[pheno$Dx == "CTL", "Type_of_Death"])), as.data.frame(table(pheno[pheno$Dx == "CASE", "Type_of_Death"])))
 plot_data$Type <- c("Controls", "Controls", "Controls", "Cases", "Cases", "Cases")
@@ -328,10 +328,10 @@ ggplot(plot_data) +
   scale_fill_manual(values = brewer.pal(11, "RdBu")[c(9, 3)]) +
   # remove grey theme
   theme_classic(base_size = 24) +
-  labs(title = "Type of Death", x = element_blank(), y = element_blank()) +
+  labs(title = "Cause of Death", x = element_blank(), y = element_blank()) +
   # change legend 
   theme(plot.title = element_text(hjust = 0.5), legend.position = c(0.14, 0.9), legend.background = element_rect(size = 0.5, linetype = "solid", colour = "black"), legend.title = element_blank(), legend.spacing.y = unit(2, "pt"), legend.spacing = unit(1,"cm")) 
-ggsave(paste0(outpath, "/1_barplot_type_of_death.pdf"), width = 8, height = 6, units = "in")
+ggsave(paste0(outpath, "/1_barplot_cause_of_death.pdf"), width = 8, height = 6, units = "in")
 rm(plot_data)
 ```
 
@@ -532,7 +532,7 @@ ggsave(paste0(outpath, "/1_violinplot_c4.pdf"), width = 8, height = 6, units = "
 
 ## Correlation plots
 
-### Age and type of death correlation
+### Age and cause of death correlation
 
 Type of death and age correlation shown in a density plot: 
 ```{r, echo = F}
@@ -628,8 +628,8 @@ names(contrast) <- categorical_cov
 # generate design matrix
 design <- model.matrix(~ . + Age + Sex + Dx + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1 + `Gene PC1` + `Gene PC2` + `Gene PC3` + `Transcript PC1` + `Transcript PC2` + `Transcript PC3` + `Exon PC1` + `Exon PC2` + `Exon PC3`, pheno_new, contrasts.arg = contrast)
 design_cor <- corr.test(design[, -1], use = 'pairwise.complete.obs', method = "pearson", adjust = "none")
-colnames(design_cor$r) <- c("Age", "Sex", "Diagnosis", "pH", "PMI", "RIN", "RIN2", "Batch", "Suicide", "Type of Death", "Ancestry Dim 1", "Ancestry Dim 2", "Ancestry Dim 3", "Ancestry Dim 4", "SV1", "Gene PC1", "Gene PC2", "Gene PC3", "Transcript PC1", "Transcript PC2", "Transcript PC3", "Exon PC1", "Exon PC2", "Exon PC3")
-rownames(design_cor$r) <- c("Age", "Sex", "Diagnosis", "pH", "PMI", "RIN", "RIN2", "Batch", "Suicide", "Type of Death", "Ancestry Dim 1", "Ancestry Dim 2", "Ancestry Dim 3", "Ancestry Dim 4", "SV1", "Gene PC1", "Gene PC2", "Gene PC3", "Transcript PC1", "Transcript PC2", "Transcript PC3", "Exon PC1", "Exon PC2", "Exon PC3")
+colnames(design_cor$r) <- c("Age", "Sex", "Diagnosis", "pH", "PMI", "RIN", "RIN2", "Batch", "Suicide", "Cause of Death", "Ancestry Dim 1", "Ancestry Dim 2", "Ancestry Dim 3", "Ancestry Dim 4", "SV1", "Gene PC1", "Gene PC2", "Gene PC3", "Transcript PC1", "Transcript PC2", "Transcript PC3", "Exon PC1", "Exon PC2", "Exon PC3")
+rownames(design_cor$r) <- c("Age", "Sex", "Diagnosis", "pH", "PMI", "RIN", "RIN2", "Batch", "Suicide", "Cause of Death", "Ancestry Dim 1", "Ancestry Dim 2", "Ancestry Dim 3", "Ancestry Dim 4", "SV1", "Gene PC1", "Gene PC2", "Gene PC3", "Transcript PC1", "Transcript PC2", "Transcript PC3", "Exon PC1", "Exon PC2", "Exon PC3")
 corrplot(design_cor$r, method = "circle", type = "upper", col = colorRampPalette(rev(brewer.pal(n = 11, name = "RdBu")))(100), tl.col = "black", p.mat = design_cor$p, sig.level = 0.05, insig = "label_sig")
 # save plot
 pdf(paste0(outpath, "/1_corrplot_all_covariates.pdf"), width = 6, height = 6)
@@ -642,8 +642,8 @@ Generate corrplot with canCorPairs, which uses a Canonical Correlation Analysis 
 ```{r}
 model <- ~ Age + Sex + pH + PMI + RIN + RIN2 + Dx + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1  + `Gene PC1` + `Gene PC2` + `Gene PC3` + `Transcript PC1` + `Transcript PC2` + `Transcript PC3` + `Exon PC1` + `Exon PC2` + `Exon PC3`
 corr <- canCorPairs(model, pheno_new)
-row.names(corr) <- c("Age", "Sex", "pH", "PMI", "RIN", "RIN2", "Diagnosis", "Suicide", "Type of Death", "Ancestry Dim 1", "Ancestry Dim 2", "Ancestry Dim 3", "Ancestry Dim 4", "Surrogate Variable 1", "Gene Expr PC1", "Gene Expr PC2", "Gene Expr PC3", "Transcript Expr PC1", "Transcript Expr PC2", "Transcript Expr PC3", "Exon Expr PC1", "Exon Expr PC2", "Exon Expr PC3")
-colnames(corr) <- c("Age", "Sex", "pH", "PMI", "RIN", "RIN2", "Diagnosis", "Suicide", "Type of Death", "Ancestry Dim 1", "Ancestry Dim 2", "Ancestry Dim 3", "Ancestry Dim 4", "Surrogate Variable 1","Gene Expr PC1", "Gene Expr PC2", "Gene Expr PC3", "Transcript Expr PC1", "Transcript Expr PC2", "Transcript Expr PC3", "Exon Expr PC1", "Exon Expr PC2", "Exon Expr PC3")
+row.names(corr) <- c("Age", "Sex", "pH", "PMI", "RIN", "RIN2", "Diagnosis", "Suicide", "Cause of Death", "Ancestry Dim 1", "Ancestry Dim 2", "Ancestry Dim 3", "Ancestry Dim 4", "Surrogate Variable 1", "Gene Expr PC1", "Gene Expr PC2", "Gene Expr PC3", "Transcript Expr PC1", "Transcript Expr PC2", "Transcript Expr PC3", "Exon Expr PC1", "Exon Expr PC2", "Exon Expr PC3")
+colnames(corr) <- c("Age", "Sex", "pH", "PMI", "RIN", "RIN2", "Diagnosis", "Suicide", "Cause of Death", "Ancestry Dim 1", "Ancestry Dim 2", "Ancestry Dim 3", "Ancestry Dim 4", "Surrogate Variable 1","Gene Expr PC1", "Gene Expr PC2", "Gene Expr PC3", "Transcript Expr PC1", "Transcript Expr PC2", "Transcript Expr PC3", "Exon Expr PC1", "Exon Expr PC2", "Exon Expr PC3")
 #plot_corrMatrix(corr, col = colorRampPalette(col2)(200))
 corrplot(corr, method = "color", type = "upper", tl.col = "black", cl.lim = c(0, 1), is.corr = F, col = colorRampPalette(rev(brewer.pal(n = 9, name = "RdBu")))(100))
 # save plot
@@ -742,11 +742,11 @@ First, we will check the first ten mds values (C1-C10) of the genotypes given in
 ```{r, echo = F}
 # check mds
 pheno_new <- pheno[, c(14, 22:31)]
-pheno_new[, c(2:11)] <- apply(pheno_new[, c(2:11)], 2, function(x) as.numeric(as.character(x)))#
+pheno_new[, c(2:11)] <- apply(pheno_new[, c(2:11)], 2, function(x) as.numeric(as.character(x)))
 pheno_new$Ancestry <- sapply(pheno_new$Ancestry, function(x) as.character(x))
 pheno_new[pheno_new$Ancestry == "", "Ancestry"] <- "NA" # set all empty ancestry values to NA
 pheno_new <- pheno_new[order(pheno_new$Ancestry),] # sort for ancestry type
-p <- ggpairs(pheno_new, mapping = aes(colour = Ancestry), cardinality_threshold = 178)
+p <- ggpairs(pheno_new, mapping = aes(colour = Ancestry), cardinality_threshold = 169)
 for(i in 1:p$nrow) {
   for(j in 1:p$ncol){
     p[i,j] <- p[i,j] + 

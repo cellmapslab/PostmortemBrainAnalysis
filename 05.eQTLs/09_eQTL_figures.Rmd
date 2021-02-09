@@ -207,30 +207,45 @@ Load all interesting eQTS gene hits. only the ABMS combined dataset including AD
 # Load ADHD-2019 eQTS
 adhd <- fread(paste0(dea_path, "/3.5.1_diff_expr_exons_for_ADHD-2019_PRS_new_pvalue_and_fdr.csv"), header = T, data.table = F, stringsAsFactors = F)
 adhd <- adhd[adhd$`FDR estimate` <= 0.1, ]
-adhd <- unique(as.vector(sapply(adhd$`Ensembl Gene ID`, function(x) strsplit(x, "\\.")[[1]][1])))
 # Load ASD-2019 eQTS
 asd <- fread(paste0(dea_path, "/3.5.2_diff_expr_exons_for_ASD-2019_PRS_new_pvalue_and_fdr.csv"), header = T, data.table = F, stringsAsFactors = F)
 asd <- asd[asd$`FDR estimate` <= 0.1, ]
-asd <- unique(as.vector(sapply(asd$`Ensembl Gene ID`, function(x) strsplit(x, "\\.")[[1]][1])))
 # Load BIP-2019 eQTS
 bip <- fread(paste0(dea_path, "/3.5.3_diff_expr_exons_for_BIP-2019_PRS_new_pvalue_and_fdr.csv"), header = T, data.table = F, stringsAsFactors = F)
 bip <- bip[bip$`FDR estimate` <= 0.1, ]
-bip <- unique(as.vector(sapply(bip$`Ensembl Gene ID`, function(x) strsplit(x, "\\.")[[1]][1])))
 # Load CDG-2019 eQTS
 cdg <- fread(paste0(dea_path, "/3.5.7_diff_expr_exons_for_CDG2-2019_PRS_new_pvalue_and_fdr.csv"), header = T, data.table = F, stringsAsFactors = F)
 cdg <- cdg[cdg$`FDR estimate` <= 0.1, ]
-cdg <- unique(as.vector(sapply(cdg$`Ensembl Gene ID`, function(x) strsplit(x, "\\.")[[1]][1])))
 # Load MDD-2019 eQTS
 mdd <- fread(paste0(dea_path, "/3.5.13_diff_expr_exons_for_MDD3-2019_PRS_new_pvalue_and_fdr.csv"), header = T, data.table = F, stringsAsFactors = F)
 mdd <- mdd[mdd$`FDR estimate` <= 0.1, ]
-mdd <- unique(as.vector(sapply(mdd$`Ensembl Gene ID`, function(x) strsplit(x, "\\.")[[1]][1])))
 # Load SCZ-2014 eQTS
 scz <- fread(paste0(dea_path, "/3.5.14_diff_expr_exons_for_SCZ2-2014_PRS_new_pvalue_and_fdr.csv"), header = T, data.table = F, stringsAsFactors = F)
 scz <- scz[scz$`FDR estimate` <= 0.1, ]
-scz <- unique(as.vector(sapply(scz$`Ensembl Gene ID`, function(x) strsplit(x, "\\.")[[1]][1])))
 # Load ABMS eQTS
 abms <- fread(paste0(eqts_path, "/3_exon_eQTS_ADHD_BIP_MDD_SCZ.txt"), data.table = F, stringsAsFactors = F, header = F)
 ```
+Check t-statistic ranges and median:
+
+|      | range | median |
+|------|-------|--------|
+| ADHD eQTS | `r min(adhd$"T-statistic")` - `r max(adhd$"T-statistic")` | `r median(adhd$"T-statistic")` |
+| ASD eQTS | `r min(asd$"T-statistic")` - `r max(asd$"T-statistic")` | `r median(asd$"T-statistic")` |
+| BIP eQTS | `r min(bip$"T-statistic")` - `r max(bip$"T-statistic")` | `r median(bip$"T-statistic")` |
+| CDG eQTS | `r min(cdg$"T-statistic")` - `r max(cdg$"T-statistic")` | `r median(cdg$"T-statistic")` |
+| MDD eQTS | `r min(mdd$"T-statistic")` - `r max(mdd$"T-statistic")` | `r median(mdd$"T-statistic")` |
+| SCZ eQTS | `r min(scz$"T-statistic")` - `r max(scz$"T-statistic")` | `r median(scz$"T-statistic")` |
+
+Then, we only get the unique gene IDs for all eQTS:
+```{r}
+adhd <- unique(as.vector(sapply(adhd$`Ensembl Gene ID`, function(x) strsplit(x, "\\.")[[1]][1])))
+asd <- unique(as.vector(sapply(asd$`Ensembl Gene ID`, function(x) strsplit(x, "\\.")[[1]][1])))
+bip <- unique(as.vector(sapply(bip$`Ensembl Gene ID`, function(x) strsplit(x, "\\.")[[1]][1])))
+cdg <- unique(as.vector(sapply(cdg$`Ensembl Gene ID`, function(x) strsplit(x, "\\.")[[1]][1])))
+mdd <- unique(as.vector(sapply(mdd$`Ensembl Gene ID`, function(x) strsplit(x, "\\.")[[1]][1])))
+scz <- unique(as.vector(sapply(scz$`Ensembl Gene ID`, function(x) strsplit(x, "\\.")[[1]][1])))
+```
+
 Then, we will check the number of found ABMS eQTS genes:
 
 |      | hits |
@@ -417,8 +432,8 @@ grid.newpage()
 draw.pairwise.venn(area1 = length(edegenes_all), 
                    area2 = length(eegenes_all), scaled = T, lty = "blank",
                    cross.area = length(intersect(edegenes_all, eegenes_all)), 
-                   category = c(paste("eeGenes", length(eegenes_all), sep = "\n"), 
-                                paste("eDEGenes", length(edegenes_all), sep = "\n")), 
+                   category = c(paste("eDEGenes", length(edegenes_all), sep = "\n"),
+                                paste("eeGenes", length(eegenes_all), sep = "\n")), 
                    fill = c(rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), 
                             rgb(red = 158, green = 212, blue = 0, maxColorValue = 255)))
 dev.off()
@@ -591,9 +606,9 @@ eqtls_gene_manhattan$Chr <- as.numeric(eqtls_gene_manhattan$Chr)
 eqtls_gene_manhattan$BP <- as.numeric(eqtls_gene_manhattan$BP)
 # generate manhattan plot
 pdf(paste0(out_path, "/3_manhattan_plot_gene_eSNPs_FDR_0.05.pdf"), width = 21, height = 7)
-manhattan(eqtls_gene_manhattan, chr = "Chr", bp = "BP", snp = "SNP", p = "P-value", suggestiveline = F, genomewideline = F, ylim = c(3, 30), col = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), "gray"))
+manhattan(eqtls_gene_manhattan, chr = "Chr", bp = "BP", snp = "SNP", p = "P-value", suggestiveline = F, genomewideline = F, ylim = c(3, 30), col = c(viridis(3, option = "D", begin = 0.15, end = 0.9)[1], "gray"))
 dev.off()
-manhattan(eqtls_gene_manhattan, chr = "Chr", bp = "BP", snp = "SNP", p = "P-value", suggestiveline = F, genomewideline = F, ylim = c(3, 30), col = c(rgb(red = 255, green = 167, blue = 42, maxColorValue = 255), "gray"))
+manhattan(eqtls_gene_manhattan, chr = "Chr", bp = "BP", snp = "SNP", p = "P-value", suggestiveline = F, genomewideline = F, ylim = c(3, 30), col = c(viridis(3, option = "D", begin = 0.15, end = 0.9)[1], "gray"))
 rm(eqtls_gene_manhattan)
 ```
 
@@ -606,9 +621,9 @@ eqtls_transcript_manhattan$Chr <- as.numeric(eqtls_transcript_manhattan$Chr)
 eqtls_transcript_manhattan$BP <- as.numeric(eqtls_transcript_manhattan$BP)
 # generate manhattan plot
 pdf(paste0(out_path, "/3_manhattan_plot_transcript_eSNPs_FDR_0.05.pdf"), width = 21, height = 7)
-manhattan(eqtls_transcript_manhattan, chr = "Chr", bp = "BP", snp = "SNP", p = "P-value", suggestiveline = F, genomewideline = F, ylim = c(2, 50), col = c(rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), "gray"))
+manhattan(eqtls_transcript_manhattan, chr = "Chr", bp = "BP", snp = "SNP", p = "P-value", suggestiveline = F, genomewideline = F, ylim = c(2, 50), col = c(viridis(3, option = "D", begin = 0.15, end = 0.9)[2], "gray"))
 dev.off()
-manhattan(eqtls_transcript_manhattan, chr = "Chr", bp = "BP", snp = "SNP", p = "P-value", suggestiveline = F, genomewideline = F, ylim = c(2, 50), col = c(rgb(red = 66, green = 146, blue = 198, maxColorValue = 255), "gray"))
+manhattan(eqtls_transcript_manhattan, chr = "Chr", bp = "BP", snp = "SNP", p = "P-value", suggestiveline = F, genomewideline = F, ylim = c(2, 50), col = c(viridis(3, option = "D", begin = 0.15, end = 0.9)[2], "gray"))
 rm(eqtls_transcript_manhattan)
 ```
 
@@ -621,9 +636,9 @@ eqtls_exon_manhattan$Chr <- as.numeric(eqtls_exon_manhattan$Chr)
 eqtls_exon_manhattan$BP <- as.numeric(eqtls_exon_manhattan$BP)
 # generate manhattan plot
 pdf(paste0(out_path, "/3_manhattan_plot_exon_eSNPs_FDR_0.05.pdf"), width = 21, height = 7)
-manhattan(eqtls_exon_manhattan, chr = "Chr", bp = "BP", snp = "SNP", p = "P-value", suggestiveline = F, genomewideline = F, ylim = c(2, 55), col = c(rgb(red = 158, green = 212, blue = 0, maxColorValue = 255), "gray"))
+manhattan(eqtls_exon_manhattan, chr = "Chr", bp = "BP", snp = "SNP", p = "P-value", suggestiveline = F, genomewideline = F, ylim = c(2, 55), col = c(viridis(3, option = "D", begin = 0.15, end = 0.9)[3], "gray"))
 dev.off()
-manhattan(eqtls_exon_manhattan, chr = "Chr", bp = "BP", snp = "SNP", p = "P-value", suggestiveline = F, genomewideline = F, ylim = c(2, 55), col = c(rgb(red = 158, green = 212, blue = 0, maxColorValue = 255), "gray"))
+manhattan(eqtls_exon_manhattan, chr = "Chr", bp = "BP", snp = "SNP", p = "P-value", suggestiveline = F, genomewideline = F, ylim = c(2, 55), col = c(viridis(3, option = "D", begin = 0.15, end = 0.9)[3], "gray"))
 rm(eqtls_exon_manhattan)
 ```
 
@@ -791,66 +806,66 @@ Calculate the distances between the SNPs and genes/transcripts/exons in the cis-
 ```{r, include = F, eval = F, echo = F}
 ### GENE eQTL ALL ###
 # 1. separate SNP chromosome from position
-eqtls_gene$SNP_chr <- lapply(eqtls_gene$SNP_location, function(x) strsplit(x, ":")[[1]][1])
-eqtls_gene$SNP_pos <- lapply(eqtls_gene$SNP_location, function(x) strsplit(x, ":")[[1]][2])
-eqtls_gene$Gene_chr <- lapply(eqtls_gene$Gene_location, function(x) strsplit(strsplit(x, ":")[[1]][1], "chr")[[1]][2])
-eqtls_gene$Gene_start <- lapply(eqtls_gene$Gene_location, function(x) strsplit(strsplit(x, ":")[[1]][2], "\\.\\.")[[1]][1])
-eqtls_gene$Gene_end <- lapply(eqtls_gene$Gene_location, function(x) strsplit(strsplit(x, ":")[[1]][2], "\\.\\.")[[1]][2])
+eqtls_gene$SNP_chr <- lapply(eqtls_gene$`SNP Location`, function(x) strsplit(x, ":")[[1]][1])
+eqtls_gene$SNP_pos <- lapply(eqtls_gene$`SNP Location`, function(x) strsplit(x, ":")[[1]][2])
+eqtls_gene$Gene_chr <- lapply(eqtls_gene$`Gene Location`, function(x) strsplit(strsplit(x, ":")[[1]][1], "chr")[[1]][2])
+eqtls_gene$Gene_start <- lapply(eqtls_gene$`Gene Location`, function(x) strsplit(strsplit(x, ":")[[1]][2], "\\.\\.")[[1]][1])
+eqtls_gene$Gene_end <- lapply(eqtls_gene$`Gene Location`, function(x) strsplit(strsplit(x, ":")[[1]][2], "\\.\\.")[[1]][2])
 # check visually if chromosomes of SNP and gene are equal
 chromosomes <- as.data.frame(eqtls_gene[, c("SNP_chr", "Gene_chr")])
 chromosomes[!duplicated(chromosomes),] 
 eqtls_gene <- as.data.frame(eqtls_gene)
 
 ### GENE eQTL CASES only ###
-eqtls_gene_cases$SNP_chr <- lapply(eqtls_gene_cases$SNP_location, function(x) strsplit(x, ":")[[1]][1])
-eqtls_gene_cases$SNP_pos <- lapply(eqtls_gene_cases$SNP_location, function(x) strsplit(x, ":")[[1]][2])
-eqtls_gene_cases$Gene_chr <- lapply(eqtls_gene_cases$Gene_location, function(x) strsplit(strsplit(x, ":")[[1]][1], "chr")[[1]][2])
-eqtls_gene_cases$Gene_start <- lapply(eqtls_gene_cases$Gene_location, function(x) strsplit(strsplit(x, ":")[[1]][2], "\\.\\.")[[1]][1])
-eqtls_gene_cases$Gene_end <- lapply(eqtls_gene_cases$Gene_location, function(x) strsplit(strsplit(x, ":")[[1]][2], "\\.\\.")[[1]][2])
+eqtls_gene_cases$SNP_chr <- lapply(eqtls_gene_cases$`SNP Location`, function(x) strsplit(x, ":")[[1]][1])
+eqtls_gene_cases$SNP_pos <- lapply(eqtls_gene_cases$`SNP Location`, function(x) strsplit(x, ":")[[1]][2])
+eqtls_gene_cases$Gene_chr <- lapply(eqtls_gene_cases$`Gene Location`, function(x) strsplit(strsplit(x, ":")[[1]][1], "chr")[[1]][2])
+eqtls_gene_cases$Gene_start <- lapply(eqtls_gene_cases$`Gene Location`, function(x) strsplit(strsplit(x, ":")[[1]][2], "\\.\\.")[[1]][1])
+eqtls_gene_cases$Gene_end <- lapply(eqtls_gene_cases$`Gene Location`, function(x) strsplit(strsplit(x, ":")[[1]][2], "\\.\\.")[[1]][2])
 # check visually if chromosomes of SNP and gene are equal
 chromosomes <- as.data.frame(eqtls_gene_cases[, c("SNP_chr", "Gene_chr")])
 chromosomes[!duplicated(chromosomes),] 
 eqtls_gene_cases <- as.data.frame(eqtls_gene_cases)
 
 ### Transcript eQTL ALL ###
-eqtls_transcript$SNP_chr <- lapply(eqtls_transcript$SNP_location, function(x) strsplit(x, ":")[[1]][1])
-eqtls_transcript$SNP_pos <- lapply(eqtls_transcript$SNP_location, function(x) strsplit(x, ":")[[1]][2])
-eqtls_transcript$Transcript_chr <- lapply(eqtls_transcript$Transcript_location, function(x) strsplit(strsplit(x, ":")[[1]][1], "chr")[[1]][2])
-eqtls_transcript$Transcript_start <- lapply(eqtls_transcript$Transcript_location, function(x) strsplit(strsplit(x, ":")[[1]][2], "\\.\\.")[[1]][1])
-eqtls_transcript$Transcript_end <- lapply(eqtls_transcript$Transcript_location, function(x) strsplit(strsplit(x, ":")[[1]][2], "\\.\\.")[[1]][2])
+eqtls_transcript$SNP_chr <- lapply(eqtls_transcript$`SNP Location`, function(x) strsplit(x, ":")[[1]][1])
+eqtls_transcript$SNP_pos <- lapply(eqtls_transcript$`SNP Location`, function(x) strsplit(x, ":")[[1]][2])
+eqtls_transcript$Transcript_chr <- lapply(eqtls_transcript$`Transcript Location`, function(x) strsplit(strsplit(x, ":")[[1]][1], "chr")[[1]][2])
+eqtls_transcript$Transcript_start <- lapply(eqtls_transcript$`Transcript Location`, function(x) strsplit(strsplit(x, ":")[[1]][2], "\\.\\.")[[1]][1])
+eqtls_transcript$Transcript_end <- lapply(eqtls_transcript$`Transcript Location`, function(x) strsplit(strsplit(x, ":")[[1]][2], "\\.\\.")[[1]][2])
 # check visually if chromosomes of SNP and gene are equal
 chromosomes <- as.data.frame(eqtls_transcript[, c("SNP_chr", "Transcript_chr")])
 chromosomes[!duplicated(chromosomes),] 
 eqtls_transcript <- as.data.frame(eqtls_transcript)
 
 ### Transcript eQTL CASES only ###
-eqtls_transcript_cases$SNP_chr <- lapply(eqtls_transcript_cases$SNP_location, function(x) strsplit(x, ":")[[1]][1])
-eqtls_transcript_cases$SNP_pos <- lapply(eqtls_transcript_cases$SNP_location, function(x) strsplit(x, ":")[[1]][2])
-eqtls_transcript_cases$Transcript_chr <- lapply(eqtls_transcript_cases$Transcript_location, function(x) strsplit(strsplit(x, ":")[[1]][1], "chr")[[1]][2])
-eqtls_transcript_cases$Transcript_start <- lapply(eqtls_transcript_cases$Transcript_location, function(x) strsplit(strsplit(x, ":")[[1]][2], "\\.\\.")[[1]][1])
-eqtls_transcript_cases$Transcript_end <- lapply(eqtls_transcript_cases$Transcript_location, function(x) strsplit(strsplit(x, ":")[[1]][2], "\\.\\.")[[1]][2])
+eqtls_transcript_cases$SNP_chr <- lapply(eqtls_transcript_cases$`SNP Location`, function(x) strsplit(x, ":")[[1]][1])
+eqtls_transcript_cases$SNP_pos <- lapply(eqtls_transcript_cases$`SNP Location`, function(x) strsplit(x, ":")[[1]][2])
+eqtls_transcript_cases$Transcript_chr <- lapply(eqtls_transcript_cases$`Transcript Location`, function(x) strsplit(strsplit(x, ":")[[1]][1], "chr")[[1]][2])
+eqtls_transcript_cases$Transcript_start <- lapply(eqtls_transcript_cases$`Transcript Location`, function(x) strsplit(strsplit(x, ":")[[1]][2], "\\.\\.")[[1]][1])
+eqtls_transcript_cases$Transcript_end <- lapply(eqtls_transcript_cases$`Transcript Location`, function(x) strsplit(strsplit(x, ":")[[1]][2], "\\.\\.")[[1]][2])
 # check visually if chromosomes of SNP and gene are equal
 chromosomes <- as.data.frame(eqtls_transcript_cases[, c("SNP_chr", "Transcript_chr")])
 chromosomes[!duplicated(chromosomes),] 
 eqtls_transcript_cases <- as.data.frame(eqtls_transcript_cases)
 
 ### Exon eQTL ALL ###
-eqtls_exon$SNP_chr <- lapply(eqtls_exon$SNP_location, function(x) strsplit(x, ":")[[1]][1])
-eqtls_exon$SNP_pos <- lapply(eqtls_exon$SNP_location, function(x) strsplit(x, ":")[[1]][2])
-eqtls_exon$Exon_chr <- lapply(eqtls_exon$Exon_location, function(x) strsplit(strsplit(x, ":")[[1]][1], "chr")[[1]][2])
-eqtls_exon$Exon_start <- lapply(eqtls_exon$Exon_location, function(x) strsplit(strsplit(x, ":")[[1]][2], "\\.\\.")[[1]][1])
-eqtls_exon$Exon_end <- lapply(eqtls_exon$Exon_location, function(x) strsplit(strsplit(x, ":")[[1]][2], "\\.\\.")[[1]][2])
+eqtls_exon$SNP_chr <- lapply(eqtls_exon$`SNP Location`, function(x) strsplit(x, ":")[[1]][1])
+eqtls_exon$SNP_pos <- lapply(eqtls_exon$`SNP Location`, function(x) strsplit(x, ":")[[1]][2])
+eqtls_exon$Exon_chr <- lapply(eqtls_exon$`Exon Location`, function(x) strsplit(strsplit(x, ":")[[1]][1], "chr")[[1]][2])
+eqtls_exon$Exon_start <- lapply(eqtls_exon$`Exon Location`, function(x) strsplit(strsplit(x, ":")[[1]][2], "\\.\\.")[[1]][1])
+eqtls_exon$Exon_end <- lapply(eqtls_exon$`Exon Location`, function(x) strsplit(strsplit(x, ":")[[1]][2], "\\.\\.")[[1]][2])
 # check visually if chromosomes of SNP and gene are equal
 chromosomes <- as.data.frame(eqtls_exon[, c("SNP_chr", "Exon_chr")])
 chromosomes[!duplicated(chromosomes),] 
 eqtls_exon <- as.data.frame(eqtls_exon)
 
 ### Exon eQTL CASES only ###
-eqtls_exon_cases$SNP_chr <- lapply(eqtls_exon_cases$SNP_location, function(x) strsplit(x, ":")[[1]][1])
-eqtls_exon_cases$SNP_pos <- lapply(eqtls_exon_cases$SNP_location, function(x) strsplit(x, ":")[[1]][2])
-eqtls_exon_cases$Exon_chr <- lapply(eqtls_exon_cases$Exon_location, function(x) strsplit(strsplit(x, ":")[[1]][1], "chr")[[1]][2])
-eqtls_exon_cases$Exon_start <- lapply(eqtls_exon_cases$Exon_location, function(x) strsplit(strsplit(x, ":")[[1]][2], "\\.\\.")[[1]][1])
-eqtls_exon_cases$Exon_end <- lapply(eqtls_exon_cases$Exon_location, function(x) strsplit(strsplit(x, ":")[[1]][2], "\\.\\.")[[1]][2])
+eqtls_exon_cases$SNP_chr <- lapply(eqtls_exon_cases$`SNP Location`, function(x) strsplit(x, ":")[[1]][1])
+eqtls_exon_cases$SNP_pos <- lapply(eqtls_exon_cases$`SNP Location`, function(x) strsplit(x, ":")[[1]][2])
+eqtls_exon_cases$Exon_chr <- lapply(eqtls_exon_cases$`Exon Location`, function(x) strsplit(strsplit(x, ":")[[1]][1], "chr")[[1]][2])
+eqtls_exon_cases$Exon_start <- lapply(eqtls_exon_cases$`Exon Location`, function(x) strsplit(strsplit(x, ":")[[1]][2], "\\.\\.")[[1]][1])
+eqtls_exon_cases$Exon_end <- lapply(eqtls_exon_cases$`Exon Location`, function(x) strsplit(strsplit(x, ":")[[1]][2], "\\.\\.")[[1]][2])
 # check visually if chromosomes of SNP and gene are equal
 chromosomes <- as.data.frame(eqtls_exon_cases[, c("SNP_chr", "Exon_chr")])
 chromosomes[!duplicated(chromosomes),] 
@@ -880,7 +895,7 @@ dist.exon.cases <- unlist(lapply(1:length(eqtls_exon_cases$SNP), function(x) if(
 # 3. generate distance plot
 ### GENE
 pdf("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/figures/6_distance_plot_gene_eqtls.pdf", height = 5)
-plot(density(dist.gene[dist.gene != 0 & dist.gene > -1000000 & dist.gene < 1000000]), xlab = "Distance of gene eQTL-variant to TSS and TES", ylab = "Density", main = "", col = viridis(3)[1], ylim = c(0, 8e-06))
+plot(density(dist.gene[dist.gene != 0 & dist.gene > -1000000 & dist.gene < 1000000]), xlab = "Position relative to gene (kb)", ylab = "Density", main = "", col = viridis(3)[1], ylim = c(0, 8e-06))
 lines(density(dist.gene.cases[dist.gene.cases != 0 & dist.gene.cases > -1000000 & dist.gene.cases < 1000000]), col = viridis(3)[2])
 legend("topright", legend = c("genes all", "genes cases only"), fill = c(viridis(3)[1],viridis(3)[2]))
 dev.off()
