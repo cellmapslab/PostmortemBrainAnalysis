@@ -893,10 +893,6 @@ plotting_data2 <- rbind(plotting_data2, GetOverlaps(gwas = scz_gr, genes = ct_ge
 mdd3_gr <- readRDS(paste0(rds_path, "/GWAS_sumstats_MDD3-2019_p0.05.rds"))
 plotting_data2 <- rbind(plotting_data2, GetOverlaps(gwas = mdd3_gr, genes = ct_genes, snps = genes_eesnps_gr, category = "MDD-2019"))
 
-# load EA-2018 and add genes with overlapping SNPs to the plotting dataset
-ea_gr <- readRDS(paste0(rds_path, "/GWAS_sumstats_EA-2018_p0.05.rds"))
-plotting_data2 <- rbind(plotting_data2, GetOverlaps(gwas = ea_gr, genes = ct_genes, snps = genes_eesnps_gr, category = "EA-2018"))
-
 # load CDG2-2019 and add genes with overlapping SNPs to the plotting dataset
 cdg_gr <- readRDS(paste0(rds_path, "/GWAS_sumstats_CDG2-2019_p0.05.rds"))
 plotting_data2 <- rbind(plotting_data2, GetOverlaps(gwas = cdg_gr, genes = ct_genes, snps = genes_eesnps_gr, category = "CDG-2019"))
@@ -914,7 +910,8 @@ Finally, we can generate the heatplot using ggplot:
 ```{r, echo = F}
 # order plotting data on category and genes with most hits
 #plotting_data2$Category <- factor(plotting_data2$Category, levels = names(table(plotting_data2$Category)[order(table(plotting_data2$Category), decreasing = T)]))
-plotting_data2$Gene <- factor(plotting_data2$Gene, levels = names(table(plotting_data2$Gene)[order(table(plotting_data2$Gene), decreasing = T)]))
+plotting_data2$Gene <- factor(plotting_data2$Gene, levels = c("ANK1", "GAD1", "DLGAP1", "SDK1", "BTBD11", "NRXN3", "ROBO2", "GRID2", "PCDH15", "PAM", "GAD2", "DPP10", "RYR1", "DLGAP2", "COL12A1", "TENM4", "TENM2", "PACRG", "RIMS2", "CIT", "CSMD1", "ATP10B", "USP24", "DOCK1", "TNK2", "DGKG", "KIF13A", "DGKD", "EPHA6"))
+#plotting_data2$Gene <- factor(plotting_data2$Gene, levels = names(table(plotting_data2$Gene)[order(table(plotting_data2$Gene), decreasing = T)]))
 #plotting_data2$Category <- factor(plotting_data2$Category, levels = c("ECM-receptor interaction", "Focal adhesion", "ABC transporters", "Rare variants", "Joint eeQTS", "MDD eeQTS", "SCZ eeQTS", "eeGenes", "teGenes", "geGenes", "eDEGenes", "GWAS Catalog SCZ-related", "CMC g/isoDEGene"))
 g <- ggplot(plotting_data2, aes_(~Gene, ~Category)) +
   geom_tile(aes(width = 0.9, height = 0.9), color = "white") + 

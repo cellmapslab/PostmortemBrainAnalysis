@@ -241,7 +241,11 @@ if(length(args) == 0){
                            results[c(overlap, pval, or), "Transcript_cases"] <- AnnotatePublicData(eqtls_transcript_cases_gr, hmm_blood_selected, perm, background)
                            results[c(overlap, pval, or), "Exon"] <- AnnotatePublicData(eqtls_exon_gr, hmm_blood_selected, perm, background)
                            results[c(overlap, pval, or), "Exon_cases"] <- AnnotatePublicData(eqtls_exon_cases_gr, hmm_blood_selected, perm, background)
-                           write.table(results, file = paste0(hmm_blood_outpath, "/pmb_cis-eQTL_annotation_results_10000_permutations_ChromHMM_blood_", states[i], ".tsv"), col.names = NA, quote = F, dec = ".", sep = "\t")
+                           if(states[i] == "8_ZNF/Rpts"){
+                             write.table(results, file = paste0(hmm_blood_outpath, "/pmb_cis-eQTL_annotation_results_10000_permutations_ChromHMM_blood_8_ZNF_Rpts.tsv"), col.names = NA, quote = F, dec = ".", sep = "\t")
+                           } else {
+                             write.table(results, file = paste0(hmm_blood_outpath, "/pmb_cis-eQTL_annotation_results_10000_permutations_ChromHMM_blood_", states[i], ".tsv"), col.names = NA, quote = F, dec = ".", sep = "\t")
+                           }
                            results
                          }
     stopCluster(cl)
@@ -303,7 +307,11 @@ if(length(args) == 0){
                            results[c(overlap, pval, or), "Transcript_cases"] <- AnnotatePublicData(eqtls_transcript_cases_gr, hmm_brain_selected, perm, background)
                            results[c(overlap, pval, or), "Exon"] <- AnnotatePublicData(eqtls_exon_gr, hmm_brain_selected, perm, background)
                            results[c(overlap, pval, or), "Exon_cases"] <- AnnotatePublicData(eqtls_exon_cases_gr, hmm_brain_selected, perm, background)
-                           write.table(results, file = paste0(hmm_brain_outpath, "/pmb_cis-eQTL_annotation_results_10000_permutations_ChromHMM_", states[i],".tsv"), col.names = NA, quote = F, dec = ".", sep = "\t")
+                           if(states[i] == "8_ZNF/Rpts"){
+                             write.table(results, file = paste0(hmm_brain_outpath, "/pmb_cis-eQTL_annotation_results_10000_permutations_ChromHMM_brain_8_ZNF_Rpts.tsv"), col.names = NA, quote = F, dec = ".", sep = "\t")
+                           } else {
+                             write.table(results, file = paste0(hmm_brain_outpath, "/pmb_cis-eQTL_annotation_results_10000_permutations_ChromHMM_brain_", states[i],".tsv"), col.names = NA, quote = F, dec = ".", sep = "\t")
+                           }
                            results
                          }
     stopCluster(cl)
@@ -365,7 +373,11 @@ if(length(args) == 0){
                            results[c(overlap, pval, or), "Transcript_cases"] <- AnnotatePublicData(eqtls_transcript_cases_gr, hmm_dlpfc_selected, perm, background)
                            results[c(overlap, pval, or), "Exon"] <- AnnotatePublicData(eqtls_exon_gr, hmm_dlpfc_selected, perm, background)
                            results[c(overlap, pval, or), "Exon_cases"] <- AnnotatePublicData(eqtls_exon_cases_gr, hmm_dlpfc_selected, perm, background)
-                           write.table(results, file = paste0(hmm_dlpfc_outpath, "/pmb_cis-eQTL_annotation_results_10000_permutations_ChromHMM_", states[i],".tsv"), col.names = NA, quote = F, dec = ".", sep = "\t")
+                           if(states[i] == "8_ZNF/Rpts"){
+                             write.table(results, file = paste0(hmm_dlpfc_outpath, "/pmb_cis-eQTL_annotation_results_10000_permutations_ChromHMM_DLPFC_8_ZNF_Rpts.tsv"), col.names = NA, quote = F, dec = ".", sep = "\t")
+                           } else {
+                             write.table(results, file = paste0(hmm_dlpfc_outpath, "/pmb_cis-eQTL_annotation_results_10000_permutations_ChromHMM_DLPFC_", states[i],".tsv"), col.names = NA, quote = F, dec = ".", sep = "\t")
+                           }
                            results
                          }
     stopCluster(cl)
