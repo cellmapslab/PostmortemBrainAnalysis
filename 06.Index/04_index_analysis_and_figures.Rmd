@@ -44,12 +44,12 @@ library(data.table)
 library(readxl)  # read in excel files
 library(tidyr)
 library(oligo)
-library(tidyr)
 
 # packages for plotting
 library(ggplot2)
 library(grid)
 library(VennDiagram)
+library(BioCircos) # circular chromosome plot
 
 # package for colorblind colors
 library(viridis)
@@ -81,6 +81,8 @@ dea_rdata_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04
 eqts_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/04_FUMA/4.1_input_files/"
 # path to CMC data
 cmc_path <- "/storage/groups/ccm01/datasets/2019_CMC_Fromer_et_al"
+# path to hiPSC data
+hipsc_path <- "/storage/groups/ccm01/datasets/2021_Stertz_et_al"
 # path to SCZ GWAS loci genes
 gwas_path <- "/storage/groups/ccm01/datasets/2018_GWAS_summary_statistics"
 # path to the snRNAseq mean expression per gene for cell types table
@@ -228,7 +230,7 @@ scz <- scz[scz$`FDR estimate` <= 0.1, ]
 scz_symbols <- scz$`Gene Symbol`
 scz <- unique(as.vector(sapply(scz$`Ensembl Gene ID`, function(x) strsplit(x, "\\.")[[1]][1])))
 # Load ABMS eQTS
-abms <- fread(paste0(eqts_path, "/3_exon_eQTS_ADHD_BD_MDD_SCZ.txt"), data.table = F, stringsAsFactors = F, header = F)
+abms <- fread(paste0(eqts_path, "/3_exon_eQTS_ADHD_BIP_MDD_SCZ.txt"), data.table = F, stringsAsFactors = F, header = F)
 ```
 
 ## Load GWAS Catalog for SCZ-related genes
@@ -263,6 +265,18 @@ cmc_geGenes <- unique(cmc_geGenes[cmc_geGenes$FDR < 0.05, "Gene_symbol"])  # fil
 # seGenes (isoQTL/sQTL genes)
 cmc_seGenes <- fread(paste0(cmc_path, "/eQTL/CMC_MSSM-Penn-Pitt_DLPFC_Analysis_isoQTL-adjustedSVA.txt"), data.table = F)
 cmc_seGenes <- unique(cmc_seGenes[cmc_seGenes$FDR < 0.05, "Gene_symbol"])  # filter for FDR < 0.05
+```
+
+## Load human-induced pluripotent stem cell (hiPSC) results (Stertz et al., 2021)
+
+```{r}
+# DEGenes
+hipsc_DEGenes <- as.data.frame(read_excel(paste0(hipsc_path, "/Differential_expression_of_genes_in_neurons_41386_2020_924_MOESM3_ESM.xlsx"), sheet = "DEG in neurons Healthy controls"))
+hipsc_DEGenes <- hipsc_DEGenes[, c("Gene", "padj", "log2FoldChange")]
+
+# overlap of DEGenes to hiPSC
+length(intersect(tDEGenes$"Ensembl Gene ID", hipsc_DEGenes$Gene))
+length(intersect(eDEGenes$"Ensembl Gene ID", hipsc_DEGenes$Gene))
 ```
 
 ## Load GTEx eQTL and sQTL genes
@@ -314,6 +328,16 @@ cts <- rbind(cts, vip)
 
 cts <- cts[order(cts$pvals_adj), ]
 ct_genes <- intersect(overlap$`Gene Symbol`, cts[cts$pvals_adj < 0.05, ]$names)
+ct_genes_mapped <- overlap[overlap$`Gene Symbol` %in% ct_genes, ]
+
+# map to Entrez IDs and save the file
+library(aliases2entrez) # to map gene symbols to entrez ids
+file <- system.file("extdata", "HGNC.txt", package = "aliases2entrez")
+HGNC <- read.delim(file)
+# run the main function
+entrez <- convert_symbols(ct_genes_mapped$`Gene Symbol`, HGNC)
+ct_genes_mapped <- merge(ct_genes_mapped, entrez, by.x = "Gene Symbol", by.y = "Symbols")
+write.table(ct_genes_mapped, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Index/29_core_genes_diff_expr_in_cell_types_mapped.csv", sep = "\t", row.names = FALSE)
 ```
 
 
@@ -431,6 +455,50 @@ grid.draw(test)
 dev.off()
 ```
 
+## Circular plot
+
+Then, we generated a circular plot to see where the 832 genes are located on the genome, e.g. which chromosomes. 
+```{r}
+# Load Gencode gtf file to get the gene locations
+gencode <- import.gff("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/annotation_files/gencode.v19.annotation.gtf", format = "gtf")
+gencode <- gencode[gencode$gene_type == "protein_coding"]  # get only protein-coding genes
+gencode <- gencode[gencode$source == "HAVANA"] # get only HAVANA source data
+genes <- as.data.frame(gencode[gencode$type == "gene"])  # get only genes (no exons, cds, transcripts etc.)
+genes <- genes[, c("gene_id", "seqnames", "start", "end")]
+rm(gencode)
+
+# For the overlap to the core gene set, we need to remove the endings from the Ensembl Gene IDs
+genes$gene_id <- as.vector(sapply(genes$gene_id, function(x) strsplit(x, "\\.")[[1]][1]))
+
+# Now, we can get the location for the core genes
+core_genes <- genes[genes$gene_id %in% overlap$`Ensembl Gene ID`, ]
+
+# Set the tracks
+tracklist = BioCircosArcTrack('coreGenes', core_genes$seqnames, core_genes$start, core_genes$end, colors = "darkblue", labels = core_genes$gene_id, maxRadius = 0.97, minRadius = 0.83)
+#maxRadius = 0.97, minRadius = 0.83  <- tracks shown in inner circle
+#minRadius = 1.18, maxRadius = 1.25  <- tracks shown in outer circle
+
+# get the chrosomose lengths for hg19 without the X and Y chromosomes
+hg19_without_x = list("1" = 249250621, "2" = 243199373, "3" = 198022430, "4" = 191154276, "5" = 180915260, "6" = 171115067, "7" = 159138663, "8" = 146364022, "9" = 141213431, "10" = 135534747, "11" = 135006516, "12" = 133851895, "13" = 115169878, "14" = 107349540, "15" = 102531392, "16" = 90354753, "17" = 81195210, "18" = 78077248, "19" = 59128983, "20" = 63025520, "21" = 48129895, "22" = 51304566)
+
+# Display the BioCircos visualization
+BioCircos(tracklist, 
+          genome = hg19_without_x,
+          yChr = FALSE, 
+          xChr = FALSE,
+          genomeFillColor = viridis(23, direction = -1, end = 0.9), 
+          chrPad = 0.02, 
+          displayGenomeBorder = FALSE, 
+          genomeTicksDisplay = FALSE,
+          genomeTicksLen = 3,
+          genomeTicksTextSize = 0,
+          genomeTicksScale = 50000000,
+          genomeLabelTextSize = "10pt",
+          genomeLabelDy = -1)
+
+```
+
+
 ## Barplot of FUMA results
 
 First we need to load the dataset and filter it for FDR < 0.05:
@@ -487,20 +555,25 @@ plotting_data$Category <- factor(plotting_data$Category, levels = c("ECM-recepto
 # Then, we add the eDEGenes
 eDEGenes_new <- as.data.frame(eDEGenes[eDEGenes$`Gene Symbol` %in% genes, "Gene Symbol"])
 colnames(eDEGenes_new) <- "Gene"
-eDEGenes_new$Category <- "eDEGenes"
+eDEGenes_new$Category <- "Exon-level differentially expressed genes"
 plotting_data <- rbind(plotting_data, eDEGenes_new)
 # Then, we add the tDEGenes => no hit
 tDEGenes_new <- as.data.frame(tDEGenes[tDEGenes$`Gene Symbol` %in% genes, "Gene Symbol"])
 # Then, we add the geGenes
 geGenes_new <- as.data.frame(eqtls_gene[eqtls_gene$`Gene Symbol` %in% genes, "Gene Symbol"])
 colnames(geGenes_new) <- "Gene"
-geGenes_new$Category <- "geGenes"
+geGenes_new$Category <- "Gene eGenes"
 plotting_data <- rbind(plotting_data, geGenes_new)
 # Then, we add the teGenes => no hit
 teGenes_new <- as.data.frame(unique(eqtls_transcript[eqtls_transcript$`Gene Symbol` %in% genes, "Gene Symbol"]))
 colnames(teGenes_new) <- "Gene"
-teGenes_new$Category <- "teGenes"
+teGenes_new$Category <- "Transcript eGenes"
 plotting_data <- rbind(plotting_data, teGenes_new)
+# Then, we add the eeGenes => all hits
+eeGenes_new <- as.data.frame(unique(eqtls_exon[eqtls_exon$`Gene Symbol` %in% genes, "Gene Symbol"]))
+colnames(eeGenes_new) <- "Gene"
+eeGenes_new$Category <- "Exon eGenes"
+plotting_data <- rbind(plotting_data, eeGenes_new)
 # Then, we add the ADHD eeQTS genes => no hit
 adhd_new <- as.data.frame(adhd_symbols[adhd_symbols %in% genes])
 # Then, we add the BD eeQTS genes => no hit
@@ -508,18 +581,22 @@ bd_new <- as.data.frame(bd_symbols[bd_symbols %in% genes])
 # Then, we add the MDD eeQTS genes
 mdd_new <- as.data.frame(mdd_symbols[mdd_symbols %in% genes])
 colnames(mdd_new) <- "Gene"
-mdd_new$Category <- "MDD eeQTS"
+mdd_new$Category <- "MDD exon eQT-Score genes"
 plotting_data <- rbind(plotting_data, mdd_new)
 # Then, we add the CDG eeQTS genes
 cdg_new <- as.data.frame(cdg_symbols[cdg_symbols %in% genes])
 colnames(cdg_new) <- "Gene"
-cdg_new$Category <- "MDD eeQTS"
+cdg_new$Category <- "CDG exon eQT-Score genes"
 plotting_data <- rbind(plotting_data, cdg_new)
 # Then, we add the SCZ eeQTS genes
 scz_new <- as.data.frame(scz_symbols[scz_symbols %in% genes])
 colnames(scz_new) <- "Gene"
-scz_new$Category <- "SCZ eeQTS"
+scz_new$Category <- "SCZ exon eQT-Score genes"
 plotting_data <- rbind(plotting_data, scz_new)
+# Then, we add the ABMS exon eQT-Score genes
+abms_new <- rbind(adhd_new, bd_new, mdd_new, scz_new)
+abms_new$Category <- "Joint exon eQT-Score genes"
+plotting_data <- rbind(plotting_data, abms_new)
 # Then, we add the CMC gDEGenes/isoDEGene (same hit in both)
 #cmc_gDEGenes_new <- as.data.frame(cmc_gDEGenes[cmc_gDEGenes %in% genes])
 #colnames(cmc_gDEGenes_new) <- "Gene"
@@ -528,28 +605,33 @@ plotting_data <- rbind(plotting_data, scz_new)
 # Then, we add the CMC geGenes
 cmc_geGenes_new <- as.data.frame(cmc_geGenes[cmc_geGenes %in% genes])
 colnames(cmc_geGenes_new) <- "Gene"
-cmc_geGenes_new$Category <- "CMC geGenes"
+cmc_geGenes_new$Category <- "CMC gene eGenes"
 plotting_data <- rbind(plotting_data, cmc_geGenes_new)
 # Then, we add the CMC seGenes/isoeGenes
 cmc_seGenes_new <- as.data.frame(cmc_seGenes[cmc_seGenes %in% genes])
 colnames(cmc_seGenes_new) <- "Gene"
-cmc_seGenes_new$Category <- "CMC seGenes"
+cmc_seGenes_new$Category <- "CMC isoform eGenes"
 plotting_data <- rbind(plotting_data, cmc_seGenes_new)
 # Then, we add the GTEx geGenes
 gtex_geGenes_new <- as.data.frame(gtex_geGenes[gtex_geGenes %in% genes])
 colnames(gtex_geGenes_new) <- "Gene"
-gtex_geGenes_new$Category <- "GTEx geGenes"
+gtex_geGenes_new$Category <- "GTEx gene eGenes"
 plotting_data <- rbind(plotting_data, gtex_geGenes_new)
 # Then, we add the GTEx seGenes
 gtex_seGenes_new <- as.data.frame(gtex_seGenes[gtex_seGenes %in% genes])
 colnames(gtex_seGenes_new) <- "Gene"
-gtex_seGenes_new$Category <- "GTEx seGenes"
+gtex_seGenes_new$Category <- "GTEx splice eGenes"
 plotting_data <- rbind(plotting_data, gtex_seGenes_new)
 # Then, we add the SCZ GWAS loci genes => no hit
 scz_gwas <- as.data.frame(scz_gwas[scz_gwas %in% genes])
 # Then, we add the single nuclei data
 colnames(cell_types) <- c("Gene", "Category")
 plotting_data <- rbind(plotting_data, cell_types)
+# Then, we add the rare variants of index patient
+rare_new <- as.data.frame(index[index$GeneSymbol %in% genes]$GeneSymbol)
+colnames(rare_new) <- "Gene"
+rare_new$Category <- "Rare variant genes"
+plotting_data <- rbind(plotting_data, rare_new)
 ```
 
 Get the eQTL SNPs for the 28 hit genes:
@@ -614,31 +696,31 @@ Add GWAS hits:
 ```{r, echo = F}
 # load SCZ2-2014 and add genes with overlapping SNPs to the plotting dataset
 scz_gr <- readRDS(paste0(rds_path, "/GWAS_sumstats_SCZ2-2014_p0.05.rds"))
-plotting_data <- rbind(plotting_data, GetOverlaps(gwas = scz_gr, genes = genes, snps = genes_eesnps_gr, category = "SCZ-2014"))
+plotting_data <- rbind(plotting_data, GetOverlaps(gwas = scz_gr, genes = genes, snps = genes_eesnps_gr, category = "SCZ"))
 
 # load MDD2-2018 and add genes with overlapping SNPs to the plotting dataset
 mdd2_gr <- readRDS(paste0(rds_path, "/GWAS_sumstats_MDD2-2018_p0.05.rds"))
-plotting_data <- rbind(plotting_data, GetOverlaps(gwas = mdd2_gr, genes = genes, snps = genes_eesnps_gr, category = "MDD2-2018"))
+plotting_data <- rbind(plotting_data, GetOverlaps(gwas = mdd2_gr, genes = genes, snps = genes_eesnps_gr, category = "MDD-2018"))
 
 # load MDD3-2019 and add genes with overlapping SNPs to the plotting dataset
 mdd3_gr <- readRDS(paste0(rds_path, "/GWAS_sumstats_MDD3-2019_p0.05.rds"))
-plotting_data <- rbind(plotting_data, GetOverlaps(gwas = mdd3_gr, genes = genes, snps = genes_eesnps_gr, category = "MDD3-2019"))
+plotting_data <- rbind(plotting_data, GetOverlaps(gwas = mdd3_gr, genes = genes, snps = genes_eesnps_gr, category = "MDD-2019"))
 
 # load EA-2018 and add genes with overlapping SNPs to the plotting dataset
 ea_gr <- readRDS(paste0(rds_path, "/GWAS_sumstats_EA-2018_p0.05.rds"))
-plotting_data <- rbind(plotting_data, GetOverlaps(gwas = ea_gr, genes = genes, snps = genes_eesnps_gr, category = "EA-2018"))
+plotting_data <- rbind(plotting_data, GetOverlaps(gwas = ea_gr, genes = genes, snps = genes_eesnps_gr, category = "EA"))
 
 # load CDG2-2019 and add genes with overlapping SNPs to the plotting dataset
 cdg_gr <- readRDS(paste0(rds_path, "/GWAS_sumstats_CDG2-2019_p0.05.rds"))
-plotting_data <- rbind(plotting_data, GetOverlaps(gwas = cdg_gr, genes = genes, snps = genes_eesnps_gr, category = "CDG2-2019"))
+plotting_data <- rbind(plotting_data, GetOverlaps(gwas = cdg_gr, genes = genes, snps = genes_eesnps_gr, category = "CDG"))
 
 # load BD-2019 and add genes with overlapping SNPs to the plotting dataset
 bd_gr <- readRDS(paste0(rds_path, "/GWAS_sumstats_BIP-2019_p0.05.rds"))
-plotting_data <- rbind(plotting_data, GetOverlaps(gwas = bd_gr, genes = genes, snps = genes_eesnps_gr, category = "BD-2019"))
+plotting_data <- rbind(plotting_data, GetOverlaps(gwas = bd_gr, genes = genes, snps = genes_eesnps_gr, category = "BD"))
 
 # load ADHD-2019 and add genes with overlapping SNPs to the plotting dataset
 adhd_gr <- readRDS(paste0(rds_path, "/GWAS_sumstats_ADHD-2019_p0.05.rds"))
-plotting_data <- rbind(plotting_data, GetOverlaps(gwas = adhd_gr, genes = genes, snps = genes_eesnps_gr, category = "ADHD-2019"))
+plotting_data <- rbind(plotting_data, GetOverlaps(gwas = adhd_gr, genes = genes, snps = genes_eesnps_gr, category = "ADHD"))
 ```
 
 Finally, we can generate the heatplot using ggplot:
@@ -750,6 +832,10 @@ First, we need to get the genes of the cell types with the highest mean expressi
 ```{r, echo = F}
 ct_genes <- unique(ct_genes)
 head(ct_genes)
+genes <- top_hits[, c("Gene Symbol", "Ensembl Gene ID")]
+genes2 <- genes[genes$`Gene Symbol` %in% ct_genes, ]
+write.table(genes2, file = paste0(out_path, "/28_KEGG_pathway_genes.tsv"), row.names = FALSE, sep = "\t")
+rm(genes, genes2)
 ```
 
 Then, we will generate the dataset, which we need to generate the heatplot. Therefore, we need three columns, with column 1 including the gene name and column 2 the ID or type the gene is found in, e.g. the pathway, eeGenes, etc.
@@ -761,20 +847,25 @@ colnames(plotting_data2) <- c("Gene", "Category")
 # Then, we add the eDEGenes
 eDEGenes_new <- as.data.frame(eDEGenes[eDEGenes$`Gene Symbol` %in% ct_genes, "Gene Symbol"])
 colnames(eDEGenes_new) <- "Gene"
-eDEGenes_new$Category <- "exon DEGenes"
+eDEGenes_new$Category <- "Exon-level differentially expressed genes"
 plotting_data2 <- rbind(plotting_data2, eDEGenes_new)
 # Then, we add the tDEGenes => no hit
 tDEGenes_new <- as.data.frame(tDEGenes[tDEGenes$`Gene Symbol` %in% ct_genes, "Gene Symbol"])
 # Then, we add the geGenes
 geGenes_new <- as.data.frame(eqtls_gene[eqtls_gene$`Gene Symbol` %in% ct_genes, "Gene Symbol"])
 colnames(geGenes_new) <- "Gene"
-geGenes_new$Category <- "gene eGenes"
+geGenes_new$Category <- "Gene eGenes"
 plotting_data2 <- rbind(plotting_data2, geGenes_new)
 # Then, we add the teGenes => no hit
 teGenes_new <- as.data.frame(unique(eqtls_transcript[eqtls_transcript$`Gene Symbol` %in% ct_genes, "Gene Symbol"]))
 colnames(teGenes_new) <- "Gene"
-teGenes_new$Category <- "transcript eGenes"
+teGenes_new$Category <- "Transcript eGenes"
 plotting_data2 <- rbind(plotting_data2, teGenes_new)
+# Then, we add the eeGenes => all hits
+eeGenes_new <- as.data.frame(unique(eqtls_exon[eqtls_exon$`Gene Symbol` %in% ct_genes, "Gene Symbol"]))
+colnames(eeGenes_new) <- "Gene"
+eeGenes_new$Category <- "Exon eGenes"
+plotting_data2 <- rbind(plotting_data2, eeGenes_new)
 # Then, we add the ADHD eeQTS genes => no hit
 adhd_new <- as.data.frame(adhd_symbols[adhd_symbols %in% ct_genes])
 # Then, we add the BD eeQTS genes => no hit
@@ -794,6 +885,10 @@ scz_new <- as.data.frame(scz_symbols[scz_symbols %in% ct_genes])
 colnames(scz_new) <- "Gene"
 scz_new$Category <- "SCZ exon eQT-Score genes"
 plotting_data2 <- rbind(plotting_data2, scz_new)
+# Then, we add the ABMS exon eQT-Score genes
+abms_new <- rbind(adhd_new, bd_new, mdd_new, scz_new)
+abms_new$Category <- "Joint exon eQT-Score genes"
+plotting_data2 <- rbind(plotting_data2, abms_new)
 # Then, we add the CMC geGenes
 cmc_geGenes_new <- as.data.frame(cmc_geGenes[cmc_geGenes %in% ct_genes])
 colnames(cmc_geGenes_new) <- "Gene"
@@ -816,13 +911,15 @@ gtex_seGenes_new$Category <- "GTEx splice eGenes"
 plotting_data2 <- rbind(plotting_data2, gtex_seGenes_new)
 # Then, we add the SCZ GWAS loci genes => no hit
 scz_gwas_new <- as.data.frame(scz_gwas[scz_gwas %in% ct_genes])
-#colnames(scz_gwas_new) <- "Gene"
-#scz_gwas_new$Category <- "GTEx seGenes"
-#plotting_data2 <- rbind(plotting_data2, scz_gwas_new)
 # Then, we add the single nuclei data
 cts2 <- cts[cts$names %in% ct_genes, c("names", "Type")]
 colnames(cts2) <- c("Gene", "Category")
 plotting_data2 <- rbind(plotting_data2, cts2)
+# Then, we add the rare variants of index patient
+rare_new <- as.data.frame(index[index$GeneSymbol %in% ct_genes]$GeneSymbol)
+colnames(rare_new) <- "Gene"
+rare_new$Category <- "Rare variant genes"
+plotting_data2 <- rbind(plotting_data2, rare_new)
 ```
 
 Get the eQTL SNPs for the 20 hit genes:
@@ -887,23 +984,23 @@ Add GWAS hits:
 ```{r, echo = F}
 # load SCZ2-2014 and add genes with overlapping SNPs to the plotting dataset
 scz_gr <- readRDS(paste0(rds_path, "/GWAS_sumstats_SCZ2-2014_p0.05.rds"))
-plotting_data2 <- rbind(plotting_data2, GetOverlaps(gwas = scz_gr, genes = ct_genes, snps = genes_eesnps_gr, category = "SCZ-2014"))
+plotting_data2 <- rbind(plotting_data2, GetOverlaps(gwas = scz_gr, genes = ct_genes, snps = genes_eesnps_gr, category = "SCZ"))
 
 # load MDD3-2019 and add genes with overlapping SNPs to the plotting dataset
 mdd3_gr <- readRDS(paste0(rds_path, "/GWAS_sumstats_MDD3-2019_p0.05.rds"))
-plotting_data2 <- rbind(plotting_data2, GetOverlaps(gwas = mdd3_gr, genes = ct_genes, snps = genes_eesnps_gr, category = "MDD-2019"))
+plotting_data2 <- rbind(plotting_data2, GetOverlaps(gwas = mdd3_gr, genes = ct_genes, snps = genes_eesnps_gr, category = "MDD"))
 
 # load CDG2-2019 and add genes with overlapping SNPs to the plotting dataset
 cdg_gr <- readRDS(paste0(rds_path, "/GWAS_sumstats_CDG2-2019_p0.05.rds"))
-plotting_data2 <- rbind(plotting_data2, GetOverlaps(gwas = cdg_gr, genes = ct_genes, snps = genes_eesnps_gr, category = "CDG-2019"))
+plotting_data2 <- rbind(plotting_data2, GetOverlaps(gwas = cdg_gr, genes = ct_genes, snps = genes_eesnps_gr, category = "CDG"))
 
 # load BD-2019 and add genes with overlapping SNPs to the plotting dataset
 bd_gr <- readRDS(paste0(rds_path, "/GWAS_sumstats_BIP-2019_p0.05.rds"))
-plotting_data2 <- rbind(plotting_data2, GetOverlaps(gwas = bd_gr, genes = ct_genes, snps = genes_eesnps_gr, category = "BD-2019"))
+plotting_data2 <- rbind(plotting_data2, GetOverlaps(gwas = bd_gr, genes = ct_genes, snps = genes_eesnps_gr, category = "BD"))
 
 # load ADHD-2019 and add genes with overlapping SNPs to the plotting dataset
 adhd_gr <- readRDS(paste0(rds_path, "/GWAS_sumstats_ADHD-2019_p0.05.rds"))
-plotting_data2 <- rbind(plotting_data2, GetOverlaps(gwas = adhd_gr, genes = ct_genes, snps = genes_eesnps_gr, category = "ADHD-2019"))
+plotting_data2 <- rbind(plotting_data2, GetOverlaps(gwas = adhd_gr, genes = ct_genes, snps = genes_eesnps_gr, category = "ADHD"))
 ```
 
 Finally, we can generate the heatplot using ggplot:
@@ -912,7 +1009,7 @@ Finally, we can generate the heatplot using ggplot:
 #plotting_data2$Category <- factor(plotting_data2$Category, levels = names(table(plotting_data2$Category)[order(table(plotting_data2$Category), decreasing = T)]))
 plotting_data2$Gene <- factor(plotting_data2$Gene, levels = c("ANK1", "GAD1", "DLGAP1", "SDK1", "BTBD11", "NRXN3", "ROBO2", "GRID2", "PCDH15", "PAM", "GAD2", "DPP10", "RYR1", "DLGAP2", "COL12A1", "TENM4", "TENM2", "PACRG", "RIMS2", "CIT", "CSMD1", "ATP10B", "USP24", "DOCK1", "TNK2", "DGKG", "KIF13A", "DGKD", "EPHA6"))
 #plotting_data2$Gene <- factor(plotting_data2$Gene, levels = names(table(plotting_data2$Gene)[order(table(plotting_data2$Gene), decreasing = T)]))
-#plotting_data2$Category <- factor(plotting_data2$Category, levels = c("ECM-receptor interaction", "Focal adhesion", "ABC transporters", "Rare variants", "Joint eeQTS", "MDD eeQTS", "SCZ eeQTS", "eeGenes", "teGenes", "geGenes", "eDEGenes", "GWAS Catalog SCZ-related", "CMC g/isoDEGene"))
+plotting_data2$Category <- factor(plotting_data2$Category, levels = c("Phosphatidylinositol signaling system", "Metabolic pathways", "GABAergic synapse", "Focal adhesion", "Circadian entrainment", "Calcium signaling pathway", "Exon eGenes", "Transcript eGenes", "Gene eGenes", "Exon-level differentially expressed genes", "SCZ exon eQT-Score genes", "MDD exon eQT-Score genes", "CDG exon eQT-Score genes", "Joint exon eQT-Score genes", "Rare variant genes", "CMC isoform eGenes", "CMC gene eGenes", "GTEx splice eGenes", "GTEx gene eGenes", "Oligodendrocyte precursor cells", "Inhibitory VIP neurons", "Inhibitory SST neurons, cluster 1", "Inhibitory PVALB neurons, cluster 2", "Inhibitory PVALB neurons, cluster 1", "synonymous_variant", "3_prime_UTR_variant", "missense_variant", "promoter", "5_prime_UTR_variant", "ZNF/Rpts", "TxWk", "TxFlnk", "Tx", "ReprPC", "BivFlnk", "TssAFlnk", "EnhG", "Enh", "TssBiv", "TssA", "SCZ", "MDD", "CDG", "BD", "ADHD"))
 g <- ggplot(plotting_data2, aes_(~Gene, ~Category)) +
   geom_tile(aes(width = 0.9, height = 0.9), color = "white") + 
   xlab(NULL) + 
@@ -954,22 +1051,23 @@ plot_data <- merge(pheno, prs, by.x = "ShortName", by.y = "row.names")
 
 # generate scatterplot
 ggplot(plot_data, aes(x = GAD1_SCZ, y = PRS.SCZ2, col = Dx)) + 
-  theme_classic(base_size = 20) + theme(panel.border = element_rect(colour = "black", fill = NA, size = 1)) +
+  theme_classic(base_size = 20) + 
   geom_point(size = 2) + 
-  xlab("GAD1 exon expression (residuals)") + 
-  ylab("SCZ2-2014 polygenic risk score (PRS)") + 
+  xlab("ENSE00003538005.1 expression (residuals)") + 
+  ylab("SCZ PRS") + 
   geom_smooth(method = "lm", se = F) + 
+  geom_text(x=3, y=30, label = paste0("FDR = ", rownames(res)[(rownames(res) %in% gad1_exons)])) +
   scale_color_manual(values = brewer.pal(11, "RdBu")[c(9, 3)], name = "Diagnosis", labels = c("Controls", "Cases"))
 ggsave(file = paste0(out_path, "/3_scatterplot_GAD1_exon_expr_vs_SCZ2_PRS.pdf"), width = 10, height = 6)
 ```
 
 ## Boxplot
 
-Generate a boxplot for the GAD1 exon eQTL of the expression of exon ENSE00003538005.1 (ID is joined with three other exons: ENSE00003538005.1|ENSE00001902767.1|ENSE00003523708.1|ENSE00003648352.1) with SNP rs1420385:
+Generate a boxplot for the GAD1 exon eQTL of the expression of exon ENSE00003699191.1 (ID is joined with three other exons: ENSE00003699191.1|ENSE00001955143.1|ENSE00003696650.1|ENSE00001708604.1) with SNP rs1420385:
 ```{r, echo = F}
 # get exon expression
-exon_expr <- t(t(exprs(exon_summaries)[grep("ENSE00003538005.1|ENSE00001902767.1|ENSE00003523708.1|ENSE00003648352.1", rownames(exon_summaries)), ]))
-colnames(exon_expr) <- "ENSE00003538005.1"
+exon_expr <- t(t(exprs(exon_summaries)[grep("ENSE00003699191.1|ENSE00001955143.1|ENSE00003696650.1|ENSE00001708604.1", rownames(exon_summaries)), ]))
+colnames(exon_expr) <- "ENSE00003699191.1"
 
 # snp data
 system(paste0("/storage/groups/ccm01/tools/PLINK/plink --bfile /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/01_preprocessed_genotypes/1.3_samples_filtered/pmb_info06_all_chr_maf0.05_merged --snp rs1420385 --recode --tab --out GAD1_SNPs"))
@@ -978,14 +1076,14 @@ pheno <- pData(exon_summaries)[, c("IID","Dx", "ShortName")]
 
 exp_p <- merge(exon_expr, pheno, by.x = "row.names", by.y = "ShortName")
 exp_p_snp <- merge(exp_p, snp, by.x = "IID", by.y = "X2.1")
-save(exp_p_snp, file = paste0(out_path, "/GAD1_ENSE00003538005.1_expression_vs_rs1420385_snp.rda"))
+save(exp_p_snp, file = paste0(out_path, "/GAD1_ENSE00003699191.1_expression_vs_rs1420385_snp.rda"))
 
 # Generate plot
-plot_data <- melt(exp_p_snp, snp = "G.G", measure.vars = c("ENSE00003538005.1", grep("ENS", colnames(exp_p_snp), value = T)))
+plot_data <- melt(exp_p_snp, snp = "G.G", measure.vars = c("ENSE00003699191.1", grep("ENS", colnames(exp_p_snp), value = T)))
 plot_data <- plot_data[plot_data$G.G != "0 0",]
 plot_data$variable <- as.character(plot_data$variable)
 # plot figure
-pdf(paste0(out_path, "/4_boxplot_GAD1_ENSE00002167314.1_expression_vs_SNP_rs1420385_with_dots.pdf"), width = 6, height = 5)
+pdf(paste0(out_path, "/4_boxplot_GAD1_ENSE00003699191.1_expression_vs_SNP_rs1420385_with_dots.pdf"), width = 6, height = 5)
 ggplot(na.omit(plot_data), aes(G.G, value)) +
   geom_boxplot() + geom_jitter(shape = 16, position = position_jitter(0.1)) +
   theme_minimal() +
@@ -995,9 +1093,9 @@ ggplot(na.omit(plot_data), aes(G.G, value)) +
      color = "black", fill = viridis(3, option = "D", begin = 0.15, end = 0.9)[2], size = 1.5, linetype = "solid"
      ), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
      panel.border = element_rect(fill = NA, color = "black")) +
-  xlab("rs1420385") + ylab("Exon expression") + ggtitle("GAD1: ENSE00003538005.1 - rs1420385")
+  xlab("rs1420385") + ylab("Exon expression") + ggtitle("GAD1: ENSE00003699191.1 - rs1420385")
 dev.off()
-pdf(paste0(out_path, "/4_boxplot_GAD1_ENSE00003538005.1_expression_vs_SNP_rs1420385.pdf"), width = 6, height = 5)
+pdf(paste0(out_path, "/4_boxplot_GAD1_ENSE00003699191.1_expression_vs_SNP_rs1420385.pdf"), width = 6, height = 5)
 ggplot(na.omit(plot_data), aes(G.G, value)) +
   geom_boxplot() + 
   theme_minimal() +
@@ -1007,7 +1105,7 @@ ggplot(na.omit(plot_data), aes(G.G, value)) +
      color = "black", fill = viridis(3, option = "D", begin = 0.15, end = 0.9)[2], size = 1.5, linetype = "solid"
      ), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
      panel.border = element_rect(fill = NA, color = "black")) +
-  xlab("rs1420385") + ylab("Exon expression") + ggtitle("GAD1: ENSE00003538005.1 - rs1420385")
+  xlab("rs1420385") + ylab("Exon expression") + ggtitle("GAD1: ENSE00003699191.1 - rs1420385")
 dev.off()
 ggplot(na.omit(plot_data), aes(G.G, value)) +
   geom_boxplot() + geom_jitter(shape = 16, position = position_jitter(0.1)) +
@@ -1018,7 +1116,24 @@ ggplot(na.omit(plot_data), aes(G.G, value)) +
      color = "black", fill = viridis(3, option = "D", begin = 0.15, end = 0.9)[2], size = 1.5, linetype = "solid"
      ), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
      panel.border = element_rect(fill = NA, color = "black")) +
-  xlab("rs1420385") + ylab("Exon expression") + ggtitle("GAD1: ENSE00003538005.1 - rs1420385")
+  xlab("rs1420385") + ylab("Exon expression") + ggtitle("GAD1: ENSE00003699191.1 - rs1420385")
+```
+
+## STRING DB network
+
+First we need to load STRINGdb -> R version too old (I generated the figure on my laptop instead as I updated R to version 4.)
+```{r}
+library(STRINGdb)
+library(igraph)
+
+# load human STRING network (Human = 9606, Mouse = 10090)
+string_db <- STRINGdb$new(version="11", species=9606, score_threshold=200, input_directory="")
+# first we need to map the gene IDs to STRING IDs
+ct_genes_mapped <- string_db$map(as.data.frame(ct_genes), "ct_genes", removeUnmappedRows = TRUE)
+hits <- ct_genes_mapped$STRING_id
+# Then we can plot the network
+string_db$plot_network(ct_genes_mapped$STRING_id)
+write.table(ct_genes, "~/core_genes_diff_expr_in_cell_types.tsv", sep = "\t", col.names = FALSE, row.names = FALSE)
 ```
 
 

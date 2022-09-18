@@ -1,0 +1,55 @@
+---
+title: "Core Genes Networks"
+author:
+  - name: Karolina Worf
+affiliation: 
+  - Institute of Computational Biology, Helmholtz Zentrum München, Neuherberg 85764, Germany
+email: karolina.worf@helmholtz-muenchen.de
+header-includes:
+  - \usepackage{float}
+date: "`r doc_date()`"
+graphics: yes
+abstract: In this R markdown file, we will provide the analysis and figure generation for the twentynine core genes with PPI networks (STRING & BioGrid). 
+output:
+  BiocStyle::pdf_document:
+  toc: true
+number_sections: true
+editor_options: 
+  chunk_output_type: console
+vignette: >
+  %\VignetteIndexEntry{Index  Analysis and Figure Generation}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+---
+
+  
+```{r knitrOptions, echo=F}
+library(BiocStyle)
+require(knitr)
+knitr::opts_chunk$set(echo = TRUE,
+                      warning = FALSE, 
+                      message = FALSE, 
+                      cache = TRUE, 
+                      cache.lazy = FALSE)
+options(stringsAsFactors = T)
+```
+
+<p>
+  **R version**: `r R.version.string`
+<br />
+  **Bioconductor version**: `r BiocManager::version()`
+</p>
+  
+  
+# Load Packages
+  
+Below you can find the list of packages that are required for all analysis steps. 
+```{r}
+# packages for preprocessing data
+library(data.table)
+
+# package for colorblind colors
+library(viridis)
+```
+
+

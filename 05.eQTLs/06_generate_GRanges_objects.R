@@ -17,6 +17,7 @@ library(IRanges)
 library(arules)
 library(reshape2)
 library(biomaRt) # to get SNP positions
+library(dplyr)
 
 # First read the arguments listed in the commandline, trailingOnly uses only the parameters after --args
 args = (commandArgs(trailingOnly = TRUE))	
@@ -54,6 +55,27 @@ if(length(args) == 0){
     # @param input Input data of which an GRanges object should be made of (needs CHR, BP, P and SNP as column names)
     # @param ofile Name for the rds output file of the generated GRanges object 
     GenerateGrangesObject <- function(input, ofile){
+        # remove all rows including NA in any column
+        input <- input[complete.cases(input), ]
+        # generate GRanges object
+        input_gr <- GenomicRanges::GRanges(seqnames = input$CHR,
+                                           ranges = IRanges::IRanges(start = as.numeric(as.character(input$BP)),
+                                                                     end = as.numeric(as.character(input$BP))),
+                                           snp_id = input$SNP,
+                                           p_value = input$P)  # generate GRanges object only with chr, position, rs SNP ID and p-value
+        # remove duplicates
+        input_gr <- input_gr[!duplicated(input_gr)] 
+        GenomeInfoDb::seqlevelsStyle(input_gr) <- "NCBI"
+        print(length(input_gr)) # print length
+        # save GRanges object to an rds file
+        saveRDS(input_gr, file = paste0(outpath, "/", ofile))
+        rm(input_gr)
+    }
+    
+    # function to generate a GRanges object filtered for p-value < 0.05 (for all datasets with Chromosome, base pair position and rs SNP ID information)
+    # @param input Input data of which an GRanges object should be made of (needs CHR, BP, P and SNP as column names)
+    # @param ofile Name for the rds output file of the generated GRanges object 
+    GenerateGrangesObjectFiltered <- function(input, ofile){
         # filter for p-value (P) < 0.05
         input <- input[input$P < 0.05, ]
         # remove all rows including NA in any column
@@ -281,25 +303,31 @@ if(length(args) == 0){
     ###########
     # CMC (Fromer et al.) gene eQTLs: geSNPs
     cmc_gene <- data.table::fread(paste0(cmc, "/CMC_MSSM-Penn-Pitt_DLPFC_Analysis_eQTL-adjustedSVA.txt"))
-    cmc_gene <- cmc_gene[cmc_gene$FDR < 0.05, ]  # filter for FDR <= 0.05
     cmc_gene_gr <- GenomicRanges::GRanges(seqnames = cmc_gene$SNP_location, 
-                                      snp_id = cmc_gene$SNP)  # generate GRanges object 
-    cmc_gene_gr <- cmc_gene_gr[!duplicated(cmc_gene_gr)]  # remove duplicated rows: 2,199,772 => 1,342,767 SNPs
+                                      snp_id = cmc_gene$SNP,
+                                      p_value = cmc_gene$pvalue,
+                                      fdr = cmc_gene$FDR)  # generate GRanges object 
+    cmc_gene_gr <- cmc_gene_gr[!duplicated(cmc_gene_gr)]  # remove duplicated rows
     GenomeInfoDb::seqlevelsStyle(cmc_gene_gr) <- "NCBI"
     seqlevels(cmc_gene_gr, pruning.mode = "coarse") <- setdiff(seqlevels(cmc_gene_gr), c("X", "Y", "M"))  # remove SNPs located on chromosomes X, Y and M
     saveRDS(cmc_gene_gr, paste0(outpath, "/CMC_adjustedSVA_eQTL_SNPs.rds"))
+    cmc_gene_gr <- cmc_gene_gr[cmc_gene_gr$fdr < 0.05, ]  # filter for FDR <= 0.05
+    saveRDS(cmc_gene_gr, paste0(outpath, "/CMC_adjustedSVA_eQTL_SNPs_fdr0.05.rds"))
     rm(cmc_gene, cmc_gene_gr)
     print("Done with CMC (Fromer et al.) gene eQTLs")
     
     # CMC (Fromer et al.) isoform eQTLs: ieSNPs
     cmc_iso <- data.table::fread(paste0(cmc, "/CMC_MSSM-Penn-Pitt_DLPFC_Analysis_isoQTL-adjustedSVA.txt"))
-    cmc_iso <- cmc_iso[cmc_iso$FDR < 0.05, ]  # filter for FDR <= 0.05
     cmc_iso_gr <- GenomicRanges::GRanges(seqnames = cmc_iso$SNP_location,
-                                     snp_id = cmc_iso$SNP)  # generate GRanges object 
-    cmc_iso_gr <- cmc_iso_gr[!duplicated(cmc_iso_gr)]  # remove duplicated rows: 2,199,772 => 1,342,767 SNPs
+                                     snp_id = cmc_iso$SNP,
+                                     p_value = cmc_iso$pvalue,
+                                     fdr = cmc_iso$FDR)  # generate GRanges object 
+    cmc_iso_gr <- cmc_iso_gr[!duplicated(cmc_iso_gr)]  # remove duplicated rows
     GenomeInfoDb::seqlevelsStyle(cmc_iso_gr) <- "NCBI"
     seqlevels(cmc_iso_gr, pruning.mode = "coarse") <- setdiff(seqlevels(cmc_iso_gr), c("X", "Y", "M"))
     saveRDS(cmc_iso_gr, paste0(outpath, "/CMC_adjustedSVA_isoQTL_SNPs.rds"))
+    cmc_iso_gr <- cmc_iso_gr[cmc_iso_gr$fdr < 0.05, ]  # filter for FDR <= 0.05
+    saveRDS(cmc_iso_gr, paste0(outpath, "/CMC_adjustedSVA_isoQTL_SNPs_fdr0.05.rds"))
     rm(cmc_iso, cmc_iso_gr)
     print("Done with CMC (Fromer et al.) isoform eQTLs")
 
@@ -314,33 +342,37 @@ if(length(args) == 0){
 
     # GTEx Whole Blood
     gtex_wb <- data.table::fread(paste0(gtex, "/GTEx_Analysis_v8_eQTL/Whole_Blood.v8.egenes.txt"))
-    gtex_wb <- gtex_wb[gtex_wb$qval < 0.05, ] # filter for FDR < 0.05 (qvalue)
     gtex_wb_gr <- GenomicRanges::GRanges(seqnames = gtex_wb$chr,
                                          ranges = IRanges::IRanges(start = as.numeric(as.character(gtex_wb$variant_pos)), 
                                                                    end = as.numeric(as.character(gtex_wb$variant_pos))),
-                                         snp_id = gtex_wb$rs_id_dbSNP151_GRCh38p7)  # generate GRanges object only with chr, position and rs SNP ID
+                                         snp_id = gtex_wb$rs_id_dbSNP151_GRCh38p7,
+                                         fdr = gtex_wb$qval)  # generate GRanges object only with chr, position and rs SNP ID
     GenomeInfoDb::seqlevelsStyle(gtex_wb_gr) <- "UCSC"  # UCSC needed for the lift over
     gtex_wb_gr_hg19 <- unlist(rtracklayer::liftOver(gtex_wb_gr, hg38_to_hg19))  # lift over from GRCh38 to GRCh37 (hg19): 12,360 => 12,292
-    gtex_wb_gr_hg19 <- gtex_wb_gr_hg19[!duplicated(gtex_wb_gr_hg19)]  # no duplicated rows found: 12,292 => 11,785 SNPs
+    gtex_wb_gr_hg19 <- gtex_wb_gr_hg19[!duplicated(gtex_wb_gr_hg19)]  # remove duplicated rows
     GenomeInfoDb::seqlevelsStyle(gtex_wb_gr_hg19) <- "NCBI"
     seqlevels(gtex_wb_gr_hg19, pruning.mode = "coarse") <- setdiff(seqlevels(gtex_wb_gr_hg19), c("X", "Y", "M"))
     saveRDS(gtex_wb_gr_hg19, paste0(outpath, "/GTEx_v8_Whole_Blood_hg19_eQTL_SNPs.rds"))
+    gtex_wb_gr_hg19 <- gtex_wb_gr_hg19[gtex_wb_gr_hg19$fdr < 0.05, ] # filter for FDR < 0.05 (qvalue)
+    saveRDS(gtex_wb_gr_hg19, paste0(outpath, "/GTEx_v8_Whole_Blood_hg19_eQTL_SNPs_fdr0.05.rds"))
     rm(gtex_wb, gtex_wb_gr, gtex_wb_gr_hg19)
     print("Done with GTEx whole blood eQTLs")
     
     # GTEx Brain Prefrontal Cortex BA9
     gtex_ba9 <- data.table::fread(paste0(gtex, "/GTEx_Analysis_v8_eQTL/Brain_Frontal_Cortex_BA9.v8.egenes.txt"))
-    gtex_ba9 <- gtex_ba9[gtex_ba9$qval < 0.05, ] # filter for FDR < 0.05 (qvalue)
     gtex_ba9_gr <- GenomicRanges::GRanges(seqnames = gtex_ba9$chr,
                                          ranges = IRanges::IRanges(start = as.numeric(as.character(gtex_ba9$variant_pos)), 
                                                                    end = as.numeric(as.character(gtex_ba9$variant_pos))),
-                                         snp_id = gtex_ba9$rs_id_dbSNP151_GRCh38p7)  # generate GRanges object only with chr, position and rs SNP ID
+                                         snp_id = gtex_ba9$rs_id_dbSNP151_GRCh38p7,
+                                         fdr = gtex_ba9$qval)  # generate GRanges object only with chr, position and rs SNP ID
     GenomeInfoDb::seqlevelsStyle(gtex_ba9_gr) <- "UCSC"  # UCSC needed for the lift over
     gtex_ba9_gr_hg19 <- unlist(rtracklayer::liftOver(gtex_ba9_gr, hg38_to_hg19))  # lift over from GRCh38 to GRCh37 (hg19)
     gtex_ba9_gr_hg19 <- gtex_ba9_gr_hg19[!duplicated(gtex_ba9_gr_hg19)]  # no duplicated rows found: 12,292 => 11,785 SNPs
     GenomeInfoDb::seqlevelsStyle(gtex_ba9_gr_hg19) <- "NCBI"
     seqlevels(gtex_ba9_gr_hg19, pruning.mode = "coarse") <- setdiff(seqlevels(gtex_ba9_gr_hg19), c("X", "Y", "M"))
     saveRDS(gtex_ba9_gr_hg19, paste0(outpath, "/GTEx_v8_Brain_Frontal_Cortex_BA9_hg19_eQTL_SNPs.rds"))
+    gtex_ba9_gr_hg19 <- gtex_ba9_gr_hg19[gtex_ba9_gr_hg19$fdr < 0.05, ] # filter for FDR < 0.05 (qvalue)
+    saveRDS(gtex_ba9_gr_hg19, paste0(outpath, "/GTEx_v8_Brain_Frontal_Cortex_BA9_hg19_eQTL_SNPs_fdr0.05.rds"))
     rm(gtex_ba9, gtex_ba9_gr, gtex_ba9_gr_hg19)
     print("Done with GTEx brain frontal cortex BA9 eQTLs")
     
@@ -350,53 +382,59 @@ if(length(args) == 0){
     for (i in brains) {
         filename <- paste0(gtex, "/GTEx_Analysis_v8_eQTL/", i)
         data <- data.table::fread(filename)
-        data <- data[data$qval < 0.05, ]  # filter for significant results
         gtex_brains <- rbind(gtex_brains, data) # merge different brain files together
     }
     gtex_brains_gr <- GenomicRanges::GRanges(seqnames = gtex_brains$chr, 
                                              ranges = IRanges::IRanges(start = as.numeric(as.character(gtex_brains$variant_pos)), 
                                                                        end = as.numeric(as.character(gtex_brains$variant_pos))),
                                              snp_id = gtex_brains$rs_id_dbSNP151_GRCh38p7,
-                                             state = gtex_brains)  # generate GRanges object only with chr, position and rs SNP ID
+                                             state = gtex_brains,
+                                             fdr = gtex_brains$qval)  # generate GRanges object only with chr, position and rs SNP ID
     GenomeInfoDb::seqlevelsStyle(gtex_brains_gr) <- "UCSC"
     gtex_brains_gr_hg19 <- unlist(rtracklayer::liftOver(gtex_brains_gr, hg38_to_hg19))  # lift over from GRCh38 to GRCh37 (hg19): 89,312 => 88,885
     gtex_brains_gr_hg19 <- gtex_brains_gr_hg19[!duplicated(gtex_brains_gr_hg19)]  # no duplicated rows found: 88,885 => 61,935 SNPs
     GenomeInfoDb::seqlevelsStyle(gtex_brains_gr_hg19) <- "NCBI"
     seqlevels(gtex_brains_gr_hg19, pruning.mode = "coarse") <- setdiff(seqlevels(gtex_brains_gr_hg19), c("X", "Y", "M"))
     saveRDS(gtex_brains_gr_hg19, paste0(outpath, "/GTEx_v8_Brains_hg19_eQTL_SNPs.rds"))
+    gtex_brains_gr_hg19 <- gtex_brains_gr_hg19[gtex_brains_gr_hg19$fdr < 0.05, ] # filter for FDR < 0.05 (qvalue)
+    saveRDS(gtex_brains_gr_hg19, paste0(outpath, "/GTEx_v8_Brains_hg19_eQTL_SNPs_fdr0.05.rds"))
     rm(brains, filename, data, i, gtex_brains, gtex_brains_gr, gtex_brains_gr_hg19)
     print("Done with GTEx brain (all brain tissues) eQTLs")
     
     ### splice QTL (sQTL) SNPs (seSNPs) ###
     # GTEx Whole Blood
     gtex_wb <- data.table::fread(paste0(gtex, "/GTEx_Analysis_v8_sQTL/Whole_Blood.v8.sgenes.txt"))
-    gtex_wb <- gtex_wb[gtex_wb$qval < 0.05, ] # filter for FDR < 0.05 (qvalue)
     gtex_wb_gr <- GenomicRanges::GRanges(seqnames = gtex_wb$chr,
                                          ranges = IRanges::IRanges(start = as.numeric(as.character(gtex_wb$variant_pos)),
                                                                    end = as.numeric(as.character(gtex_wb$variant_pos))),
-                                         snp_id = gtex_wb$rs_id_dbSNP151_GRCh38p7)  # generate GRanges object only with chr, position and rs SNP ID
+                                         snp_id = gtex_wb$rs_id_dbSNP151_GRCh38p7,
+                                         fdr = gtex_wb$qval)  # generate GRanges object only with chr, position and rs SNP ID
     GenomeInfoDb::seqlevelsStyle(gtex_wb_gr) <- "UCSC"  # UCSC needed for the lift over
     gtex_wb_gr_hg19 <- unlist(rtracklayer::liftOver(gtex_wb_gr, hg38_to_hg19))  # lift over from GRCh38 to GRCh37 (hg19): 3,013 => 3,004
     gtex_wb_gr_hg19 <- gtex_wb_gr_hg19[!duplicated(gtex_wb_gr_hg19)]  # no duplicated rows found: 3,004 => 2,837 SNPs
     GenomeInfoDb::seqlevelsStyle(gtex_wb_gr_hg19) <- "NCBI"
     seqlevels(gtex_wb_gr_hg19, pruning.mode = "coarse") <- setdiff(seqlevels(gtex_wb_gr_hg19), c("X", "Y", "M"))
     saveRDS(gtex_wb_gr_hg19, paste0(outpath, "/GTEx_v8_Whole_Blood_hg19_sQTL_SNPs.rds"))
+    gtex_wb_gr_hg19 <- gtex_wb_gr_hg19[gtex_wb_gr_hg19$fdr < 0.05, ] # filter for FDR < 0.05 (qvalue)
+    saveRDS(gtex_wb_gr_hg19, paste0(outpath, "/GTEx_v8_Whole_Blood_hg19_sQTL_SNPs_fdr0.05.rds"))
     rm(gtex_wb, gtex_wb_gr, gtex_wb_gr_hg19)
     print("Done with GTEx whole blood sQTLs")
     
     # GTEx Brain Prefrontal Cortex BA9
     gtex_ba9 <- data.table::fread(paste0(gtex, "/GTEx_Analysis_v8_sQTL/Brain_Frontal_Cortex_BA9.v8.sgenes.txt"))
-    gtex_ba9 <- gtex_ba9[gtex_ba9$qval < 0.05, ] # filter for FDR < 0.05 (qvalue)
     gtex_ba9_gr <- GenomicRanges::GRanges(seqnames = gtex_ba9$chr,
                                          ranges = IRanges::IRanges(start = as.numeric(as.character(gtex_ba9$variant_pos)),
                                                                    end = as.numeric(as.character(gtex_ba9$variant_pos))),
-                                         snp_id = gtex_ba9$rs_id_dbSNP151_GRCh38p7)  # generate GRanges object only with chr, position and rs SNP ID
+                                         snp_id = gtex_ba9$rs_id_dbSNP151_GRCh38p7,
+                                         fdr = gtex_ba9$qval)  # generate GRanges object only with chr, position and rs SNP ID
     GenomeInfoDb::seqlevelsStyle(gtex_ba9_gr) <- "UCSC"  # UCSC needed for the lift over
     gtex_ba9_gr_hg19 <- unlist(rtracklayer::liftOver(gtex_ba9_gr, hg38_to_hg19))  # lift over from GRCh38 to GRCh37 (hg19): 3,013 => 3,004
     gtex_ba9_gr_hg19 <- gtex_ba9_gr_hg19[!duplicated(gtex_ba9_gr_hg19)]  # no duplicated rows found: 3,004 => 2,837 SNPs
     GenomeInfoDb::seqlevelsStyle(gtex_ba9_gr_hg19) <- "NCBI"
     seqlevels(gtex_ba9_gr_hg19, pruning.mode = "coarse") <- setdiff(seqlevels(gtex_ba9_gr_hg19), c("X", "Y", "M"))
     saveRDS(gtex_ba9_gr_hg19, paste0(outpath, "/GTEx_v8_Brain_Frontal_Cortex_BA9_hg19_sQTL_SNPs.rds"))
+    gtex_ba9_gr_hg19 <- gtex_ba9_gr_hg19[gtex_ba9_gr_hg19$fdr < 0.05, ] # filter for FDR < 0.05 (qvalue)
+    saveRDS(gtex_ba9_gr_hg19, paste0(outpath, "/GTEx_v8_Brain_Frontal_Cortex_BA9_hg19_sQTL_SNPs_fdr0.05.rds"))
     rm(gtex_ba9, gtex_ba9_gr, gtex_ba9_gr_hg19)
     print("Done with GTEx brain frontal cortex BA9 sQTLs")
 
@@ -406,19 +444,21 @@ if(length(args) == 0){
     for (i in brains) {
         filename <- paste0(gtex, "/GTEx_Analysis_v8_sQTL/", i)
         data <- data.table::fread(filename)
-        data <- data[data$qval < 0.05, ]  # filter for significant results
         gtex_brains <- rbind(gtex_brains, data) # merge different brain files together
     }
     gtex_brains_gr <- GenomicRanges::GRanges(seqnames = gtex_brains$chr,
                                              ranges = IRanges::IRanges(start = as.numeric(as.character(gtex_brains$variant_pos)),
                                                                        end = as.numeric(as.character(gtex_brains$variant_pos))),
-                                             snp_id = gtex_brains$rs_id_dbSNP151_GRCh38p7)  # generate GRanges object only with chr, position and rs SNP ID
+                                             snp_id = gtex_brains$rs_id_dbSNP151_GRCh38p7,
+                                             fdr = gtex_brains$qval)  # generate GRanges object only with chr, position and rs SNP ID
     GenomeInfoDb::seqlevelsStyle(gtex_brains_gr) <- "UCSC"
     gtex_brains_gr_hg19 <- unlist(rtracklayer::liftOver(gtex_brains_gr, hg38_to_hg19))  # lift over from GRCh38 to GRCh37 (hg19): 20,642 => 20,527
     gtex_brains_gr_hg19 <- gtex_brains_gr_hg19[!duplicated(gtex_brains_gr_hg19)]  # no duplicated rows found: 20,527 => 11,804 SNPs
     GenomeInfoDb::seqlevelsStyle(gtex_brains_gr_hg19) <- "NCBI"
     seqlevels(gtex_brains_gr_hg19, pruning.mode = "coarse") <- setdiff(seqlevels(gtex_brains_gr_hg19), c("X", "Y", "M"))
     saveRDS(gtex_brains_gr_hg19, paste0(outpath, "/GTEx_v8_Brains_hg19_sQTL_SNPs.rds"))
+    gtex_brains_gr_hg19 <- gtex_brains_gr_hg19[gtex_brains_gr_hg19$fdr < 0.05, ]  # filter for significant results
+    saveRDS(gtex_brains_gr_hg19, paste0(outpath, "/GTEx_v8_Brains_hg19_sQTL_SNPs_fdr0.05.rds"))
     rm(brains, filename, data, i, gtex_brains, gtex_brains_gr, gtex_brains_gr_hg19)
     print("Done with GTEx brain (all brain tissues) eQTLs")
 
@@ -427,15 +467,17 @@ if(length(args) == 0){
     ### Cortex meQTL ###
     ####################
     cortex_meqtl <- fread(cortex)
-    cortex_meqtl <- cortex_meqtl[cortex_meqtl$p < 0.05, ]
     cortex_meqtl_gr <- GRanges(seqnames = cortex_meqtl$snpChr, 
                                ranges = IRanges(start = as.numeric(as.character(cortex_meqtl$snpPos)), 
                                                 end = as.numeric(as.character(cortex_meqtl$snpPos))),
-                               snp_id = cortex_meqtl$snpRsNum)  # generate GRanges object only with gene ID, name and location
-    cortex_meqtl_gr <- cortex_meqtl_gr[!duplicated(cortex_meqtl_gr)]  # remove duplicated rows: 8,663 genes (no duplicates)
+                               snp_id = cortex_meqtl$snpRsNum,
+                               p_value = cortex_meqtl$p)  # generate GRanges object only with gene ID, name and location
+    cortex_meqtl_gr <- cortex_meqtl_gr[!duplicated(cortex_meqtl_gr)]  # remove duplicated rows
     GenomeInfoDb::seqlevelsStyle(cortex_meqtl_gr) <- "NCBI"
     seqlevels(cortex_meqtl_gr, pruning.mode = "coarse") <- setdiff(seqlevels(cortex_meqtl_gr), c("X", "Y", "M"))
     saveRDS(cortex_meqtl_gr, paste0(outpath, "/Cortex_meQTL_SNPs.rds"))
+    cortex_meqtl_gr <- cortex_meqtl_gr[cortex_meqtl_gr$p_value < 0.05, ]
+    saveRDS(cortex_meqtl_gr, paste0(outpath, "/Cortex_meQTL_SNPs_p0.05.rds"))
     rm(cortex_meqtl, cortex_meqtl_gr)
     print("Done with cortex meQTLs")
 
@@ -506,30 +548,35 @@ if(length(args) == 0){
     ###############################
     ### AD-2019 ###
     ad <- data.table::fread(paste0(gwas, "/AD-2019/AD_sumstats_Jansenetal_2019sept.txt"), header = T, stringsAsFactors = F, select = c("CHR", "BP", "SNP", "P"))
-    GenerateGrangesObject(ad, ofile = "GWAS_sumstats_AD-2019_p0.05.rds")
+    GenerateGrangesObject(ad, ofile = "GWAS_sumstats_AD-2019.rds")
+    GenerateGrangesObjectFiltered(ad, ofile = "GWAS_sumstats_AD-2019_p0.05.rds")
     rm(ad)
 
     ### ADHD-2019 ###
     # data from 2017, but Paper published 2019
     adhd <- data.table::fread(paste0(gwas, "/ADHD-2019/adhd_jul2017"), header = T, stringsAsFactors = F, select = c("CHR", "BP", "SNP", "P"))
-    GenerateGrangesObject(adhd, ofile = "GWAS_sumstats_ADHD-2019_p0.05.rds")
+    GenerateGrangesObject(adhd, ofile = "GWAS_sumstats_ADHD-2019.rds")
+    GenerateGrangesObjectFiltered(adhd, ofile = "GWAS_sumstats_ADHD-2019_p0.05.rds")
     rm(adhd)
 
     ### ALCDEP-2018 ###
     alcdep <- data.table::fread(paste0(gwas, "/ALCDEP-2018/pgc_alcdep.trans_fe_unrel_geno.aug2018_release.txt"), header = T, stringsAsFactors = F, select = c("CHR", "BP", "SNP", "P"))
-    GenerateGrangesObject(alcdep, ofile = "GWAS_sumstats_ALCDEP-2018_p0.05.rds")
+    GenerateGrangesObject(alcdep, ofile = "GWAS_sumstats_ALCDEP-2018.rds")
+    GenerateGrangesObjectFiltered(alcdep, ofile = "GWAS_sumstats_ALCDEP-2018_p0.05.rds")
     rm(alcdep)
 
     ### AN-2019 ###
     an <- data.table::fread(paste0(gwas, "/AN-2019/pgcAN2.2019-07.vcf.tsv"), header = T, stringsAsFactors = F, select = c("CHROM", "POS", "ID", "PVAL"), skip = 70)
     colnames(an) <- c("CHR", "BP", "SNP", "P")
-    GenerateGrangesObject(an, ofile = "GWAS_sumstats_AN-2019_p0.05.rds")
+    GenerateGrangesObject(an, ofile = "GWAS_sumstats_AN-2019.rds")
+    GenerateGrangesObjectFiltered(an, ofile = "GWAS_sumstats_AN-2019_p0.05.rds")
     rm(an)
 
     ### ASD-2019 ###
     # data from 2017 but Paper published 2019, that is why we call it ASD-2019 not ASD-2017!
     asd <- data.table::fread(paste0(gwas, "/ASD-2019/iPSYCH-PGC_ASD_Nov2017"), header = T, stringsAsFactors = F, select = c("CHR", "BP", "SNP", "P"))
-    GenerateGrangesObject(asd, ofile = "GWAS_sumstats_ASD-2019_p0.05.rds")
+    GenerateGrangesObject(asd, ofile = "GWAS_sumstats_ASD-2019.rds")
+    GenerateGrangesObjectFiltered(asd, ofile = "GWAS_sumstats_ASD-2019_p0.05.rds")
     rm(asd)
 
     ### AUDIT-2019 ###
@@ -537,142 +584,179 @@ if(length(args) == 0){
     # positions were not available, so load the version including bp positions
     audit <- data.table::fread(paste0(gwas, "/AUDIT-2019/AUDIT_UKB_2018_AJP_with_positions.txt"), header = T, stringsAsFactors = F, select = c("chr", "bp", "rsid", "p_T"))
     colnames(audit) <- c("CHR", "BP", "SNP", "P")
-    GenerateGrangesObject(audit, ofile = "GWAS_sumstats_AUDIT-2019_p0.05.rds")
+    GenerateGrangesObject(audit, ofile = "GWAS_sumstats_AUDIT-2019.rds")
+    GenerateGrangesObjectFiltered(audit, ofile = "GWAS_sumstats_AUDIT-2019_p0.05.rds")
     rm(audit)
 
     ### BIP-2019 ###
     # data from 2018, but published 2019
     bip <- data.table::fread(paste0(gwas, "/BIP-2019/daner_PGC_BIP32b_mds7a_0416a"), header = T, stringsAsFactors = F, select = c("CHR", "BP", "SNP", "P"))
-    GenerateGrangesObject(bip, ofile = "GWAS_sumstats_BIP-2019_p0.05.rds")
+    GenerateGrangesObject(bip, ofile = "GWAS_sumstats_BIP-2019.rds")
+    GenerateGrangesObjectFiltered(bip, ofile = "GWAS_sumstats_BIP-2019_p0.05.rds")
     rm(bip)
     
     ### BIPvsSCZ-2018 ###
     bip <- data.table::fread(paste0(gwas, "/BIP+SCZ-2018/BDvsSCZ.sumstats"), header = T, stringsAsFactors = F, select = c("CHR", "BP", "SNP", "P"))
-    GenerateGrangesObject(bip, ofile = "GWAS_sumstats_BIPvsSCZ-2018_p0.05.rds")
+    GenerateGrangesObject(bip, ofile = "GWAS_sumstats_BIPvsSCZ-2018.rds")
+    GenerateGrangesObjectFiltered(bip, ofile = "GWAS_sumstats_BIPvsSCZ-2018_p0.05.rds")
     rm(bip)
     
     ### BIPSCZvsCONT-2018 ###
     bip <- data.table::fread(paste0(gwas, "/BIP+SCZ-2018/BDSCZvsCONT.sumstats"), header = T, stringsAsFactors = F, select = c("CHR", "BP", "SNP", "P"))
-    GenerateGrangesObject(bip, ofile = "GWAS_sumstats_BIPSCZvsCONT-2018_p0.05.rds")
+    GenerateGrangesObject(bip, ofile = "GWAS_sumstats_BIPSCZvsCONT-2018.rds")
+    GenerateGrangesObjectFiltered(bip, ofile = "GWAS_sumstats_BIPSCZvsCONT-2018_p0.05.rds")
     rm(bip)
 
     ### BMI-2015 (ENGAGE) ###
     bmi <- data.table::fread(paste0(gwas, "/BMI-2015_ENGAGE/ENGAGE1000G_BMI.txt"), header = T, stringsAsFactors = F, select = c("chromosome", "position", "SNP", "P"))
     colnames(bmi) <- c("CHR", "BP", "SNP", "P")
-    GenerateGrangesObject(bmi, ofile = "GWAS_sumstats_BMI-2015_ENGAGE_p0.05.rds")
+    GenerateGrangesObject(bmi, ofile = "GWAS_sumstats_BMI-2015_ENGAGE.rds")
+    GenerateGrangesObjectFiltered(bmi, ofile = "GWAS_sumstats_BMI-2015_ENGAGE_p0.05.rds")
     rm(bmi)
     
     ### BMI-2015 (GIANT) ###
     # add positions using HapMap II release 22 (done already)
     bmi <- data.table::fread(paste0(gwas, "/BMI-2015_GIANT/SNP_gwas_mc_merge_nogc_with_locations.tbl.uniq"), header = T, stringsAsFactors = F, select = c("Chromosome", "Position", "SNP", "p"))
     colnames(bmi) <- c("CHR", "BP", "SNP", "P")
-    GenerateGrangesObject(bmi, ofile = "GWAS_sumstats_BMI-2015_GIANT_p0.05.rds")
+    GenerateGrangesObject(bmi, ofile = "GWAS_sumstats_BMI-2015_GIANT.rds")
+    GenerateGrangesObjectFiltered(bmi, ofile = "GWAS_sumstats_BMI-2015_GIANT_p0.05.rds")
     rm(bmi)
     
     ### BMI-2018 (GIANT) ###
     bmi <- data.table::fread(paste0(gwas, "/BMI-2018/Meta-analysis_Locke_et_al+UKBiobank_2018_UPDATED.txt"), header = T, stringsAsFactors = F, select = c("CHR", "POS", "SNP", "P"))
     colnames(bmi) <- c("CHR", "BP", "SNP", "P")
-    GenerateGrangesObject(bmi, ofile = "GWAS_sumstats_BMI-2018_p0.05.rds")
+    GenerateGrangesObject(bmi, ofile = "GWAS_sumstats_BMI-2018.rds")
+    GenerateGrangesObjectFiltered(bmi, ofile = "GWAS_sumstats_BMI-2018_p0.05.rds")
     rm(bmi)
     
     ### BMI-2019 (GIANT) ###
     bmi <- data.table::fread(paste0(gwas, "/BMI-2019/Bmi.giant-ukbb.meta-analysis.combined.23May2018.HapMap2_only.txt"), header = T, stringsAsFactors = F, select = c("CHR", "POS", "SNP", "P"))
     colnames(bmi) <- c("CHR", "BP", "SNP", "P")
-    GenerateGrangesObject(bmi, ofile = "GWAS_sumstats_BMI-2019_p0.05.rds")
+    GenerateGrangesObject(bmi, ofile = "GWAS_sumstats_BMI-2019.rds")
+    GenerateGrangesObjectFiltered(bmi, ofile = "GWAS_sumstats_BMI-2019_p0.05.rds")
     rm(bmi)
 
     ### CAD-2017 ###
     # downlift from hg38 to hg19 done already just take the hg19 version
     cad <- data.table::fread(paste0(gwas, "/CAD-2017/UKBB.GWAS1KG.EXOME.CAD.SOFT.META.PublicRelease.300517.hg19.OR.txt"), header = T, stringsAsFactors = F, select = c("chr", "bp_hg19", "snptestid", "p-value_gc"))
     colnames(cad) <- c("CHR", "BP", "SNP", "P")
-    GenerateGrangesObject(cad, ofile = "GWAS_sumstats_CAD-2017_p0.05.rds")
+    GenerateGrangesObject(cad, ofile = "GWAS_sumstats_CAD-2017.rds")
+    GenerateGrangesObjectFiltered(cad, ofile = "GWAS_sumstats_CAD-2017_p0.05.rds")
     rm(cad)
 
     ### Cannabis-2018 ###
     cannabis <- data.table::fread(paste0(gwas, "/Cannabis-2018/Cannabis_ICC_UKB_het.txt"), header = T, stringsAsFactors = F, select = c("CHR", "BP", "SNP", "P"))
     cannabis <- cannabis[complete.cases(cannabis)] # remove rows with missing information 
-    GenerateGrangesObject(cannabis, ofile = "GWAS_sumstats_Cannabis-2018_p0.05.rds")
+    GenerateGrangesObject(cannabis, ofile = "GWAS_sumstats_Cannabis-2018.rds")
+    GenerateGrangesObjectFiltered(cannabis, ofile = "GWAS_sumstats_Cannabis-2018_p0.05.rds")
     rm(cannabis)
 
     ### CDG1-2013 ###
     # uplift from hg18 to hg19 done already, just load the hg19 version
     cdg1 <- data.table::fread(paste0(gwas, "/CDG1-2013/pgc.cross.full.2013-03.hg19.txt"), header = T, stringsAsFactors = F, select = c("hg18chr", "bp", "snpid", "pval"))
     colnames(cdg1) <- c("CHR", "BP", "SNP", "P")
-    GenerateGrangesObject(cdg1, ofile = "GWAS_sumstats_CDG1-2013_p0.05.rds")
+    GenerateGrangesObject(cdg1, ofile = "GWAS_sumstats_CDG1-2013.rds")
+    GenerateGrangesObjectFiltered(cdg1, ofile = "GWAS_sumstats_CDG1-2013_p0.05.rds")
     rm(cdg1)
     
     ### CDG2-2019 ###
     cdg2 <- data.table::fread(paste0(gwas, "/CDG2-2019/pgc_cdg2_meta_no23andMe_oct2019_v2.txt.daner.txt"), header = T, stringsAsFactors = F, select = c("CHROM", "POS", "ID", "PVAL"))
     colnames(cdg2) <- c("CHR", "BP", "SNP", "P")
-    GenerateGrangesObject(cdg2, ofile = "GWAS_sumstats_CDG2-2019_p0.05.rds")
+    GenerateGrangesObject(cdg2, ofile = "GWAS_sumstats_CDG2-2019.rds")
+    GenerateGrangesObjectFiltered(cdg2, ofile = "GWAS_sumstats_CDG2-2019_p0.05.rds")
     rm(cdg2)
 
     ### EA-2018 ###
     ea <- data.table::fread(paste0(gwas, "/EA-2018/GWAS_EA_excl23andMe.txt"), header = T, stringsAsFactors = F, select = c("CHR", "POS", "MarkerName", "Pval"))
     colnames(ea) <- c("CHR", "BP", "SNP", "P")
-    GenerateGrangesObject(ea, ofile = "GWAS_sumstats_EA-2018_p0.05.rds")
+    GenerateGrangesObject(ea, ofile = "GWAS_sumstats_EA-2018.rds")
+    GenerateGrangesObjectFiltered(ea, ofile = "GWAS_sumstats_EA-2018_p0.05.rds")
     rm(ea)
 
     ### ED-2017 ###
     ed <- data.table::fread(paste0(gwas, "/ED-2017/pgc.ed.freeze1.summarystatistics.July2017.txt"), header = T, stringsAsFactors = F, select = c("CHR", "BP", "SNP", "P"))
-    GenerateGrangesObject(ed, ofile = "GWAS_sumstats_ED-2017_p0.05.rds")
+    GenerateGrangesObject(ed, ofile = "GWAS_sumstats_ED-2017.rds")
+    GenerateGrangesObjectFiltered(ed, ofile = "GWAS_sumstats_ED-2017_p0.05.rds")
     rm(ed)
 
     ### Height-2014 ###
     # uplift from hg18 to hg19 done already, just load the hg19 version
     height <- data.table::fread(paste0(gwas, "/Height-2014/GIANT_HEIGHT_Wood_et_al_2014_publicrelease_HapMapCeuFreq_hg19_with_locations.txt"), header = T, stringsAsFactors = F, select = c("Chromosome", "Position", "MarkerName", "p"))
     colnames(height) <- c("CHR", "BP", "SNP", "P")
-    GenerateGrangesObject(height, ofile = "GWAS_sumstats_HE-2014_p0.05.rds")
+    GenerateGrangesObject(height, ofile = "GWAS_sumstats_HE-2014.rds")
+    GenerateGrangesObjectFiltered(height, ofile = "GWAS_sumstats_HE-2014_p0.05.rds")
     rm(height)
 
     ### Intelligence-2018 ###
     intelligence <- data.table::fread(paste0(gwas, "/Intelligence-2018/SavageJansen_2018_intelligence_metaanalysis.txt"), header = T, stringsAsFactors = F, select = c("CHR", "POS", "SNP", "P"))
     colnames(intelligence) <- c("CHR", "BP", "SNP", "P")
-    GenerateGrangesObject(intelligence, ofile = "GWAS_sumstats_IN-2018_p0.05.rds")
+    GenerateGrangesObject(intelligence, ofile = "GWAS_sumstats_IN-2018.rds")
+    GenerateGrangesObjectFiltered(intelligence, ofile = "GWAS_sumstats_IN-2018_p0.05.rds")
     rm(intelligence)
 
     ### MDD1-2012 ###
     # uplift from hg18 to hg19 done already, just load the hg19 version
     mdd1 <- data.table::fread(paste0(gwas, "/MDD1-2012/pgc.mdd.full.2012-04.hg19.txt"), header = T, stringsAsFactors = F, select = c("hg18chr", "bp", "snpid", "pval"))
     colnames(mdd1) <- c("CHR", "BP", "SNP", "P")
-    GenerateGrangesObject(mdd1, ofile = "GWAS_sumstats_MDD1-2012_p0.05.rds")
+    GenerateGrangesObject(mdd1, ofile = "GWAS_sumstats_MDD1-2012.rds")
+    GenerateGrangesObjectFiltered(mdd1, ofile = "GWAS_sumstats_MDD1-2012_p0.05.rds")
     rm(mdd1)
 
     ### MDD2-2018 ###
     mdd2 <- data.table::fread(paste0(gwas, "/MDD2-2018/daner_pgc_mdd_meta_align_170228_filtered_incl23andMe"), header = T, stringsAsFactors = F, select = c("CHR", "BP", "SNP", "P"))
-    GenerateGrangesObject(mdd2, ofile = "GWAS_sumstats_MDD2-2018_p0.05.rds")
+    GenerateGrangesObject(mdd2, ofile = "GWAS_sumstats_MDD2-2018.rds")
+    GenerateGrangesObjectFiltered(mdd2, ofile = "GWAS_sumstats_MDD2-2018_p0.05.rds")
     rm(mdd2)
 
     ### MDD3-2019 ###
     mdd3 <- data.table::fread(paste0(gwas, "/MDD3-2019/daner_pgc_mdd_meta_w2_no23andMe_rmUKBB"), header = T, stringsAsFactors = F, select = c("CHR", "BP", "SNP", "P"))
-    GenerateGrangesObject(mdd3, ofile = "GWAS_sumstats_MDD3-2019_p0.05.rds")
+    GenerateGrangesObject(mdd3, ofile = "GWAS_sumstats_MDD3-2019.rds")
+    GenerateGrangesObjectFiltered(mdd3, ofile = "GWAS_sumstats_MDD3-2019_p0.05.rds")
     rm(mdd3)
 
     ### OCD-2017 ###
     ocd <- data.table::fread(paste0(gwas, "/OCD-2017/ocd_aug2017"), header = T, stringsAsFactors = F, select = c("CHR", "BP", "SNP", "P"))
-    GenerateGrangesObject(ocd, ofile = "GWAS_sumstats_OCD-2017_p0.05.rds")
+    GenerateGrangesObject(ocd, ofile = "GWAS_sumstats_OCD-2017.rds")
+    GenerateGrangesObjectFiltered(ocd, ofile = "GWAS_sumstats_OCD-2017_p0.05.rds")
     rm(ocd)
 
     ### PTSD-2019 ###
     ptsd <- data.table::fread(paste0(gwas, "/PTSD-2019/pts_all_freeze2_overall.results"), header = T, stringsAsFactors = F, select = c("CHR", "BP", "SNP", "P"))
-    GenerateGrangesObject(ptsd, ofile = "GWAS_sumstats_PTSD-2019_p0.05.rds")
+    GenerateGrangesObject(ptsd, ofile = "GWAS_sumstats_PTSD-2019.rds")
+    GenerateGrangesObjectFiltered(ptsd, ofile = "GWAS_sumstats_PTSD-2019_p0.05.rds")
     rm(ptsd)
 
+    ### SCZ1-2012 ###
+    scz1 <- data.table::fread(paste0(gwas, "/SCZ1-2012/pgc.scz.full.2012-04.correct.header.hg19.txt"), header = T, stringsAsFactors = F, select = c("hg19chr", "bp", "snpid", "pval"))
+    colnames(scz1) <- c("CHR", "BP", "SNP", "P")
+    GenerateGrangesObject(scz1, ofile = "GWAS_sumstats_SCZ1-2012.rds")
+    GenerateGrangesObjectFiltered(scz1, ofile = "GWAS_sumstats_SCZ1-2012_p0.05.rds")
+    rm(scz1)
+    
     ### SCZ2-2014 ###
     scz2 <- data.table::fread(paste0(gwas, "/SCZ2-2014/scz2.snp.results.txt"), header = T, stringsAsFactors = F, select = c("hg19chrc", "bp", "snpid", "p"))
     colnames(scz2) <- c("CHR", "BP", "SNP", "P")
-    GenerateGrangesObject(scz2, ofile = "GWAS_sumstats_SCZ2-2014_p0.05.rds")
+    GenerateGrangesObject(scz2, ofile = "GWAS_sumstats_SCZ2-2014.rds")
+    GenerateGrangesObjectFiltered(scz2, ofile = "GWAS_sumstats_SCZ2-2014_p0.05.rds")
     rm(scz2)
+    
+    ### SCZ3-2020 ###
+    scz3 <- data.table::fread(paste0(gwas, "/SCZ3-2020/PGC3_SCZ_wave3_public_without_frequencies.v1.tsv"), header = T, stringsAsFactors = F, select = c("CHR", "BP", "SNP", "P"))
+    GenerateGrangesObject(scz3, ofile = "GWAS_sumstats_SCZ3-2020.rds")
+    GenerateGrangesObjectFiltered(scz3, ofile = "GWAS_sumstats_SCZ3-2020_p0.05.rds")
+    rm(scz3)
 
     ### T2D-2017 ###
     t2d <- data.table::fread(paste0(gwas, "/T2D-2017/METAANALYSIS_DIAGRAM_SE1_BP_POS.txt"), header = T, stringsAsFactors = F, select = c("Chr", "Position", "Chr:Position", "P-value"))
     colnames(t2d) <- c("CHR", "BP", "SNP", "P")
-    GenerateGrangesObject(t2d, ofile = "GWAS_sumstats_T2D-2017_p0.05.rds")
+    GenerateGrangesObject(t2d, ofile = "GWAS_sumstats_T2D-2017.rds")
+    GenerateGrangesObjectFiltered(t2d, ofile = "GWAS_sumstats_T2D-2017_p0.05.rds")
     rm(t2d)
 
     ### TS-2018 ###
     ts <- data.table::fread(paste0(gwas, "/TS-2018/TS_Oct2018"), header = T, stringsAsFactors = F, select = c("CHR", "BP", "SNP", "P"))
-    GenerateGrangesObject(ts, ofile = "GWAS_sumstats_TS-2018_p0.05.rds")
+    GenerateGrangesObject(ts, ofile = "GWAS_sumstats_TS-2018.rds")
+    GenerateGrangesObjectFiltered(ts, ofile = "GWAS_sumstats_TS-2018_p0.05.rds")
     rm(ts)
 
     print(sessionInfo())

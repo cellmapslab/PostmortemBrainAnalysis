@@ -126,7 +126,12 @@ GeneratePCA <- function(data, cov, pcol, discrete, file){
          labs(col = cov) +
          xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
          ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-         theme(plot.title = element_text(hjust = 0.5))+
+         theme_classic(base_size = 22) + 
+         theme(panel.border = element_rect(fill = NA, size = 2),
+               plot.title = element_text(hjust = 0.5),
+               axis.text.x = element_text(color = "black"), 
+               axis.text.y = element_text(color = "black"), 
+               axis.ticks = element_line(color = "black")) +
          coord_fixed(ratio = sd_ratio)
   } else {
     g <- ggplot(data, aes(PC1, PC2)) +         
@@ -134,11 +139,16 @@ GeneratePCA <- function(data, cov, pcol, discrete, file){
          labs(col = cov) +
          xlab(paste0("PC1, VarExp: ", percent_var[1], "%")) +
          ylab(paste0("PC2, VarExp: ", percent_var[2], "%")) +
-         theme(plot.title = element_text(hjust = 0.5))+
+         theme_classic(base_size = 22) + 
+         theme(panel.border = element_rect(fill = NA, size = 2),
+               plot.title = element_text(hjust = 0.5),
+               axis.text.x = element_text(color = "black"), 
+               axis.text.y = element_text(color = "black"), 
+               axis.ticks = element_line(color = "black")) +
          coord_fixed(ratio = sd_ratio) +
          scale_color_manual(values = pcol)
   }
-  ggsave(plot = g, filename = paste0(outpath, "/", file))
+  ggsave(plot = g, filename = paste0(outpath, "/", file), width = 13, height = 5, units = "in")
   return(g)
 }
 
@@ -203,6 +213,11 @@ We will use the red-blue color palette for all figure generations and therefore 
 hmcol <- rev(colorRampPalette(RColorBrewer::brewer.pal(11, "RdBu"))(200))
 # for all other plots
 rdbu <- brewer.pal(11, "RdBu")
+col_con <- viridis(1000, option = "D", begin = 0.15, end = 0.9)
+col_dis <- viridis(3, option = "D", begin = 0.15, end = 0.9)
+col_gdegene <- col_dis[1]  # purple
+col_tdegene <- col_dis[2]  # turquoise
+col_edegene <- col_dis[3]  # light green
 ```
 
 # Evaluate phenotype data
@@ -721,14 +736,17 @@ ggsave(plot = g, file = paste0(outpath, "/1_barplot_variance_explained_with_resi
 # barplot without residuals
 g <- ggplot(vp[vp$Name != "Residuals", ], aes(x = Name, y = Mean * 100, fill = Type)) +
     geom_bar(stat = "identity", position = position_dodge()) +
-    scale_fill_manual(values = brewer.pal(11, "RdBu")[c(9, 4, 3)]) +
+    scale_fill_manual(values = col_dis) +
     geom_errorbar(aes(x = Name, ymin = (Mean - SE) * 100, ymax = (Mean + SE) * 100), position = position_dodge(width = 0.9), width = 0.4) +
-    theme_bw(base_size = 15) +
+    theme_classic(base_size = 22) +
+    theme(panel.border = element_rect(fill = NA, size = 1), axis.text.x = element_text(color = "black"), legend.position = c(0.8, 0.7), legend.background = element_rect(size = 0.5, linetype = "solid", color = "black")) +
+    scale_x_discrete(labels = c("RIN2", "RIN", "Type of Death", "Age", "Diagnosis", "Suicide", "pH", "Sex", "Dim2", "PMI", "Dim4", "Dim1", "Dim3")) +
+    scale_y_continuous(expand = c(0.02, 0)) +
     xlab("") +
     ylab("Variance explained (%)")+
   theme(axis.text.x = element_text(angle = 60, hjust = 1, vjust = 1))
 g
-ggsave(plot = g, file = paste0(outpath, "/1_barplot_variance_explained_without_residuals.pdf"))
+ggsave(plot = g, file = paste0(outpath, "/1_barplot_variance_explained_without_residuals.pdf"), height = 6, units = "in")
 ```
 
 
@@ -984,7 +1002,7 @@ rm(a, one, two, three, four)
 Now, we will represent the probe intensities in a boxplot graph, where each box corresponds to exactly one microarray sample. The boxplot function from the oligo package performs a log2-transformation by default, so we can use the boxplot function without any previous raw data transformation. The logarithmic scale simplifies the visualization of the data.
 ```{r, echo = F}
 # color for overall expression boxplots
-boxplot_colors <- c(replicate(length(pheno[pheno$File == "9", "File"]), "#4393C3"), replicate(length(pheno[pheno$File == "a", "File"]), "#F4A582"), replicate(length(pheno[pheno$File == "M", "File"]), "#D6604D"))
+boxplot_colors <- c(replicate(length(pheno[pheno$File == "9", "File"]), "#6A00A8FF"), replicate(length(pheno[pheno$File == "a", "File"]), "#D6556DFF"), replicate(length(pheno[pheno$File == "M", "File"]), "#FCCE25FF"))
 # boxplot of raw_data
 pdf(paste0(outpath, "/2_boxplot_raw_data_log2_intensity.pdf"), width = 15)
 boxplot(raw_data, target = "probeset", ylab = "log2 intensity", xlab = "", las = 2, col = boxplot_colors, main = "Boxplot of log2-intensities (raw data)")
@@ -1049,7 +1067,7 @@ pca_diagnosis <- GeneratePCA(data_raw, cov = "Diagnosis", pcol = brewer.pal(11, 
 # PCA only colouring File
 pca_file <- GeneratePCA(data_raw, cov = "File", pcol = brewer.pal(11, "RdBu")[c(1, 3, 10)], discrete = FALSE, file = "2_pca_raw_data_File_colored.pdf")
 # PCA only colouring Batches
-pca_batches <- GeneratePCA(data_raw, cov = "Batches", pcol = brewer.pal(11, "RdBu")[c(10, 8, 4, 3, 1)], discrete = FALSE, file = "2_pca_raw_data_Batches_colored.pdf")
+pca_batches <- GeneratePCA(data_raw, cov = "Batches", pcol = viridis(5, end = 0.9, option = "C"), discrete = FALSE, file = "2_pca_raw_data_Batches_colored.pdf")
 # PCA only colouring Type of Death
 # here, we need to first change the undefined ToD values to NA
 data_raw$ToD <- as.character(data_raw$ToD)
@@ -1247,7 +1265,7 @@ pca_diagnosis <- GeneratePCA(data_bc, cov = "Diagnosis", pcol = brewer.pal(11, "
 # PCA only colouring File
 pca_file <- GeneratePCA(data_bc, cov = "File", pcol = brewer.pal(11, "RdBu")[c(1, 3, 10)], discrete = FALSE, file = "4_pca_batch_corrected_data_File_colored.pdf")
 # PCA only colouring Batches
-pca_batches <- GeneratePCA(data_bc, cov = "Batches", pcol = brewer.pal(11, "RdBu")[c(10, 8, 4, 3, 1)], discrete = FALSE, file = "4_pca_batch_corrected_data_Batches_colored.pdf")
+pca_batches <- GeneratePCA(data_bc, cov = "Batches", pcol = viridis(5, end = 0.9, option = "C"), discrete = FALSE, file = "4_pca_batch_corrected_data_Batches_colored.pdf")
 # PCA only colouring Type of Death
 # here, we need to first change the undefined ToD values to NA
 data_bc$ToD <- as.character(data_bc$ToD)

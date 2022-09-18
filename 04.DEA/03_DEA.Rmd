@@ -24,10 +24,15 @@ vignette: >
 ---
 
 ```{r global_options, include = FALSE}
-library(BiocStyle)
 require(knitr)
-knitr::opts_chunk$set(warning = F, message = F, cache = T, cache.lazy = F)
-options(stringsAsFactors = T)
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  warning = FALSE, 
+  message = FALSE, 
+  cache = TRUE, 
+  cache.lazy = FALSE)
+options(stringsAsFactors = TRUE)
 ```
 
 <p>
@@ -815,6 +820,26 @@ rm(fit, design)
 ```
 Now, we have multiple hits on the transcript level. We can find `r length(unique(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for diagnosis, `r length(unique(top_hits_age[top_hits_age$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for age, `r length(unique(top_hits_ph[top_hits_ph$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for pH, `r length(unique(top_hits_pmi[top_hits_pmi$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for pmi, `r length(unique(top_hits_c2[top_hits_c2$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for the second ancestry principal component (PC2). All hits are based on a 10% FDR (FDR < 0.1). The six diagnosis gene hits are: `r top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]`
 
+### Diagnosis with sex and diagnosis interaction model with recalculated P-values and FDR
+
+Adding (Dx*Sex) to the model.
+```{r, echo = F}
+# reduce expression set
+transcript_summaries_new <- GetExprWithSmallestP(input = "2.2_diff_expr_transcripts_for_diagnosis_with_sex_dx_interaction.csv", transcript_summaries)
+dim(transcript_summaries_new)
+# generate design matrix
+design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1 + (Sex*Dx), pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, transcript_summaries_new)
+# generate result table
+top_hits <- GenerateResultTableTranscript(fit, variable = "DxCASE", file =  "2.4_diff_expr_transcripts_for_diagnosis_with_sex_dx_interaction_new_pvalue_and_fdr.csv")
+# save data into an RData file (for figure generation)
+save(design, fit, top_hits, file = paste0(outpath, "/2.4_diff_expr_transcripts_for_diagnosis_with_sex_dx_interaction_new_pvalue_and_fdr.RData"))
+# remove unnecessary data
+rm(transcript_summaries_new, design, fit)
+```
+Now, we have (`r length(unique(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]))`) hits. The (`r length(unique(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]))`) sex and diagnosis interaction gene hits are: `r top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]`.
+
 ### PRS with recalculated P-value and FDR
 
 As the low adjusted P-values of the transcript expressions could come from the high number of transcripts to test for, we want to redo the adjusted P-value calculation for all PRS from above as follows:
@@ -1360,7 +1385,27 @@ save(design, fit, top_hits, res, file = paste0(outpath, "/3.4_diff_expr_exons_fo
 # remove unnecessary data
 rm(fit, design)
 ```
-Now, we have multiple hits on the exon level. We can find `r length(unique(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for diagnosis, `r length(unique(top_hits_age[top_hits_age$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for age, `r length(unique(top_hits_ph[top_hits_ph$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for pH, `r length(unique(top_hits_pmi[top_hits_pmi$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for pmi, `r length(unique(top_hits_c2[top_hits_c2$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for the second ancestry principal component (PC2). All hits are based on a 10% FDR (FDR < 0.1). The first ten diagnosis gene hits are: `r top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]`
+Now, we have multiple hits on the exon level. We can find `r length(unique(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for diagnosis, `r length(unique(top_hits_age[top_hits_age$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for age, `r length(unique(top_hits_ph[top_hits_ph$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for pH, `r length(unique(top_hits_pmi[top_hits_pmi$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for pmi, `r length(unique(top_hits_c2[top_hits_c2$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for the second ancestry principal component (PC2). All hits are based on a 10% FDR (FDR < 0.1). The first ten diagnosis gene hits are: `r top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"][1:10]`
+
+### Diagnosis with sex and diagnosis interaction model with recalculated P-values and FDR
+
+Adding a Sex and diagnosis interaction term (Sex * Dx) to the model.
+```{r, echo = F}
+# reduce expression set
+exon_summaries_new <- GetExprWithSmallestP(input = "3.2_diff_expr_exons_for_diagnosis_with_sex_dx_interaction.csv", exon_summaries)
+dim(exon_summaries_new)
+# generate design matrix
+design <- model.matrix(~ Dx + Age + Sex + pH + PMI + RIN + RIN2 + Suicide + Type_of_Death + C1 + C2 + C3 + C4 + SV1 + (Sex*Dx), pData)
+# differential expression analysis (limma)
+fit <- RunLimma(design, exon_summaries_new)
+# generate result table
+top_hits <- GenerateResultTableExon(fit, variable = "DxCASE", file =  "3.4_diff_expr_exons_for_diagnosis_with_sex_dx_interaction_new_pvalue_and_fdr.csv")
+# save data into an RData file (for figure generation)
+save(design, fit, top_hits, file = paste0(outpath, "/3.4_diff_expr_exons_for_diagnosis_with_sex_dx_interaction_new_pvalue_and_fdr.RData"))
+# remove unnecessary data
+rm(exon_summaries_new, design, fit)
+```
+Now, we have multiple hits on the exon level. We can find `r length(unique(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for diagnosis and sex interaction. The first ten diagnosis gene hits are: `r top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"][1:10]`
 
 ### PRS with recalculated P-value and FDR
 
@@ -1378,7 +1423,7 @@ top_hits <- GenerateResultTableExon(fit, variable = "PRS.ADHD", file =  "3.5.1_d
 # remove unnecessary data
 rm(exon_summaries_new, design, fit)
 ```
-We can find `r length(unique(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for FDR < 10% (hits for FDR < 5%: `r length(unique(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"]))`) for the ADHD-2019 PRS. Here are the 10 first top gene symbols: `r top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"]`
+We can find `r length(unique(top_hits[top_hits$"FDR estimate" < 0.1, "Ensembl Gene ID"]))` hits for FDR < 10% (hits for FDR < 5%: `r length(unique(top_hits[top_hits$"FDR estimate" < 0.05, "Ensembl Gene ID"]))`) for the ADHD-2019 PRS. Here are the 10 first top gene symbols: `r top_hits[top_hits$"FDR estimate" < 0.1, "Gene Symbol"][1:10]`
 
 **ASD-2019 PRS**
 ```{r, echo = F}

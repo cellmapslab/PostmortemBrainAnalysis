@@ -373,6 +373,7 @@ Load the dataset generated in the DEA for genes differentially expressed for the
 ```{r}
 # load RData file
 load(paste0(results_path, "/1.2_diff_expr_genes_for_diagnosis_with_sex_dx_interaction.RData"))
+sex_diagnosis_int_gene <- top_hits[top_hits$`FDR estimate` < 0.1, ]
 ```
 
 ### Volcano Plot
@@ -607,6 +608,101 @@ for (hit in top_hits$`Ensembl Transcript ID`) {
 rm(design, fit, name, data, top_hits, g)
 ```
 
+## Sex * Diagnosis interaction model with new FDR model
+
+### Load Data
+
+Load the dataset generated in the DEA for genes differentially expressed for the diagnosis with sex*diagnosis interaction with updated p-value and FDR calculation.
+```{r}
+# load RData file
+load(paste0(results_path, "/2.4_diff_expr_transcripts_for_diagnosis_with_sex_dx_interaction_new_pvalue_and_fdr.RData"))
+sex_diagnosis_int_transcript <- top_hits[top_hits$`FDR estimate` < 0.1, ]
+```
+
+### Volcano Plot
+
+Generate a volcano plot (y-axis: -log10 of p-values, x-axis: log2FC) for all hits.
+```{r}
+# volcano plot
+GenerateVolcanoPlot(fit, variable = "DxCASE", cols = col_gdegene, file = "2.4_volcano_plot_diff_expr_transcripts_for_diagnosis_with_sex_dx_interaction_new_pvalue_and_fdr.pdf")
+rm(design, fit)
+```
+
+### Boxplot
+
+#### TRIM10
+For the TRIM10 hit, we will plot the residuals of sex vs. diagnosis as this gene infers a difference between these two covariates. To generate the TRIM10 boxplot we will use the results from the normal model and the transcript ENST00000376704.3|ENST00000449742.2 of the gene to see the difference between the two sexes.
+```{r, echo = F}
+# load data
+load(paste0(results_path, "/2.4_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.RData"))
+# generate boxplot with case vs control for male and female samples of the hit gene (TRIM10)
+trim10 <- res[rownames(res) == "ENST00000376704.3|ENST00000449742.2", ]
+trim10 <- t(t(as.data.frame(trim10)))
+trim10 <- merge(trim10, pData(transcript_summaries)[, c("ShortName", "Dx", "Sex")], by.x = "row.names", by.y = "ShortName", all.x = T)
+trim10$DxSex <- paste0(trim10$Dx, trim10$Sex)
+g <- ggplot(trim10, aes(Sex, trim10, fill = Dx)) +
+  scale_x_discrete(labels = c("Female", "Male")) +
+  theme_classic(base_size = 22) + 
+  theme(text = element_text(size = 22), axis.text.x = element_text(color = "black", angle = 45, hjust = 1), panel.border = element_rect(fill = NA, size = 2), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) +
+  scale_fill_manual(values = c("gray", col_gdegene), labels = c("Controls", "Cases")) + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  geom_boxplot(alpha = 0.7) + 
+  ggtitle("TRIM10") +
+  ylab("Gene expression") + 
+  xlab("Sex") + 
+  labs(fill = "Diagnosis")
+ggsave(plot = g, file = paste0(outpath, "/2.4_boxplot_TRIM10__diff_expr_transcripts_for_diagnosis_with_sex_dx_interaction_new_pvalue_and_fdr.pdf"), width = 7, height = 6)
+g
+# p-value females
+females <- trim10[trim10$Sex == "F",]
+case <- females[females$Dx == "CASE",]
+control <- females[females$Dx == "CTL",]
+t.test(case$trim10, control$trim10) # p-value = 0.01022
+# p-value males
+males <- trim10[trim10$Sex == "M",]
+case <- males[males$Dx == "CASE",]
+control <- males[males$Dx == "CTL",]
+t.test(case$trim10, control$trim10) # p-value = 0.05302
+# remove unnecessary data
+rm(design, fit, trim10, females, males, case, control, g)
+```
+
+#### MRPS27
+
+Same as for MRPS27, but with transcript ENST00000515404.1.
+```{r, echo = F}
+# generate boxplot with case vs control for male and female samples of the hit gene (MRPS27)
+mrps27 <- res[rownames(res) == "ENST00000515404.1", ]
+mrps27 <- t(t(as.data.frame(mrps27)))
+mrps27 <- merge(mrps27, pData(transcript_summaries)[, c("ShortName", "Dx", "Sex")], by.x = "row.names", by.y = "ShortName", all.x = T)
+mrps27$DxSex <- paste0(mrps27$Dx, mrps27$Sex)
+g <- ggplot(mrps27, aes(Sex, mrps27, fill = Dx)) +
+  scale_x_discrete(labels = c("Female", "Male")) +
+  theme_classic(base_size = 22) + 
+  theme(text = element_text(size = 22), axis.text.x = element_text(color = "black", angle = 45, hjust = 1), panel.border = element_rect(fill = NA, size = 2), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) +
+  scale_fill_manual(values = c("gray", col_gdegene), labels = c("Controls", "Cases")) + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  geom_boxplot(alpha = 0.7) + 
+  ggtitle("MRPS27") +
+  ylab("Gene expression") + 
+  xlab("Sex") + 
+  labs(fill = "Diagnosis")
+ggsave(plot = g, file = paste0(outpath, "/2.4_boxplot_MRPS27__diff_expr_transcripts_for_diagnosis_with_sex_dx_interaction_new_pvalue_and_fdr.pdf"), width = 7, height = 6)
+g
+# p-value females
+females <- mrps27[mrps27$Sex == "F",]
+case <- females[females$Dx == "CASE",]
+control <- females[females$Dx == "CTL",]
+t.test(case$mrps27, control$mrps27) # p-value = 0.01558
+# p-value males
+males <- mrps27[mrps27$Sex == "M",]
+case <- males[males$Dx == "CASE",]
+control <- males[males$Dx == "CTL",]
+t.test(case$mrps27, control$mrps27) # p-value = 0.06102
+# remove unnecessary data
+rm(res, mrps27, females, males, case, control, g)
+```
+
 ## PRS with new FDR model
 
 We will generate a barplot of the number of hits, we get using the different calculated polygenic risk scores. 
@@ -763,9 +859,13 @@ eDEGene_hits <- unique(as.data.frame(separate_rows(eDEGene_hits, `gene_id`, sep 
 # gDEGenes
 load(paste0(results_path, "/1.1_diff_expr_genes_for_diagnosis.RData"))
 GenerateVolcanoPlot2(fit, variable = "DxCASE", cols = col_gdegene, highlight = eDEGene_hits, file = "1.1_volcano_plot_diff_expr_genes_for_diagnosis_eDEGenes_colored.pdf")
+gDEGene_hits <- topTable(fit, coef = "DxCASE", number = Inf, adjust.method = "BH")
+gDEGene_hits <- gDEGene_hits[1:100, ]
 #tDEGenes
 load(paste0(results_path, "/2.4_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.RData"))
 GenerateVolcanoPlot2(fit, variable = "DxCASE", cols = col_tdegene, highlight = eDEGene_hits, file = "2.4_volcano_plot_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr_eDEGenes_colored.pdf")
+tDEGene_hits <- topTable(fit, coef = "DxCASE", number = Inf, adjust.method = "BH")
+tDEGene_hits <- tDEGene_hits[1:100, ]
 ```
 
 ### Barplots
@@ -836,6 +936,61 @@ g
 rm(limma_res_all)
 ```
 
+### Forest plot 
+Forest plot showing the log2FC range and median (dot) of the 2,223 exon-level differentially expressed gene hits for all three levels. The 2,223 genes exhibit a larger magnitude of changes on the exon-level (median abs. log2FC = 0.23, range of -0.69 to 0.75) compared to the two other levels (transcript median abs. log2FC = 0.11, range of -0.47 to 0.55, and gene median abs. log2FC = 0.047, range of -0.38 to 0.51).
+```{r}
+# gDEGenes
+load(paste0(results_path, "/1.1_diff_expr_genes_for_diagnosis.RData"))
+gDEGene_hits <- topTable(fit, coef = "DxCASE", number = Inf, adjust.method = "BH")
+gDEGene_hits <- gDEGene_hits[gDEGene_hits$gene_id %in% eDEGene_hits$gene_id, ]
+#tDEGenes
+load(paste0(results_path, "/2.4_diff_expr_transcripts_for_diagnosis_new_pvalue_and_fdr.RData"))
+tDEGene_hits <- topTable(fit, coef = "DxCASE", number = Inf, adjust.method = "BH")
+tDEGene_hits <- unique(as.data.frame(separate_rows(tDEGene_hits, `gene_id`, sep = "\\|")))  # separate if gene IDs were merged
+tDEGene_hits <- tDEGene_hits[tDEGene_hits$gene_id %in% eDEGene_hits$gene_id, ]
+# eDEGenes
+load(paste0(results_path, "/3.4_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.RData"))
+eDEGene_hits <- topTable(fit, coef = "DxCASE", number = Inf, adjust.method = "BH")
+eDEGene_hits <- eDEGene_hits[eDEGene_hits$adj.P.Val < 0.1, ]
+eDEGene_hits <- unique(as.data.frame(separate_rows(eDEGene_hits, `gene_id`, sep = "\\|")))  # separate if gene IDs were merged
+```
+
+Table showing the log2 fold change (log2FC) range and the median of the absolute log2FC of the gene-, transcript- and exon-level differentially expressed gene (DEGene) hits:
+
+| Differentially expressed genes (DEGenes) | Min of log2FC | Max of log2FC | Median of abs log2FC |
+|------|------|------|------|
+| gDEGenes | `r min(gDEGene_hits$logFC)` | `r round(max(gDEGene_hits$logFC), 2)` | `r round(median(abs(gDEGene_hits$logFC)), 2)` |
+| tDEGenes | `r min(tDEGene_hits$logFC)` | `r round(max(tDEGene_hits$logFC), 2)` | `r round(median(abs(tDEGene_hits$logFC)), 2)` |
+| eDEGenes | `r min(eDEGene_hits$logFC)` | `r round(max(eDEGene_hits$logFC), 2)` | `r round(median(abs(eDEGene_hits$logFC)), 2)` |
+
+Finally, we can generate the forest plot:
+```{r, echo = F}
+# Create a data frame with min and max log2FC and median of the absolute log2FC for gene-, transcript- and exon-level DEGenes
+a <- c("Gene", "Transcript", "Exon")
+b <- c(min(gDEGene_hits$logFC), min(tDEGene_hits$logFC), min(eDEGene_hits$logFC))
+c <- c(max(gDEGene_hits$logFC), max(tDEGene_hits$logFC), max(eDEGene_hits$logFC))
+d <- c(median(abs(gDEGene_hits$logFC)), median(abs(tDEGene_hits$logFC)), median(abs(eDEGene_hits$logFC)))
+# Join the variables to create a data frame
+all <- data.frame(a, b, c, d)
+colnames(all) <- c("Type", "mini", "maxi", "medi")
+# change order of Type
+all$Type <- factor(all$Type, levels = c("Exon", "Transcript", "Gene"))
+
+g <- ggplot(all, aes(x = Type, y = medi, ymin = mini, ymax = maxi, color = Type)) +
+  theme_minimal() +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), text = element_text(size = 18), axis.text.x = element_text(size = 16), axis.text.y = element_text(size = 16), axis.line = element_line(size = 1, linetype = "solid")) +
+  geom_errorbar(size = 1.1) +
+  geom_point(size = 3.5) +
+  coord_flip() +
+  geom_hline(yintercept = 0, linetype = 2) +
+  xlab("") +
+  ylab(bquote("median abs. log"["2"]*"FC")) +
+  scale_colour_manual(values = c("Gene" = col_gdegene, "Transcript" = col_tdegene, "Exon" = col_edegene))
+# save plot
+ggsave(plot = g, file = paste0(outpath, "/4_forest_plot_log2fc_for_gene_transcript_exon_level_of_2223_eDEGene_hits.pdf"), width = 12.5, height = 5.75)
+g
+```
+
 ### Heatmap of eDEGenes (diagnosis)
 
 First, we will plot a heatmap of the 2223 eDEGenes.
@@ -871,6 +1026,42 @@ edegenes_exprs <- edegenes_exprs[, -c(1, length(edegenes_exprs) - 1)]
 pheatmap(edegenes_exprs[, -c(length(edegenes_exprs))], scale = "row", annotation_col = anno, annotation_colors = annotation_colors, show_colnames = F, show_rownames = F, color = colorRampPalette(rev(brewer.pal(n = 11, name = "RdBu")))(100))
 dev.off()
 pheatmap(edegenes_exprs[, -c(length(edegenes_exprs))], scale = "row", annotation_col = anno, annotation_colors = annotation_colors, labels_col = edegenes_exprs$gene_name, show_colnames = F, show_rownames = F, color = colorRampPalette(rev(brewer.pal(n = 11, name = "RdBu")))(100), filename = paste0(outpath, "/3.4_heatmap_significant_DEA_hits_exons_new_pvalue_and_fdr.pdf"))
+rm(anno, annotation_colors, edegenes_exprs, exon_to_symbol)
+```
+
+Then, we plot a heatmap of only the top 10 eDEGenes:
+```{r, echo = F}
+# get only top 10 hits
+top_hits <- top_hits[1:10, ]
+# ǵenerate heatmap of hits
+anno <- pData(exon_summaries)[, c("Age", "PMI", "RIN", "Sex", "Suicide", "Dx", "ShortName")]
+rownames(anno) <- anno$ShortName
+anno$ShortName <- NULL
+# generate Age bins (from 18-35, 35-52, 52-70, 70-87)
+anno$Age <- cut(anno$Age, breaks = c(18, 35, 52, 70, 88), right = FALSE, labels = c("18-35", "35-52", "52-70", "70-88"))
+# generate PMI bins
+anno$PMI <- cut(anno$PMI, breaks = c(8, 26, 44, 62, 79), right = FALSE, labels = c("8-26", "26-44", "44-62", "62-79"))
+# generate RIN bins
+anno$RIN <- cut(anno$RIN, breaks = c(6, 7, 8, 9, 10), right = FALSE, labels = c("6-7", "7-8", "8-9", "9-10"))
+# Specify annotation colors
+annotation_colors = list(Sex = c("M" = brewer.pal(11, "RdBu")[10], "F" = brewer.pal(11, "RdBu")[2]),
+                         Dx = c("CTL" = brewer.pal(11, "RdBu")[9], "CASE" = brewer.pal(11, "RdBu")[3]),
+                         Suicide = c("N" = brewer.pal(11, "PuOr")[9], "Y" = brewer.pal(11, "PuOr")[3]),
+                         RIN = c("6-7" = brewer.pal(9, "Oranges")[3], "7-8" = brewer.pal(9, "Oranges")[5], "8-9" = brewer.pal(9, "Oranges")[7], "9-10" = brewer.pal(9, "Oranges")[9]),
+                         Age = c("18-35" = brewer.pal(9, "Blues")[3], "35-52" = brewer.pal(9, "Blues")[5], "52-70" = brewer.pal(9, "Blues")[7], "70-88" = brewer.pal(9, "Blues")[9]),
+                         PMI = c("8-26" = brewer.pal(9, "Purples")[3], "26-44" = brewer.pal(9, "Purples")[5], "44-62" = brewer.pal(9, "Purples")[7], "62-79" = brewer.pal(9, "Purples")[9]))
+# change Exon IDs with Gene Symbols
+edegenes_exprs <- as.data.frame(exprs(exon_summaries)[top_hits$`Ensembl Exon ID`, ])
+edegenes_exprs$exon_id <- row.names(exprs(exon_summaries)[top_hits$`Ensembl Exon ID`, ])
+exon_to_symbol <- fData(exon_summaries)[fData(exon_summaries)$exon_id %in% edegenes_exprs$exon_id, c("exon_id", "gene_name")]
+# remove all multiple gene symbols (mostly duplicated)
+exon_to_symbol$gene_name <- sapply(exon_to_symbol$gene_name, function(x) strsplit(x, "\\|")[[1]][1])
+edegenes_exprs <- plyr::join(edegenes_exprs, exon_to_symbol)
+edegenes_exprs <- edegenes_exprs[, -c(1, length(edegenes_exprs) - 1)]
+# generate plot
+pheatmap(edegenes_exprs[, -c(length(edegenes_exprs))], scale = "row", annotation_col = anno, annotation_colors = annotation_colors, show_colnames = F, show_rownames = F, color = colorRampPalette(rev(brewer.pal(n = 11, name = "RdBu")))(100))
+dev.off()
+pheatmap(edegenes_exprs[, -c(length(edegenes_exprs))], scale = "row", annotation_col = anno, annotation_colors = annotation_colors, labels_col = edegenes_exprs$gene_name, show_colnames = F, show_rownames = F, color = colorRampPalette(rev(brewer.pal(n = 11, name = "RdBu")))(100), filename = paste0(outpath, "/3.4_heatmap_significant_DEA_hits_exons_new_pvalue_and_fdr_top10.pdf"))
 rm(anno, annotation_colors, edegenes_exprs, exon_to_symbol)
 ```
 
@@ -925,6 +1116,178 @@ for (hit in top_hits$`Ensembl Exon ID`[1:6]) {
   g
 }
 rm(name, data)
+```
+
+## Sex * Diagnosis interaction model with new FDR model
+
+### Load Data
+
+Load the dataset generated in the DEA for genes differentially expressed for the diagnosis with sex*diagnosis interaction with updated p-value and FDR calculation.
+```{r}
+# load RData file
+load(paste0(results_path, "/3.4_diff_expr_exons_for_diagnosis_with_sex_dx_interaction_new_pvalue_and_fdr.RData"))
+sex_diagnosis_int_exon <- top_hits[top_hits$`FDR estimate` < 0.1, ]
+```
+
+### Volcano Plot
+
+Generate a volcano plot (y-axis: -log10 of p-values, x-axis: log2FC) for all hits.
+```{r}
+# volcano plot
+GenerateVolcanoPlot(fit, variable = "DxCASE", cols = col_gdegene, file = "3.4_volcano_plot_diff_expr_exons_for_diagnosis_with_sex_dx_interaction_new_pvalue_and_fdr.pdf")
+rm(design, fit)
+```
+
+### Barplot
+
+Now, we generate a barplot only including the diagnosis bars of gene, transcript and exon level differentially expressed hits for sex*diagnosis interaction results. 
+```{r}
+results <- data.frame("type" = c("gene", "transcript", "exon"), "counts" = c(length(sex_diagnosis_int_gene$`Ensembl Gene ID`), length(sex_diagnosis_int_transcript$`Ensembl Gene ID`), length(unique(sex_diagnosis_int_exon$`Ensembl Gene ID`))))
+results$type <- factor(results$type, levels = c("gene", "transcript", "exon"))
+g <- ggplot(results, aes(y = counts, x = type, fill = type)) +
+  geom_bar(stat = "identity") +
+  theme_classic(base_size = 22) + 
+  theme(axis.text.x = element_text(color = "black", angle = 45, hjust = 1), panel.border = element_rect(fill = NA, size = 2), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) +
+  ylab("# significant hits") +
+  xlab("") +
+  scale_y_continuous(breaks = seq(0, 2000, 1000)) + 
+  geom_text(size = 7, aes(label = counts), nudge_y = 120, colour = "dimgray") + 
+  scale_fill_manual(values = c(col_gdegene, col_tdegene, col_edegene))
+ggsave(plot = g, file = paste0(outpath, "/3.4_barplot_significant_hits_gene_transcript_exon_for_diagnosis_with_sex_dx_interaction.pdf"), width = 6, height = 4)
+g
+rm(results)
+```
+
+### Forest plot
+
+Forest plot of the fold changes of the sex * diagnosis hits:
+```{r}
+results <- data.frame("type" = c("gene", "transcript", "exon"), "counts" = c(length(sex_diagnosis_int_gene$`Ensembl Gene ID`), length(sex_diagnosis_int_transcript$`Ensembl Gene ID`), length(unique(sex_diagnosis_int_exon$`Ensembl Gene ID`))))
+results$type <- factor(results$type, levels = c("gene", "transcript", "exon"))
+g <- ggplot(results, aes(y = counts, x = type, fill = type)) +
+  geom_bar(stat = "identity") +
+  theme_classic(base_size = 22) + 
+  theme(axis.text.x = element_text(color = "black", angle = 45, hjust = 1), panel.border = element_rect(fill = NA, size = 2), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) +
+  ylab("# significant hits") +
+  xlab("") +
+  scale_y_continuous(breaks = seq(0, 2000, 1000)) + 
+  geom_text(size = 7, aes(label = counts), nudge_y = 120, colour = "dimgray") + 
+  scale_fill_manual(values = c(col_gdegene, col_tdegene, col_edegene))
+ggsave(plot = g, file = paste0(outpath, "/3.4_barplot_significant_hits_gene_transcript_exon_for_diagnosis_with_sex_dx_interaction.pdf"), width = 6, height = 4)
+g
+rm(sex_diagnosis_int_gene, sex_diagnosis_int_transcript, sex_diagnosis_int_exon, results)
+```
+
+### Boxplots
+
+#### TRIM10
+
+For the TRIM10 hit, we will plot the residuals of sex vs. diagnosis as this gene infers a difference between these two covariates. To generate the TRIM10 boxplot we will use the results from the normal model and the exon ENSE00001889834.1 of the gene to see the difference between the two sexes.
+```{r, echo = F}
+# load data
+load(paste0(results_path, "/3.4_diff_expr_exons_for_diagnosis_new_pvalue_and_fdr.RData"))
+# generate boxplot with case vs control for male and female samples of the hit gene (TRIM10)
+trim10 <- res[rownames(res) == "ENSE00001889834.1", ]
+trim10 <- t(t(as.data.frame(trim10)))
+trim10 <- merge(trim10, pData(exon_summaries)[, c("ShortName", "Dx", "Sex")], by.x = "row.names", by.y = "ShortName", all.x = T)
+trim10$DxSex <- paste0(trim10$Dx, trim10$Sex)
+g <- ggplot(trim10, aes(Sex, trim10, fill = Dx)) +
+  scale_x_discrete(labels = c("Female", "Male")) +
+  theme_classic(base_size = 22) + 
+  theme(text = element_text(size = 22), axis.text.x = element_text(color = "black", angle = 45, hjust = 1), panel.border = element_rect(fill = NA, size = 2), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) +
+  scale_fill_manual(values = c("gray", col_gdegene), labels = c("Controls", "Cases")) + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  geom_boxplot(alpha = 0.7) + 
+  ggtitle("TRIM10") +
+  ylab("Gene expression") + 
+  xlab("Sex") + 
+  labs(fill = "Diagnosis")
+ggsave(plot = g, file = paste0(outpath, "/3.4_boxplot_TRIM10__diff_expr_exons_for_diagnosis_with_sex_dx_interaction_new_pvalue_and_fdr.pdf"), width = 7, height = 6)
+g
+# p-value females
+females <- trim10[trim10$Sex == "F",]
+case <- females[females$Dx == "CASE",]
+control <- females[females$Dx == "CTL",]
+t.test(case$trim10, control$trim10) # p-value = 0.02183
+# p-value males
+males <- trim10[trim10$Sex == "M",]
+case <- males[males$Dx == "CASE",]
+control <- males[males$Dx == "CTL",]
+t.test(case$trim10, control$trim10) # p-value = 0.1008
+# remove unnecessary data
+rm(design, fit, trim10, females, males, case, control, g)
+```
+
+#### MRPS27
+
+Same as for MRPS27, but with exon ENSE00002125333.2.
+```{r, echo = F}
+# generate boxplot with case vs control for male and female samples of the hit gene (MRPS27)
+mrps27 <- res[rownames(res) == "ENSE00002125333.2", ]
+mrps27 <- t(t(as.data.frame(mrps27)))
+mrps27 <- merge(mrps27, pData(exon_summaries)[, c("ShortName", "Dx", "Sex")], by.x = "row.names", by.y = "ShortName", all.x = T)
+mrps27$DxSex <- paste0(mrps27$Dx, mrps27$Sex)
+g <- ggplot(mrps27, aes(Sex, mrps27, fill = Dx)) +
+  scale_x_discrete(labels = c("Female", "Male")) +
+  theme_classic(base_size = 22) + 
+  theme(text = element_text(size = 22), axis.text.x = element_text(color = "black", angle = 45, hjust = 1), panel.border = element_rect(fill = NA, size = 2), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) +
+  scale_fill_manual(values = c("gray", col_gdegene), labels = c("Controls", "Cases")) + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  geom_boxplot(alpha = 0.7) + 
+  ggtitle("MRPS27") +
+  ylab("Gene expression") + 
+  xlab("Sex") + 
+  labs(fill = "Diagnosis")
+ggsave(plot = g, file = paste0(outpath, "/3.4_boxplot_MRPS27__diff_expr_exons_for_diagnosis_with_sex_dx_interaction_new_pvalue_and_fdr.pdf"), width = 7, height = 6)
+g
+# p-value females
+females <- mrps27[mrps27$Sex == "F",]
+case <- females[females$Dx == "CASE",]
+control <- females[females$Dx == "CTL",]
+t.test(case$mrps27, control$mrps27) # p-value = 0.851
+# p-value males
+males <- mrps27[mrps27$Sex == "M",]
+case <- males[males$Dx == "CASE",]
+control <- males[males$Dx == "CTL",]
+t.test(case$mrps27, control$mrps27) # p-value = 0.922
+# remove unnecessary data
+rm(mrps27, females, males, case, control, g)
+```
+
+#### RAD18
+
+Same as for RAD18, but with exons ENSE00001688971.1|ENSE00003688844.1|ENSE00001720030.1|ENSE00003656411.1.
+```{r, echo = F}
+# generate boxplot with case vs control for male and female samples of the hit gene (RAD18)
+rad18 <- res[rownames(res) == "ENSE00001688971.1|ENSE00003688844.1|ENSE00001720030.1|ENSE00003656411.1", ]
+rad18 <- t(t(as.data.frame(rad18)))
+rad18 <- merge(rad18, pData(exon_summaries)[, c("ShortName", "Dx", "Sex")], by.x = "row.names", by.y = "ShortName", all.x = T)
+rad18$DxSex <- paste0(rad18$Dx, rad18$Sex)
+g <- ggplot(rad18, aes(Sex, rad18, fill = Dx)) +
+  scale_x_discrete(labels = c("Female", "Male")) +
+  theme_classic(base_size = 22) + 
+  theme(text = element_text(size = 22), axis.text.x = element_text(color = "black", angle = 45, hjust = 1), panel.border = element_rect(fill = NA, size = 2), axis.text.y = element_text(color = "black"), axis.ticks = element_line(color = "black")) +
+  scale_fill_manual(values = c("gray", col_gdegene), labels = c("Controls", "Cases")) + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  geom_boxplot(alpha = 0.7) + 
+  ggtitle("RAD18") +
+  ylab("Gene expression") + 
+  xlab("Sex") + 
+  labs(fill = "Diagnosis")
+ggsave(plot = g, file = paste0(outpath, "/3.4_boxplot_RAD18__diff_expr_exons_for_diagnosis_with_sex_dx_interaction_new_pvalue_and_fdr.pdf"), width = 7, height = 6)
+g
+# p-value females
+females <- rad18[rad18$Sex == "F",]
+case <- females[females$Dx == "CASE",]
+control <- females[females$Dx == "CTL",]
+t.test(case$rad18, control$rad18) # p-value = 4.971e-05
+# p-value males
+males <- rad18[rad18$Sex == "M",]
+case <- males[males$Dx == "CASE",]
+control <- males[males$Dx == "CTL",]
+t.test(case$rad18, control$rad18) # p-value = 0.04425
+# remove unnecessary data
+rm(res, rad18, females, males, case, control, g)
 ```
 
 ## PRS with new FDR model
@@ -1082,17 +1445,17 @@ get_upregulated_genes <- function(prs, gwas){
   return(upreg)
 }
 upreg_adhd <- get_upregulated_genes(adhd, "ADHD-2019")
-upreg_bd <- get_upregulated_genes(bip, "BIP-2019")
+upreg_bd <- get_upregulated_genes(bd, "BIP-2019")
 upreg_cdg <- get_upregulated_genes(cdg, "CDG2-2019")
 upreg_mdd <- get_upregulated_genes(mdd, "MDD3-2019")
 upreg_scz <- get_upregulated_genes(scz, "SCZ2-2014")
 upreg_all <- list("MDD" = sum(as.logical(upreg_mdd[, 2])), "CDG" = sum(as.logical(upreg_cdg[, 2])), "SCZ" = sum(as.logical(upreg_scz[, 2])), "BD" = sum(as.logical(upreg_bd[, 2])), "ADHD" = sum(as.logical(upreg_adhd[, 2])))
 
-# without MDD2
-eqts_genes <- list("ADHD-2019" = unlist(prs_exons$`ADHD-2019`), "BIP-2019" = unlist(prs_exons$`BIP-2019`), "SCZ2-2014" = unlist(prs_exons$`SCZ2-2014`), "CDG2-2019" = unlist(prs_exons$`CDG2-2019`), "MDD3_2019" = unlist(prs_exons$`MDD3-2019`))
-pdf(paste0(outpath, "/4_upset_plot__ADHD_BIP_CDG2_MDD3_SCZ2_exons_eQTS_new_pvalue_and_fdr.pdf"), width = 14, height = 7, onefile = F)
+# without MDD2 & CDG
+eqts_genes <- list("ADHD" = unlist(prs_exons$`ADHD-2019`), "BD" = unlist(prs_exons$`BIP-2019`), "SCZ" = unlist(prs_exons$`SCZ2-2014`), "MDD" = unlist(prs_exons$`MDD3-2019`))
+pdf(paste0(outpath, "/4_upset_plot_ADHD_BD_MDD3_SCZ2_exons_eQTS_new_pvalue_and_fdr.pdf"), width = 14, height = 7, onefile = F)
 upset(fromList(eqts_genes), 
-      sets = c("ADHD-2019", "BIP-2019", "CDG2-2019", "MDD3_2019", "SCZ2-2014"),
+      sets = c("ADHD", "BD", "MDD", "SCZ"),
       nsets = 6, 
       mainbar.y.label = "# genes", 
       text.scale = 2, 
@@ -1118,11 +1481,11 @@ tDEGene_hits <- topTable(fit, coef = "DxCASE", number = Inf, adjust.method = "BH
 tDEGene_hits <- tDEGene_hits[tDEGene_hits$adj.P.Val < 0.1, ]
 tDEGene_hits <- unique(separate_rows(tDEGene_hits, `gene_id`, sep = "\\|")$gene_id)  # separate if gene IDs were merged
 # remove the ending of the Ensembl Gene IDs
-eDEGene_hits <- unlist(lapply(eDEGene_hits, function(x) strsplit(x, "\\.")[[1]][1]))
+eDEGene_hits <- unlist(lapply(eDEGene_hits$gene_id, function(x) strsplit(x, "\\.")[[1]][1]))
 tDEGene_hits <- unlist(lapply(tDEGene_hits, function(x) strsplit(x, "\\.")[[1]][1]))
 # get number of overlap to GWAS catalog genes
 print(paste0("Overlap tDEGenes to SCZ-GWAScat: ", length(intersect(tDEGene_hits, gwas_cat_genes))))
-print(paste0("Overlap tDEGenes to SCZ-GWAScat: ", length(intersect(eDEGene_hits, gwas_cat_genes)), " (", round((length(intersect(eDEGene_hits, gwas_cat_genes)) / length(eDEGene_hits)) * 100, 2), "%)"))
+print(paste0("Overlap eDEGenes to SCZ-GWAScat: ", length(intersect(eDEGene_hits, gwas_cat_genes)), " (", round((length(intersect(eDEGene_hits, gwas_cat_genes)) / length(eDEGene_hits)) * 100, 2), "%)"))
 rm(gwas_cat, gwas_cat_genes)
 ```
 
@@ -1257,17 +1620,6 @@ fndc3a <- merge(fndc3a, fndc3a_exon_expr, by.x = "Row.names", by.y = "row.names"
 colnames(fndc3a)[1] <- "SampleID"
 dim(fndc3a)  # should be 169 rows (samples)
 
-# calculate the difference as the median expression of cases substracted by the median expression of controls
-differences <- data.frame()
-for(id in unique(fndc3a_plot_data$EnsemblID)) {
-  diff <- median(fndc3a_plot_data[fndc3a_plot_data$EnsemblID == id & fndc3a_plot_data$SampleType == "Cases",]$Expression) - median(fndc3a_plot_data[fndc3a_plot_data$EnsemblID == id & fndc3a_plot_data$SampleType == "Controls",]$Expression)
-  row <- cbind(id, diff)
-  differences <- rbind(differences, row)
-}
-differences$diff <- as.numeric(levels(differences$diff))[differences$diff]
-differences <- differences[order(differences$diff, decreasing = T), ]
-as.vector(differences$id)
-
 # 3.6 Form data into right order
 fndc3a <- fndc3a[, c("SampleID", "ENSG00000102531.12", "ENST00000378383.1", "ENST00000497644.1", "ENST00000541916.1|ENST00000484074.1", "ENST00000492622.2", "ENST00000398316.3", "ENSE00000682482.1", "ENSE00003553418.1|ENSE00003591878.1", "ENSE00000682481.1", "ENSE00001335285.2", "ENSE00003618072.1|ENSE00003538992.1", "ENSE00001342704.1", "ENSE00001422888.3", "ENSE00003657943.1|ENSE00003595023.1", "ENSE00003647569.1|ENSE00003636520.1", "ENSE00003532194.1|ENSE00001896523.1|ENSE00003662779.1", "ENSE00003537609.1|ENSE00003598917.1", "ENSE00001129140.1", "ENSE00001129131.1", "ENSE00003488149.1|ENSE00003524858.1", "ENSE00003479083.1|ENSE00003595348.1|ENSE00003582104.1", "ENSE00001922094.2", "ENSE00001342700.1", "ENSE00001129122.1", "ENSE00001129152.1", "ENSE00003561019.1|ENSE00003616958.1", "ENSE00000939645.1", "ENSE00001378011.1|ENSE00001934521.1", "ENSE00003676028.1|ENSE00003632112.1", "ENSE00003610694.1|ENSE00003685468.1", "ENSE00003535624.1|ENSE00003689909.1")]
 colnames(fndc3a) <- c("SampleID", "FNDC3A", "FNDC3A-001", "FNDC3A-006", "FNDC3A-004", "FNDC3A-003", "FNDC3A-002", "ENSE00000682482.1", "ENSE00003553418.1", "ENSE00000682481.1", "ENSE00001335285.2", "ENSE00003618072.1", "ENSE00001342704.1", "ENSE00001422888.3", "ENSE00003657943.1", "ENSE00003636520.1", "ENSE00003532194.1", "ENSE00003537609.1", "ENSE00001129140.1", "ENSE00001129131.1", "ENSE00003488149.1", "ENSE00003479083.1", "ENSE00001922094.2", "ENSE00001342700.1", "ENSE00001129122.1", "ENSE00001129152.1", "ENSE00003561019.1", "ENSE00000939645.1", "ENSE00001378011.1", "ENSE00003632112.1", "ENSE00003685468.1", "ENSE00003689909.1")
@@ -1299,6 +1651,21 @@ sp <- ggplot(fndc3a_plot_data, aes(x = EnsemblID, y = Expression, fill = SampleT
   geom_hline(yintercept = median(fndc3a_plot_data[fndc3a_plot_data$EnsemblID == "FNDC3A", "Expression"]), linetype = "dashed") 
 sp + facet_wrap(. ~ Type, scales = "free")
 dev.off()
+
+pdf(paste0(outpath, "/4.1_boxplot_FNDC3A_gene_vs_transcripts_vs_exons_residuals_same_size.pdf"), width = 26, height = 8)
+sp + facet_grid(. ~ Type, scales = "free", space = "free") + scale_x_discrete(expand = c(0, 0.5))
+dev.off()
+
+# calculate the difference as the median expression of cases substracted by the median expression of controls
+differences <- data.frame()
+for(id in unique(fndc3a_plot_data$EnsemblID)) {
+  diff <- median(fndc3a_plot_data[fndc3a_plot_data$EnsemblID == id & fndc3a_plot_data$SampleType == "Cases",]$Expression) - median(fndc3a_plot_data[fndc3a_plot_data$EnsemblID == id & fndc3a_plot_data$SampleType == "Controls",]$Expression)
+  row <- cbind(id, diff)
+  differences <- rbind(differences, row)
+}
+differences$diff <- as.numeric(levels(differences$diff))[differences$diff]
+differences <- differences[order(differences$diff, decreasing = T), ]
+as.vector(differences$id)
 ```
 
 
@@ -1470,7 +1837,7 @@ plot_data <- merge(plot_data, grs, by = c("GeneSet", "variable"))
 colnames(plot_data) <- c("GeneSet", "eQTS", "adjP", "GeneRatio")
 plot_data$log_adjP <- -log(plot_data$adjP)
 plot_data <- plot_data[!(duplicated(plot_data)), ]
-plot_data$GeneSet <- factor(plot_data$GeneSet, levels = c("Vitamin digestion and absorption", "Tryptophan metabolism", "Starch and sucrose metabolism", "Parathyroid hormone synthesis, secretion and action", "GnRH secretion", "Galactose metabolism", "Cortisol synthesis and secretion", "Bile secretion", "Alanine, aspartate and glutamate metabolism", "VEGF signaling pathway", "Vasopressin-regulated water reabsorption", "Various types of N-glycan biosynthesis", "Other types of O-glycan biosynthesis", "N-Glycan biosynthesis", "Aminoacyl-tRNA biosynthesis", "RNA transport", "Retrograde endocannabinoid signaling", "Relaxin signaling pathway", "Phototransduction", "Inflammatory mediator regulation of TRP channels", "Fc gamma R-mediated phagocytosis", "Fanconi anemia pathway", "Cholinergic synapse", "cGMP-PKG signaling pathway", "cAMP signaling pathway", "Thyroid hormone synthesis", "Melanogenesis", "Estrogen signaling pathway", "Calcium signaling pathway", "Nucleotide excision repair", "Mismatch repair", "DNA replication", "Base excision repair", "Lysine degradation", "Ubiquitin mediated proteolysis", "Thermogenesis", "Synaptic vesicle cycle", "Regulation of actin cytoskeleton", "Ras signaling pathway", "Rap1 signaling pathway", "Phospholipase D signaling pathway", "Oxytocin signaling pathway", "Neurotrophin signaling pathway", "mTOR signaling pathway", "mRNA surveillance pathway", "Long-term depression", "Insulin secretion", "GnRH signaling pathway", "Gap junction", "ErbB signaling pathway", "Endocytosis", "Endocrine and other factor-regulated calcium reabsorption", "Dopaminergic synapse", "Collecting duct acid secretion", "Circadian entrainment", "Axon guidance", "Autophagy", "Apelin signaling pathway", "Adrenergic signaling in cardiomyocytes", "PI3K-Akt signaling pathway", "Metabolic pathways", "Gastric acid secretion", "Amino sugar and nucleotide sugar metabolism", "Aldosterone synthesis and secretion", "Progesterone-mediated oocyte maturation", "Oocyte meiosis", "Homologous recombination", "Growth hormone synthesis, secretion and action", "Thyroid hormone signaling pathway", "Protein digestion and absorption", "Platelet activation", "Phosphatidylinositol signaling system", "Long-term potentiation", "Inositol phosphate metabolism", "Glutamatergic synapse", "Glucagon signaling pathway", "AMPK signaling pathway", "Adherens junction", "Lysosome", "Focal adhesion", "ABC transporters", "ECM-receptor interaction") )
+plot_data$GeneSet <- factor(plot_data$GeneSet, levels = rev(levels(plot_data$GeneSet)))
 plot_data$eQTS <- factor(plot_data$eQTS, levels = c("SCZ", "CDG", "MDD", "ABMS", "Index"))
 plot_data$Group <- ifelse(plot_data$eQTS != "Index", "eQTS", "Index")
 ```

@@ -411,7 +411,7 @@ rm(svobj, nsv, edata, pheno, mod, mod0) # remove unnecessary data
 
 ## GENCODE information
 
-First, we need all gene, transcript and exon information for the human hg19 (GRCH37) genome. Therefore, we will load the Gencode release 19 .gtf file (downloaded from https://www.gencodegenes.org/human/release_19.html) and filter for all protein-coding genes as well as manually annotated genes from the HAVANA group (source). Then, we will split the dataset into gene, transcript and exon types only. 
+First, we need all gene, transcript and exon information for the human hg19 (GRCH37) genome. Therefore, we will load the Gencode release 19 .gtf file (downloaded from https://www.gencodegenes.org/human/release_19.html) and filter for all protein-coding genes as well as manually annotated genes from the HAVANA group (source). Then, we will split the dataset into gene, transcript and exon types only.
 ```{r}
 # Load Gencode gtf file
 gencode <- import.gff("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/annotation_files/gencode.v19.annotation.gtf", format = "gtf")
