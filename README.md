@@ -40,7 +40,3 @@ Following analyses will be performed:
   - Preprocessing and GRanges object generation
   - Generate FUMA input files
   - Generate overlap to eeGenes and eQTS genes and plot results
-6. **LD Score Regression**
-  - Estimate heritability & calculate genetic correlation to different GWAS summary statistic files
-8. **Co-expression analysis**
-  - WGCNA???
