@@ -1136,6 +1136,23 @@ string_db$plot_network(ct_genes_mapped$STRING_id)
 write.table(ct_genes, "~/core_genes_diff_expr_in_cell_types.tsv", sep = "\t", col.names = FALSE, row.names = FALSE)
 ```
 
+## STRING DB network
+
+First we need to load STRINGdb -> R version too old (I generated the figure on my laptop instead as I updated R to version 4.)
+```{r}
+library(STRINGdb)
+library(igraph)
+
+# load human STRING network (Human = 9606, Mouse = 10090)
+string_db <- STRINGdb$new(version="11", species=9606, score_threshold=200, input_directory="")
+# first we need to map the gene IDs to STRING IDs
+ct_genes_mapped <- string_db$map(as.data.frame(ct_genes), "ct_genes", removeUnmappedRows = TRUE)
+hits <- ct_genes_mapped$STRING_id
+# Then we can plot the network
+string_db$plot_network(ct_genes_mapped$STRING_id)
+write.table(ct_genes, "~/core_genes_diff_expr_in_cell_types.tsv", sep = "\t", col.names = FALSE, row.names = FALSE)
+```
+
 
 # USP24 Figures
 

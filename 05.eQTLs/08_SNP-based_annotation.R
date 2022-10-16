@@ -561,6 +561,10 @@ if(length(args) == 0){
       # load public data: GWAS summary statistic file
       sumstat <- readRDS(paste0(inpath, "/GWAS_sumstats_", gwas_names[[i]], "_p0.05.rds"))
       # Save GRanges objects of all GWAS (nominal p < 0.05) in the order they should be running
+<<<<<<< HEAD
+=======
+      sumstat <- sumstat[sumstat$p_value <= 0.05, ]
+>>>>>>> ffd06f5 (Minor updates)
       gwas <- append(gwas, GRangesList(gwas = sumstat), after = length(gwas))
       # Save GRanges objects of all GWAS (genome-wide filtered: p < 5e-8) in the order they should be running
       sumstat <- sumstat[sumstat$p_value <= 5e-8, ]

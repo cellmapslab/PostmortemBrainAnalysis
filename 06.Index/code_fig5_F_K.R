@@ -115,6 +115,7 @@ ggplot(plot_data, aes(x = USP24_SCZ, y = PRS.SCZ2, col = Dx)) +
 ggsave(file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Index/04_figures/3_scatterplot_USP24_", exon, "_residuals_exon_expr_vs_SCZ2_PRS.pdf"), width = 10, height = 6)
 
 
+<<<<<<< HEAD
 # Boxplot with residuals
 # get exon expression
 results_path = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_DEA_results"
@@ -149,6 +150,8 @@ ggplot(na.omit(plot_data), aes(T.T, value)) +
 ggsave(file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Index/04_figures/4_boxplot_USP24_ENSE00001139439_residuals_exon_expr_vs_SNP_rs1475703.pdf", width = 6, height = 5)
 
 
+=======
+>>>>>>> ffd06f5 (Minor updates)
 ############
 ### GAD1 ###
 ############
@@ -175,7 +178,10 @@ ggplot(plot_data, aes(x = GAD1_SCZ, y = PRS.SCZ2, col = Dx)) +
   annotate(geom = "text", x = 8, y = -0.0022, label = paste0("FDR = ", round(top_hits[top_hits$`Ensembl Exon ID` == exon, "FDR estimate"], 3)))
 ggsave(file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Index/04_figures/3_scatterplot_GAD1_", exon, "_exon_expr_vs_SCZ2_PRS.pdf"), width = 10, height = 6)
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> ffd06f5 (Minor updates)
 # Boxplot - Now we generate the boxplot with the expression of exon ENSE00003699191.1|ENSE00001955143.1|ENSE00003696650.1|ENSE00001708604.1 of GAD1 (ID is joined with other exons) with SNP rs1420385
 # get exon expression
 exon_expr <- t(t(exprs(exon_summaries)[grep("ENSE00003699191.1|ENSE00001955143.1|ENSE00003696650.1|ENSE00001708604.1", rownames(exon_summaries)), ]))
@@ -207,8 +213,11 @@ ggplot(na.omit(plot_data), aes(G.G, value)) +
   ggtitle("GAD1")
 ggsave(file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Index/04_figures/4_boxplot_GAD1_ENSE00003699191.1_expression_vs_SNP_rs1420385.pdf", width = 6, height = 5)
 
+<<<<<<< HEAD
 
 # Scatterplot with residuals
+=======
+>>>>>>> ffd06f5 (Minor updates)
 # get SCZ2-2019 eQTS expression (residuals)
 prs <- res[rownames(res)[rownames(res) %in% gad1_exons], ] # use residuals instead of scores
 prs <- t(t(as.data.frame(prs)))
@@ -228,6 +237,7 @@ ggplot(plot_data, aes(x = GAD1_SCZ, y = PRS.SCZ2, col = Dx)) +
 ggsave(file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Index/04_figures/3_scatterplot_GAD1_", exon, "_residuals_exon_expr_vs_SCZ2_PRS.pdf"), width = 10, height = 6)
 
 
+<<<<<<< HEAD
 # Boxplot with residuals
 # get exon expression
 results_path = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_DEA_results"
@@ -257,6 +267,8 @@ ggplot(na.omit(plot_data), aes(G.G, value)) +
 ggsave(file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Index/04_figures/4_boxplot_GAD1_ENSE00003699191.1_residuals_exon_expr_vs_SNP_rs1420385.pdf", width = 6, height = 5)
 
 
+=======
+>>>>>>> ffd06f5 (Minor updates)
 ##############
 ### PCDH15 ###
 ##############
@@ -333,6 +345,7 @@ ggplot(plot_data, aes(x = PCDH15_SCZ, y = PRS.SCZ2, col = Dx)) +
   annotate(geom = "text", x = 0, y = -0.0022, label = paste0("FDR = ", round(top_hits[top_hits$`Ensembl Exon ID` == exon, "FDR estimate"], 3)))
 ggsave(file = paste0("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Index/04_figures/3_scatterplot_PCDH15_", exon, "_residuals_exon_expr_vs_SCZ2_PRS.pdf"), width = 10, height = 6)
 
+<<<<<<< HEAD
 
 # Boxplot with residuals
 # get exon expression
@@ -367,3 +380,5 @@ ggplot(na.omit(plot_data), aes(T.T, value)) +
   ggtitle("PCDH15")
 ggsave(file = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Index/04_figures/4_boxplot_PCDH15_ENSE00001587529.1_residuals_exon_expr_vs_SNP_rs11523830.pdf", width = 6, height = 5)
 
+=======
+>>>>>>> ffd06f5 (Minor updates)
