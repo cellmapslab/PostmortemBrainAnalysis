@@ -8,6 +8,8 @@
 06.Index/**/
 05.eQTLs/09_eQTL_figures_cache/*
 05.eQTLs/09_eQTL_figures_cache/**
+07.LDSC
+08.Figures
 *.map
 *.ped
 *.zip
