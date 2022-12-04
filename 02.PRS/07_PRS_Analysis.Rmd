@@ -59,7 +59,7 @@ library(variancePartition) # for correlation calculation & variance explained
 Before we can start, we need to make sure that all necessary paths and folder names are saved. If the output folder does not exist yet, we will generate it using the systems (Red Hat Enterprise Linux operating system: Fedora 25) "mkdir" command.
 ```{r}
 # get PRS output path and generate the figures folder
-path = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS"
+path = "/lustre/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS"
 # generate output folders for figures and result tables
 system(paste0("mkdir -p ", path, "/07_figures"))
 system(paste0("mkdir -p ", path, "/08_results"))
@@ -177,7 +177,7 @@ EvaluatePRS <- function(gwas){
 
 ```{r}
 # load and save phenotype data
-load("/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
+load("/lustre/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_files/7_affymetrix_exon_microarray_data_after_rma_probeset_summaries_filtered_batch_corrected_SVA_gene_summaries_annotated.RData")
 index <- which(is.na(pData(gene_summaries)$C1))  # remove all samples with C1 = NA
 dim(gene_summaries)
 pData <- pData(gene_summaries)
@@ -194,6 +194,7 @@ an_2019_prsice <- EvaluatePRS(gwas = "AN-2019")
 asd_2019_prsice <- EvaluatePRS(gwas = "ASD-2019")
 audit_2019_prsice <- EvaluatePRS(gwas = "AUDIT-2019")
 bip_2019_prsice <- EvaluatePRS(gwas = "BIP-2019")
+bip_2021_prsice <- EvaluatePRS(gwas = "BIP-2021")
 bip_vs_scz_2018_prsice <- EvaluatePRS(gwas = "BIPvsSCZ-2018")
 bipscz_vs_ctl_2018_prsice <- EvaluatePRS(gwas = "BIPSCZvsCONT-2018")
 bmi_2015_engage_prsice <- EvaluatePRS(gwas = "BMI-2015_ENGAGE")
@@ -214,6 +215,7 @@ mdd3_2019_prsice <- EvaluatePRS(gwas = "MDD3-2019")
 ocd_2017_prsice <- EvaluatePRS(gwas = "OCD-2017") # 5e-08 missing use 5.005e-05 instead
 ptsd_2019_prsice <- EvaluatePRS(gwas = "PTSD-2019") # 5e-08 missing use 5.005e-05 instead
 scz2_2014_prsice <- EvaluatePRS(gwas = "SCZ2-2014")
+scz3_2022_prsice <- EvaluatePRS(gwas = "SCZ3-2022")
 t2d_2017_prsice <- EvaluatePRS(gwas = "T2D-2017")
 ts_2018_prsice <- EvaluatePRS(gwas = "TS-2018")
 ```
@@ -222,32 +224,30 @@ ts_2018_prsice <- EvaluatePRS(gwas = "TS-2018")
 # Correlation Plot
 
 ```{r}
-# Correlation Plot (only for ADHD-2019, ASD-2019, BIP-2019, CDG2-2019, MDD2-2018, MDD3-2019, SCZ2-2014, EA-2018, T2D-2017)
+# Correlation Plot (only for ADHD-2019, ASD-2019, BIP-2021, CDG2-2019, MDD3-2019, SCZ3-2022, EA-2018, T2D-2017)
 # Add PRS for different summary statistic files to pData
 prs_adhd <- data.frame(IID = adhd_2019_prsice$IID, PRS_ADHD = adhd_2019_prsice$`0.01`)
 pData <- merge(pData, prs_adhd, by = "IID", all.x = T)
 prs_asd <- data.frame(IID = asd_2019_prsice$IID, PRS_ASD = asd_2019_prsice$`0.01`)
 pData <- merge(pData, prs_asd, by = "IID", all.x = T)
-prs_scz2 <- data.frame(IID = scz2_2014_prsice$IID, PRS_SCZ = scz2_2014_prsice$`0.01`)
-pData <- merge(pData, prs_scz2, by = "IID", all.x = T)
-prs_mdd2 <- data.frame(IID = mdd2_2018_prsice$IID, PRS_MDD2 = mdd2_2018_prsice$`0.01`)
-pData <- merge(pData, prs_mdd2, by = "IID", all.x = T)
-prs_mdd3 <- data.frame(IID = mdd3_2019_prsice$IID, PRS_MDD3 = mdd3_2019_prsice$`0.01`)
-pData <- merge(pData, prs_mdd3, by = "IID", all.x = T)
-prs_bip <- data.frame(IID = bip_2019_prsice$IID, PRS_BIP = bip_2019_prsice$`0.01`)
+prs_bip <- data.frame(IID = bip_2021_prsice$IID, PRS_BIP = bip_2021_prsice$`0.01`)
 pData <- merge(pData, prs_bip, by = "IID", all.x = T)
-prs_ea <- data.frame(IID = ea_2018_prsice$IID, PRS_EA = ea_2018_prsice$`0.01`)
-pData <- merge(pData, prs_ea, by = "IID", all.x = T)
 prs_cdg <- data.frame(IID = cdg2_2019_prsice$IID, PRS_CDG = cdg2_2019_prsice$`0.01`)
 pData <- merge(pData, prs_cdg, by = "IID", all.x = T)
+prs_mdd3 <- data.frame(IID = mdd3_2019_prsice$IID, PRS_MDD3 = mdd3_2019_prsice$`0.01`)
+pData <- merge(pData, prs_mdd3, by = "IID", all.x = T)
+prs_scz3 <- data.frame(IID = scz3_2022_prsice$IID, PRS_SCZ3 = scz3_2022_prsice$`0.01`)
+pData <- merge(pData, prs_scz3, by = "IID", all.x = T)
+prs_ea <- data.frame(IID = ea_2018_prsice$IID, PRS_EA = ea_2018_prsice$`0.01`)
+pData <- merge(pData, prs_ea, by = "IID", all.x = T)
 prs_t2d <- data.frame(IID = t2d_2017_prsice$IID, PRS_T2D = t2d_2017_prsice$`0.01`)
 pData <- merge(pData, prs_t2d, by = "IID", all.x = T)
 # Calculate correlations using canCorPairs from the variancePartition package
-model <- ~ PRS_SCZ + PRS_MDD2 + PRS_MDD3 + PRS_BIP + PRS_CDG + PRS_ADHD + PRS_ASD + PRS_EA + PRS_T2D + Age + Sex + Dx + C1 + C2 + C3 + C4
+model <- ~ PRS_SCZ3 + PRS_MDD3 + PRS_BIP + PRS_CDG + PRS_ADHD + PRS_ASD + PRS_EA + PRS_T2D + Age + Sex + Dx + C1 + C2 + C3 + C4
 corr <- canCorPairs(model, pData)
 # change orw and column names
-colnames(corr) <- c("SCZ-2014", "MDD-2018", "MDD-2019", "BIP-2019", "CDG-2019", "ADHD-2019", "ASD-2019", "EA-2018", "T2D-2017", "Age", "Sex", "Diagnosis", "Ancestry Dim 1", "Ancestry Dim 2", "Ancestry Dim 3", "Ancestry Dim 4")
-rownames(corr) <- c("SCZ-2014", "MDD-2018", "MDD-2019", "BIP-2019", "CDG-2019", "ADHD-2019", "ASD-2019", "EA-2018", "T2D-2017", "Age", "Sex", "Diagnosis", "Ancestry Dim 1", "Ancestry Dim 2", "Ancestry Dim 3", "Ancestry Dim 4")
+colnames(corr) <- c("SCZ-2022", "MDD-2019", "BIP-2021", "CDG-2019", "ADHD-2019", "ASD-2019", "EA-2018", "T2D-2017", "Age", "Sex", "Diagnosis", "Ancestry Dim 1", "Ancestry Dim 2", "Ancestry Dim 3", "Ancestry Dim 4")
+rownames(corr) <- c("SCZ-2022", "MDD-2019", "BIP-2021", "CDG-2019", "ADHD-2019", "ASD-2019", "EA-2018", "T2D-2017", "Age", "Sex", "Diagnosis", "Ancestry Dim 1", "Ancestry Dim 2", "Ancestry Dim 3", "Ancestry Dim 4")
 # generate correlation plot and save into a file
 corrplot(corr, method = "color", type = "upper", tl.col = "black", cl.lim = c(0, 1), is.corr = F, col = colorRampPalette(rev(brewer.pal(n = 9, name = "RdBu")))(100))
 pdf(paste0(path, "/07_figures/corrplot_covariates_PRS.pdf"))
@@ -261,7 +261,7 @@ dev.off()
 ```{r}
 # heatmap for all PRS GWAS
 # save only IID and PRS columns
-pData_new <- pData[, c("IID", "PRS_MDD2", "PRS_MDD3", "PRS_BIP", "PRS_SCZ", "PRS_CDG")]
+pData_new <- pData[, c("IID", "PRS_MDD3", "PRS_BIP", "PRS_SCZ3", "PRS_CDG")]
 # set IIDs as rownames and remove IID column afterwards
 row.names(pData_new) <- pData_new$IID
 # generate heatmap
@@ -275,12 +275,12 @@ colnames(anno) <- c("Diagnosis", "Sex", "Age")
 anno_colors = list(Sex = c("M" = brewer.pal(11, "RdBu")[10], "F" = brewer.pal(11, "RdBu")[2]),
                    Diagnosis = c("CTL" = brewer.pal(11, "RdBu")[9], "CASE" = brewer.pal(11, "RdBu")[3]),
                    Age = c("18-35" = brewer.pal(9, "Blues")[3], "35-52" = brewer.pal(9, "Blues")[5], "52-70" = brewer.pal(9, "Blues")[7], "70-88" = brewer.pal(9, "Blues")[9]))
-pdf(paste0(path, "/07_figures/heatmap_PRS_SCZ_BIP_MDD2_MDD3_CDG_GWAS.pdf"), width = 12, height = 9)
+pdf(paste0(path, "/07_figures/heatmap_PRS_SCZ3_BIP_MDD3_CDG_GWAS.pdf"), width = 12, height = 9)
 pheatmap(t(pData_new[, 2:length(pData_new)]), scale = "row", cluster_rows = F, annotation_col = anno, annotation_colors = anno_colors, font_size = 0.6, show_colnames = F, 
-         cex = 1.5, labels_row = c("MDD-2018", "MDD-2019", "BIP-2019", "SCZ-2014", "CDG-2019"), color = colorRampPalette(rev(brewer.pal(n = 11, name = "RdBu")))(100))
+         cex = 1.5, labels_row = c("MDD-2019", "BIP-2021", "SCZ-2022", "CDG-2019"), color = colorRampPalette(rev(brewer.pal(n = 11, name = "RdBu")))(100))
 dev.off()
 p <- pheatmap(t(pData_new[, 2:length(pData_new)]), scale = "row", cluster_rows = F, annotation_col = anno, annotation_colors = anno_colors, font_size = 0.6, show_colnames = F, 
-              cex = 1.5, labels_row = c("MDD-2018", "MDD-2019", "BIP-2019", "SCZ-2014", "CDG-2019"), color = colorRampPalette(rev(brewer.pal(n = 11, name = "RdBu")))(100))
+              cex = 1.5, labels_row = c("MDD-2019", "BIP-2021", "SCZ-2022", "CDG-2019"), color = colorRampPalette(rev(brewer.pal(n = 11, name = "RdBu")))(100))
 dev.off()
 iid.order <- p$tree_col$order
 row_names <- as.character(pData_new[iid.order, "IID"])

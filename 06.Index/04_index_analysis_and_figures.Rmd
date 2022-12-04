@@ -62,7 +62,7 @@ library(RColorBrewer)
 Before we can start, we need to make sure that all necessary paths and folder names are saved. If the output folder does not exist, we will generate it using the systems (Red Hat Enterprise Linux operating system: Fedora 25) "mkdir" command.
 ```{r}
 # index path
-path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Index"
+path <- "/lustre/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Index"
 # path to the rare variants of index patients RData file
 rdata_path <- paste0(path, "/01_RData_file")
 # path to the overlap file
@@ -70,29 +70,29 @@ overlap_path <- paste0(path, "/02_overlap")
 # path to the fuma files
 fuma_path <- paste0(path, "/03_FUMA")
 # path to the eQTL result tables
-eqtl_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/04_result_tables"
+eqtl_path <- "/lustre/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/04_result_tables"
 # path to SNP rdata GRanges files
-rds_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/06_RData_files"
+rds_path <- "/lustre/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/06_RData_files"
 # path to differentially expression analysis (DEA) hits
-dea_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_DEA_results"
+dea_path <- "/lustre/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_DEA_results"
 # path to RData files of DEA
-dea_rdata_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_files"
+dea_rdata_path <- "/lustre/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_files"
 # path to eQTS genes of ABMS
-eqts_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/04_FUMA/4.1_input_files/"
+eqts_path <- "/lustre/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/04_FUMA/4.1_input_files/"
 # path to CMC data
-cmc_path <- "/storage/groups/ccm01/datasets/2019_CMC_Fromer_et_al"
+cmc_path <- "/lustre/groups/ccm01/datasets/2019_CMC_Fromer_et_al"
 # path to hiPSC data
-hipsc_path <- "/storage/groups/ccm01/datasets/2021_Stertz_et_al"
+hipsc_path <- "/lustre/groups/ccm01/datasets/2021_Stertz_et_al"
 # path to SCZ GWAS loci genes
-gwas_path <- "/storage/groups/ccm01/datasets/2018_GWAS_summary_statistics"
+gwas_path <- "/lustre/groups/ccm01/datasets/2018_GWAS_summary_statistics"
 # path to the snRNAseq mean expression per gene for cell types table
-ct_path <- "/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/snRNASeq_data"
+ct_path <- "/lustre/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/snRNASeq_data"
 # path to the polygenic risk score (PRS) results
-prs_path = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/04_PRSice-2"
+prs_path = "/lustre/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/04_PRSice-2"
 # path to GTEx data
-gtex_path <- "/storage/groups/ccm01/datasets/2019_GTEx_v8"
+gtex_path <- "/lustre/groups/ccm01/datasets/2019_GTEx_v8"
 # path to rare variants of index patients (from Bonn)
-index_path <- "/storage/groups/ccm01/datasets/2018_IntegraMent_Mental_Disorders/Schizophrenia/Index-Patients"
+index_path <- "/lustre/groups/ccm01/datasets/2018_IntegraMent_Mental_Disorders/Schizophrenia/Index-Patients"
 # path to store the output into 
 out_path <- paste0(path, "/04_figures")
 # generate ouput path if not existing already
@@ -237,7 +237,7 @@ abms <- fread(paste0(eqts_path, "/3_exon_eQTS_ADHD_BIP_MDD_SCZ.txt"), data.table
 
 ```{r}
 # load GWAS Catalog
-gwas_cat <- fread("/storage/groups/ccm01/datasets/2020_GWAS_Catalog/gwas_catalog_v1.0.2-associations_e100_r2020-07-14.tsv", header = T, sep = "\t", stringsAsFactors = F)
+gwas_cat <- fread("/lustre/groups/ccm01/datasets/2020_GWAS_Catalog/gwas_catalog_v1.0.2-associations_e100_r2020-07-14.tsv", header = T, sep = "\t", stringsAsFactors = F)
 gwas_cat <- gwas_cat[grep("EFO_0000692", gwas_cat$MAPPED_TRAIT_URI), ]
 gwas_cat_genes <- gwas_cat$`REPORTED GENE(S)`
 gwas_cat_genes <- gwas_cat_genes[gwas_cat_genes != ""]
@@ -294,16 +294,23 @@ gtex_seGenes <- unique(gtex_seGenes[gtex_seGenes$qval < 0.05, "gene_name"])  # f
 
 SCZ2-2014
 ```{r}
-scz_gwas <- fread(paste0(gwas_path, "/SCZ2-2014/SCZ2_GWAS_107_loci_genes.txt"), header = F, data.table = F, stringsAsFactors = F)
-scz_gwas <- unique(scz_gwas$V1)
-length(scz_gwas)
+scz2_2014 <- fread(paste0(gwas_path, "/SCZ2-2014/SCZ2_GWAS_107_loci_genes.txt"), header = F, data.table = F, stringsAsFactors = F)
+scz2_2014 <- unique(scz2_2014$V1)
+length(scz2_2014)
 ```
 
 SCZ3-2020
 ```{r}
-scz_gwas <- fread(paste0(gwas_path, "/SCZ3-2020/PGC3_prioritized_genes.tsv"), header = F, data.table = F, stringsAsFactors = F)
-scz_gwas <- unique(scz_gwas$V1)
-length(scz_gwas)
+scz3_2020 <- fread(paste0(gwas_path, "/SCZ3-2020/PGC3_prioritized_genes.tsv"), header = F, data.table = F, stringsAsFactors = F)
+scz3_2020 <- unique(scz3_2020$V1)
+length(scz3_2020)
+```
+
+SCZ3-2022
+```{r}
+scz3_2022 <- read_excel(paste0(gwas_path, "/SCZ3-2022/scz2022-Extended-Data-Table1.xlsx"), sheet = "Extended.Data.Table.1")
+scz3_2022 <- unique(scz3_2022$V1)
+length(scz3_2022)
 ```
 
 ## Load cell type file for heatplot
@@ -337,7 +344,7 @@ HGNC <- read.delim(file)
 # run the main function
 entrez <- convert_symbols(ct_genes_mapped$`Gene Symbol`, HGNC)
 ct_genes_mapped <- merge(ct_genes_mapped, entrez, by.x = "Gene Symbol", by.y = "Symbols")
-write.table(ct_genes_mapped, "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Index/29_core_genes_diff_expr_in_cell_types_mapped.csv", sep = "\t", row.names = FALSE)
+write.table(ct_genes_mapped, "/lustre/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/06.Index/29_core_genes_diff_expr_in_cell_types_mapped.csv", sep = "\t", row.names = FALSE)
 ```
 
 
@@ -377,7 +384,7 @@ Now, we can check all the overlaps to the index dataset:
 
 Load the 32 genes from the Schizophrenia Exome Meta-Analysis Consortium (SCHEMA) and check the overlap to the 2,378 index genes.
 ```{r}
-schema <- read.csv2("/storage/groups/ccm01/datasets/2021_SCHEMA/SCHEMA_32_genes.csv", sep = "\t")
+schema <- read.csv2("/lustre/groups/ccm01/datasets/2021_SCHEMA/SCHEMA_32_genes.csv", sep = "\t")
 intersect(schema$gene_id, index$`Ensembl Gene ID`)
 ```
 
@@ -460,7 +467,7 @@ dev.off()
 Then, we generated a circular plot to see where the 832 genes are located on the genome, e.g. which chromosomes. 
 ```{r}
 # Load Gencode gtf file to get the gene locations
-gencode <- import.gff("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/annotation_files/gencode.v19.annotation.gtf", format = "gtf")
+gencode <- import.gff("/lustre/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/annotation_files/gencode.v19.annotation.gtf", format = "gtf")
 gencode <- gencode[gencode$gene_type == "protein_coding"]  # get only protein-coding genes
 gencode <- gencode[gencode$source == "HAVANA"] # get only HAVANA source data
 genes <- as.data.frame(gencode[gencode$type == "gene"])  # get only genes (no exons, cds, transcripts etc.)
@@ -788,7 +795,7 @@ exon_expr <- t(t(exprs(exon_summaries)[grep("ENSE00000762309.1", rownames(exon_s
 colnames(exon_expr) <- "ENSE00000762309.1"
 
 # snp data
-system(paste0("/storage/groups/ccm01/tools/PLINK/plink --bfile /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/01_preprocessed_genotypes/1.3_samples_filtered/pmb_info06_all_chr_maf0.05_merged --snp rs11373481 --recode --tab --out LAMA4_SNPs"))
+system(paste0("/lustre/groups/ccm01/tools/PLINK/plink --bfile /lustre/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/01_preprocessed_genotypes/1.3_samples_filtered/pmb_info06_all_chr_maf0.05_merged --snp rs11373481 --recode --tab --out LAMA4_SNPs"))
 snp <- read.delim("LAMA4_SNPs.ped", head = T)
 pheno <- pData(exon_summaries)[, c("IID","Dx", "ShortName")]
 
@@ -1070,7 +1077,7 @@ exon_expr <- t(t(exprs(exon_summaries)[grep("ENSE00003699191.1|ENSE00001955143.1
 colnames(exon_expr) <- "ENSE00003699191.1"
 
 # snp data
-system(paste0("/storage/groups/ccm01/tools/PLINK/plink --bfile /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/01_preprocessed_genotypes/1.3_samples_filtered/pmb_info06_all_chr_maf0.05_merged --snp rs1420385 --recode --tab --out GAD1_SNPs"))
+system(paste0("/lustre/groups/ccm01/tools/PLINK/plink --bfile /lustre/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/01_preprocessed_genotypes/1.3_samples_filtered/pmb_info06_all_chr_maf0.05_merged --snp rs1420385 --recode --tab --out GAD1_SNPs"))
 snp <- read.delim("GAD1_SNPs.ped", head = T)
 pheno <- pData(exon_summaries)[, c("IID","Dx", "ShortName")]
 
@@ -1198,7 +1205,7 @@ exon_expr <- t(t(exprs(exon_summaries)[grep("ENSE00001139439.2|ENSE00001811443.1
 colnames(exon_expr) <- "ENSE00001139439.2"
 
 # snp data
-system(paste0("/storage/groups/ccm01/tools/PLINK/plink --bfile /storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/01_preprocessed_genotypes/1.3_samples_filtered/pmb_info06_all_chr_maf0.05_merged --snp rs1475703 --recode --tab --out USP24_SNPs"))
+system(paste0("/lustre/groups/ccm01/tools/PLINK/plink --bfile /lustre/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/01_preprocessed_genotypes/1.3_samples_filtered/pmb_info06_all_chr_maf0.05_merged --snp rs1475703 --recode --tab --out USP24_SNPs"))
 snp <- read.delim("USP24_SNPs.ped", head = T)
 pheno <- pData(exon_summaries)[, c("IID","Dx", "ShortName")]
 

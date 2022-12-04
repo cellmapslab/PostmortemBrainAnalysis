@@ -5,9 +5,6 @@
 # Invoke the script in the commandline as follows: R CMD BATCH --slave "--args inpath=<path/to/input-files> what=<data> outpath=<path/for/output>" 08_SNP-based_annotation.R &>> SNP-based_annotation.log
 # or using Rscript: Rscript --slave 08_SNP-based_annotation.R inpath=<path/to/input-files> what=<data> outpath=<path/for/output> &>> SNP-based_annotation.log
 
-# Load locally installed packages for R version 3.6
-.libPaths("/home/icb/karolina.worf/R/x86_64-pc-linux-gnu-library/3.6/")
-
 # load packages
 suppressPackageStartupMessages({
   library(data.table)
@@ -541,41 +538,32 @@ if(length(args) == 0){
     write.table(results, file = paste0(meqtl_outpath, "/pmb_cis-eQTL_annotation_results_10000_permutations_cortex_meqtl.tsv"), col.names = NA, quote = F, dec = ".", sep = "\t")
     rm(meqtl_outpath, cortex_meqtl, results, perm, background, meqtl)
     
-  } else if (what == "GWAS") {
+  } else if (what == "GWAS_nom") {
     # Generate output path
     gwas_outpath <- paste0(outpath, "/06_GWAS")
     system(paste0("mkdir -p ", gwas_outpath))
     
     # generate empty data frames to fill
     states_p0.05 <- data.frame()
-    states_p5e8 <- data.frame()
     
     # get all GWAS RDS input file paths in the same order as the gwas and gwas_gw list
-    gwas_names <- c("SCZ1-2012", "SCZ2-2014", "SCZ3-2020", "BIP-2019", "MDD1-2012", "MDD2-2018", "MDD3-2019", "CDG1-2013", "CDG2-2019", "ADHD-2019", "ASD-2019", "EA-2018", "BMI-2015_ENGAGE", "BMI-2015_GIANT", "BMI-2018", "BMI-2019", "AD-2019", "ALCDEP-2018", "AN-2019", "AUDIT-2019", "CAD-2017", "Cannabis-2018", "ED-2017", "HE-2014", "IN-2018", "OCD-2017", "PTSD-2019", "T2D-2017", "TS-2018")
+    #gwas_names <- c("SCZ1-2012", "SCZ2-2014", "SCZ3-2022", "BIP-2019", "MDD1-2012", "MDD2-2018", "MDD3-2019", "CDG1-2013", "CDG2-2019", "ADHD-2019", "ASD-2019", "EA-2018", "BMI-2015_ENGAGE", "BMI-2015_GIANT", "BMI-2018", "BMI-2019", "AD-2019", "ALCDEP-2018", "AN-2019", "AUDIT-2019", "CAD-2017", "Cannabis-2018", "ED-2017", "HE-2014", "IN-2018", "OCD-2017", "PTSD-2019", "T2D-2017", "TS-2018")
+    gwas_names <- c("SCZ3-2022", "BIP-2021", "MDD3-2019", "CDG2-2019", "ADHD-2019", "ASD-2019", "EA-2018", "BMI-2019", "T2D-2017")
     
     # load GWAS files and save them into a GRangesList
     gwas <- GRangesList()
-    gwas_gw <- GRangesList()
     gwas_files <- list()  # save all unfiltered GWAS summary statistic file names with path
     for (i in seq_along(gwas_names)) {
       # load public data: GWAS summary statistic file
       sumstat <- readRDS(paste0(inpath, "/GWAS_sumstats_", gwas_names[[i]], "_p0.05.rds"))
       # Save GRanges objects of all GWAS (nominal p < 0.05) in the order they should be running
-<<<<<<< HEAD
-=======
       sumstat <- sumstat[sumstat$p_value <= 0.05, ]
->>>>>>> ffd06f5 (Minor updates)
       gwas <- append(gwas, GRangesList(gwas = sumstat), after = length(gwas))
-      # Save GRanges objects of all GWAS (genome-wide filtered: p < 5e-8) in the order they should be running
-      sumstat <- sumstat[sumstat$p_value <= 5e-8, ]
-      gwas_gw <- append(gwas_gw, GRangesList(gwas = sumstat), after = length(gwas_gw))
       # Add correct GWAS name to the list (did not work directly)
       if (i == 1) {
         names(gwas) <- gwas_names[[i]]
-        names(gwas_gw) <- gwas_names[[i]]
       } else {
         names(gwas) <- c(names(gwas[1:(i-1)]), gwas_names[[i]])
-        names(gwas_gw) <- c(names(gwas_gw[1:(i-1)]), gwas_names[[i]])
       }
       rm(sumstat)
       # get all GWAS RDS input file paths in the same order as the gwas and gwas_gw list
@@ -585,11 +573,6 @@ if(length(args) == 0){
     # save number of SNPs in each GWAS with nominal p (p < 0.05) into a file
     states <- as.data.frame(elementNROWS(gwas))
     write.table(states, file = paste0(gwas_outpath, "/GWAS_p0.05_sizes.tsv"), row.names = T, col.names = F, quote = F, sep = "\t")
-    rm(states)
-    
-    # save number of SNPs in each GWAS with genome-wide p (p < 5e-8) into a file
-    states <- as.data.frame(elementNROWS(gwas_gw))
-    write.table(states, file = paste0(gwas_outpath, "/GWAS_p5e-8_sizes.tsv"), row.names = T, col.names = F, quote = F, sep = "\t")
     rm(states)
     
     ### Get overlap of all GWAS (p < 0.05) to CMC, GTEx wb, GTEx brain and GTEx BA9
@@ -606,59 +589,11 @@ if(length(args) == 0){
       results[names(gwas)[[i]], "GTEx_eQTL_ba9"] <- sum(overlapsAny(gtex_ba9_eqtl, gwas_selected))
       results[names(gwas)[[i]], "GTEx_sQTL_ba9"] <- sum(overlapsAny(gtex_ba9_sqtl, gwas_selected))
     }
+    
     ### write results into a file
     write.table(results, file = paste0(gwas_outpath, "/CMC_GTEx_SNP_overlap_to_all_GWAS_p0.05.tsv"), col.names = NA, quote = F, dec = ".", sep = "\t")
     rm(results, gwas_selected)
-    
-    ### Get overlap of all GWAS (p < 5e-08) to CMC, GTEx wb, brain, ba9
-    results <- data.frame()
-    for (i in seq_along(gwas_gw)) {
-      gwas_selected <- gwas_gw[[i]]
-      print(names(gwas_gw)[[i]])
-      results[names(gwas_gw)[[i]], "CMC_eQTL"] <- sum(overlapsAny(cmc_eqtl, gwas_selected))
-      results[names(gwas_gw)[[i]], "CMC_isoQTL"] <- sum(overlapsAny(cmc_isoqtl, gwas_selected))
-      results[names(gwas_gw)[[i]], "GTEx_eQTL_wb"] <- sum(overlapsAny(gtex_wb_eqtl, gwas_selected))
-      results[names(gwas_gw)[[i]], "GTEx_sQTL_wb"] <- sum(overlapsAny(gtex_wb_sqtl, gwas_selected))
-      results[names(gwas_gw)[[i]], "GTEx_eQTL_brain"] <- sum(overlapsAny(gtex_brains_eqtl, gwas_selected))
-      results[names(gwas_gw)[[i]], "GTEx_sQTL_brain"] <- sum(overlapsAny(gtex_brains_sqtl, gwas_selected))
-      results[names(gwas_gw)[[i]], "GTEx_eQTL_ba9"] <- sum(overlapsAny(gtex_ba9_eqtl, gwas_selected))
-      results[names(gwas_gw)[[i]], "GTEx_sQTL_ba9"] <- sum(overlapsAny(gtex_ba9_sqtl, gwas_selected))
-    }
-    ### write results into a file
-    write.table(results, file = paste0(gwas_outpath, "/CMC_GTEx_SNP_overlap_to_all_GWAS_p5e-8.tsv"), col.names = NA, quote = F, dec = ".", sep = "\t")
-    rm(results, gwas_selected)
-    
-    ### Annotation to genome-wide GWAS hits ###
-    # First, set parameters
-    perm <- 10000
-    # Annotation to GWAS summary statistics (parallelized)
-    cl <- makeCluster(10)
-    registerDoSNOW(cl)
-    clusterCall(cl, function(x) .libPaths(x), .libPaths())  # load packages from above
-    results2 <- foreach (i = seq_along(gwas_gw), .combine = rbind,
-                         .packages = c("GenomicRanges", "S4Vectors")) %dopar% {
-                           results <- data.frame()
-                           overlap <- paste0(names(gwas_gw)[i], "_SNP_overlap")
-                           pval <- paste0(names(gwas_gw)[i], "_SNP_pVal")
-                           or <- paste0(names(gwas_gw)[i], "_SNP_or")
-                           gwas_selected <- gwas_gw[[i]]
-                           gwas_full <- readRDS(gwas_files[[i]])
-                           background <- subsetByOverlaps(background_gr, gwas_full)
-                           rm(gwas_full)
-                           results[c(overlap, pval, or), "Gene"] <- AnnotatePublicData(eqtls_gene_gr, gwas_selected, perm, background)
-                           results[c(overlap, pval, or), "Gene_cases"] <- AnnotatePublicData(eqtls_gene_cases_gr, gwas_selected, perm, background)
-                           results[c(overlap, pval, or), "Transcript"] <- AnnotatePublicData(eqtls_transcript_gr, gwas_selected, perm, background)
-                           results[c(overlap, pval, or), "Transcript_cases"] <- AnnotatePublicData(eqtls_transcript_cases_gr, gwas_selected, perm, background)
-                           results[c(overlap, pval, or), "Exon"] <- AnnotatePublicData(eqtls_exon_gr, gwas_selected, perm, background)
-                           results[c(overlap, pval, or), "Exon_cases"] <- AnnotatePublicData(eqtls_exon_cases_gr, gwas_selected, perm, background)
-                           write.table(results, file = paste0(gwas_outpath, "/pmb_cis-eQTL_annotation_results_10000_permutations_", names(gwas_gw)[i],"_p5e-8.tsv"), col.names = NA, quote = F, dec = ".", sep = "\t")
-                           results
-                         }
-    stopCluster(cl)
-    # Write results into a file
-    write.table(results2, file = paste0(gwas_outpath, "/pmb_cis-eQTL_annotation_results_10000_permutations_ALL_GWAS_hits_p5e-8.tsv"), col.names = NA, quote = F, dec = ".", sep = "\t")
-    rm(results2)
-    
+     
     ### Annotation to nominal GWAS hits ###
     # First, set parameters
     perm <- 10000
@@ -688,6 +623,91 @@ if(length(args) == 0){
     stopCluster(cl)
     # Write results into a file
     write.table(results2, file = paste0(gwas_outpath, "/pmb_cis-eQTL_annotation_results_10000_permutations_ALL_GWAS_hits_p0.05.tsv"), col.names = NA, quote = F, dec = ".", sep = "\t")
+  } else if (what == "GWAS_gw") {
+    # Generate output path
+    gwas_outpath <- paste0(outpath, "/06_GWAS")
+    system(paste0("mkdir -p ", gwas_outpath))
+    
+    # generate empty data frames to fill
+    states_p5e8 <- data.frame()
+    
+    # get all GWAS RDS input file paths in the same order as the gwas and gwas_gw list
+    #gwas_names <- c("SCZ1-2012", "SCZ2-2014", "SCZ3-2020", "BIP-2019", "MDD1-2012", "MDD2-2018", "MDD3-2019", "CDG1-2013", "CDG2-2019", "ADHD-2019", "ASD-2019", "EA-2018", "BMI-2015_ENGAGE", "BMI-2015_GIANT", "BMI-2018", "BMI-2019", "AD-2019", "ALCDEP-2018", "AN-2019", "AUDIT-2019", "CAD-2017", "Cannabis-2018", "ED-2017", "HE-2014", "IN-2018", "OCD-2017", "PTSD-2019", "T2D-2017", "TS-2018")
+    gwas_names <- c("SCZ3-2020", "BIP-2021", "MDD3-2019", "CDG2-2019", "ADHD-2019", "ASD-2019", "EA-2018", "T2D-2017")
+    
+    # load GWAS files and save them into a GRangesList
+    gwas_gw <- GRangesList()
+    gwas_files <- list()  # save all unfiltered GWAS summary statistic file names with path
+    for (i in seq_along(gwas_names)) {
+      # load public data: GWAS summary statistic file
+      sumstat <- readRDS(paste0(inpath, "/GWAS_sumstats_", gwas_names[[i]], "_p0.05.rds"))
+      # Save GRanges objects of all GWAS (genome-wide filtered: p < 5e-8) in the order they should be running
+      sumstat <- sumstat[sumstat$p_value <= 5e-8, ]
+      gwas_gw <- append(gwas_gw, GRangesList(gwas = sumstat), after = length(gwas_gw))
+      # Add correct GWAS name to the list (did not work directly)
+      if (i == 1) {
+        names(gwas_gw) <- gwas_names[[i]]
+      } else {
+        names(gwas_gw) <- c(names(gwas_gw[1:(i-1)]), gwas_names[[i]])
+      }
+      rm(sumstat)
+      # get all GWAS RDS input file paths in the same order as the gwas and gwas_gw list
+      gwas_files <- append(gwas_files, paste0(inpath, "/GWAS_sumstats_", gwas_names[[i]], ".rds"))
+    }
+    
+    # save number of SNPs in each GWAS with genome-wide p (p < 5e-8) into a file
+    states <- as.data.frame(elementNROWS(gwas_gw))
+    write.table(states, file = paste0(gwas_outpath, "/GWAS_p5e-8_sizes.tsv"), row.names = T, col.names = F, quote = F, sep = "\t")
+    rm(states)
+    
+    ### Get overlap of all GWAS (p < 5e-08) to CMC, GTEx wb, brain, ba9
+    results <- data.frame()
+    for (i in seq_along(gwas_gw)) {
+      gwas_selected <- gwas_gw[[i]]
+      print(names(gwas_gw)[[i]])
+      results[names(gwas_gw)[[i]], "CMC_eQTL"] <- sum(overlapsAny(cmc_eqtl, gwas_selected))
+      results[names(gwas_gw)[[i]], "CMC_isoQTL"] <- sum(overlapsAny(cmc_isoqtl, gwas_selected))
+      results[names(gwas_gw)[[i]], "GTEx_eQTL_wb"] <- sum(overlapsAny(gtex_wb_eqtl, gwas_selected))
+      results[names(gwas_gw)[[i]], "GTEx_sQTL_wb"] <- sum(overlapsAny(gtex_wb_sqtl, gwas_selected))
+      results[names(gwas_gw)[[i]], "GTEx_eQTL_brain"] <- sum(overlapsAny(gtex_brains_eqtl, gwas_selected))
+      results[names(gwas_gw)[[i]], "GTEx_sQTL_brain"] <- sum(overlapsAny(gtex_brains_sqtl, gwas_selected))
+      results[names(gwas_gw)[[i]], "GTEx_eQTL_ba9"] <- sum(overlapsAny(gtex_ba9_eqtl, gwas_selected))
+      results[names(gwas_gw)[[i]], "GTEx_sQTL_ba9"] <- sum(overlapsAny(gtex_ba9_sqtl, gwas_selected))
+    }
+    ### write results into a file
+    write.table(results, file = paste0(gwas_outpath, "/CMC_GTEx_SNP_overlap_to_all_GWAS_p5e-8.tsv"), col.names = NA, quote = F, dec = ".", sep = "\t")
+    rm(results, gwas_selected)
+    
+    ### Annotation to genome-wide GWAS hits ###
+    # First, set parameters
+    perm <- 10000
+    # Annotation to GWAS summary statistics (parallelized)
+    cl <- makeCluster(8)
+    registerDoSNOW(cl)
+    clusterCall(cl, function(x) .libPaths(x), .libPaths())  # load packages from above
+    results2 <- foreach (i = seq_along(gwas_gw), .combine = rbind,
+                         .packages = c("GenomicRanges", "S4Vectors")) %dopar% {
+                           results <- data.frame()
+                           overlap <- paste0(names(gwas_gw)[i], "_SNP_overlap")
+                           pval <- paste0(names(gwas_gw)[i], "_SNP_pVal")
+                           or <- paste0(names(gwas_gw)[i], "_SNP_or")
+                           gwas_selected <- gwas_gw[[i]]
+                           gwas_full <- readRDS(gwas_files[[i]])
+                           background <- subsetByOverlaps(background_gr, gwas_full)
+                           rm(gwas_full)
+                           results[c(overlap, pval, or), "Gene"] <- AnnotatePublicData(eqtls_gene_gr, gwas_selected, perm, background)
+                           results[c(overlap, pval, or), "Gene_cases"] <- AnnotatePublicData(eqtls_gene_cases_gr, gwas_selected, perm, background)
+                           results[c(overlap, pval, or), "Transcript"] <- AnnotatePublicData(eqtls_transcript_gr, gwas_selected, perm, background)
+                           results[c(overlap, pval, or), "Transcript_cases"] <- AnnotatePublicData(eqtls_transcript_cases_gr, gwas_selected, perm, background)
+                           results[c(overlap, pval, or), "Exon"] <- AnnotatePublicData(eqtls_exon_gr, gwas_selected, perm, background)
+                           results[c(overlap, pval, or), "Exon_cases"] <- AnnotatePublicData(eqtls_exon_cases_gr, gwas_selected, perm, background)
+                           write.table(results, file = paste0(gwas_outpath, "/pmb_cis-eQTL_annotation_results_10000_permutations_", names(gwas_gw)[i],"_p5e-8.tsv"), col.names = NA, quote = F, dec = ".", sep = "\t")
+                           results
+                         }
+    stopCluster(cl)
+    # Write results into a file
+    write.table(results2, file = paste0(gwas_outpath, "/pmb_cis-eQTL_annotation_results_10000_permutations_ALL_GWAS_hits_p5e-8_bkgd.tsv"), col.names = NA, quote = F, dec = ".", sep = "\t")
+    rm(results2)  
   } else {
     print("Parameter not defined!")
   }
@@ -697,5 +717,16 @@ if(length(args) == 0){
   #eqtls_hmm <- as.data.frame(table(seqnames(hmm_blood)))
   #chromosomes <- merge(eqtls_chr, eqtls_hmm, by = "Var1")
   #print(wilcox.test(chromosomes$Freq.x, chromosomes$Freq.y, alternative = "two.sided"))
+  
+  #gwas <- c("ADHD-2019", "ASD-2019", "BIP-2021", "CDG2-2019", "EA-2018", "MDD3-2019", "SCZ3-2022", "T2D-2017")
+  #results2 <- data.frame()
+  #for (i in seq_along(gwas)) {
+  #  file <- fread(paste0(outpath, "/06_GWAS/pmb_cis-eQTL_annotation_results_10000_permutations_", gwas[i], "_p5e-8.tsv"), header=TRUE)
+  #  results2 <- rbind(results2, file)
+  #}
+  #results2 <- as.data.frame(results2)
+  #row.names(results2) <- results2$V1
+  #results2$V1 <- NULL
+  #write.table(results2, file = paste0(outpath, "/06_GWAS/pmb_cis-eQTL_annotation_results_10000_permutations_ALL_GWAS_hits_p5e-8.tsv"), col.names = NA, quote = F, dec = ".", sep = "\t")
   print(sessionInfo())
 }

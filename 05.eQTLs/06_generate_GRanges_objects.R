@@ -595,6 +595,13 @@ if(length(args) == 0){
     GenerateGrangesObjectFiltered(bip, ofile = "GWAS_sumstats_BIP-2019_p0.05.rds")
     rm(bip)
     
+    ### BIP-2021 ###
+    bip <- data.table::fread(paste0(gwas, "/BIP-2021/pgc-bip2021-all.vcf.tsv"), header = T, stringsAsFactors = F, select = c("#CHROM", "POS", "ID", "PVAL"))
+    colnames(bip) <- c("CHR", "BP", "SNP", "P")
+    GenerateGrangesObject(bip, ofile = "GWAS_sumstats_BIP-2021.rds")
+    GenerateGrangesObjectFiltered(bip, ofile = "GWAS_sumstats_BIP-2021_p0.05.rds")
+    rm(bip)
+    
     ### BIPvsSCZ-2018 ###
     bip <- data.table::fread(paste0(gwas, "/BIP+SCZ-2018/BDvsSCZ.sumstats"), header = T, stringsAsFactors = F, select = c("CHR", "BP", "SNP", "P"))
     GenerateGrangesObject(bip, ofile = "GWAS_sumstats_BIPvsSCZ-2018.rds")
@@ -709,10 +716,23 @@ if(length(args) == 0){
     rm(mdd2)
 
     ### MDD3-2019 ###
-    mdd3 <- data.table::fread(paste0(gwas, "/MDD3-2019/daner_pgc_mdd_meta_w2_no23andMe_rmUKBB"), header = T, stringsAsFactors = F, select = c("CHR", "BP", "SNP", "P"))
+    mdd3 <- data.table::fread(paste0(gwas, "/MDD3-2019/PGC_UKB_depression_genome-wide.txt"), header = T, stringsAsFactors = F, select = c("MarkerName", "P"))
+    mdd3 <- mdd3[mdd3$P < 0.05, ]  # filter for p <= 0.05 (as otherwise it takes too long to get the positions)
+    # get positions for the rs IDs
+    rsids <- getBM(attributes = c("refsnp_id", "chr_name", "chrom_end"), 
+                   filters = "snp_filter",
+                   values = mdd3$MarkerName,
+                   mart = snpmart,
+                   uniqueRows = TRUE)
+    # merge with MDD3 rs SNP IDs
+    mdd3 <- merge(mdd3, rsids, by.x = "MarkerName", by.y = "refsnp_id", all.x = T)
+    # reorder columns, change column names and remove all rows with NA's
+    mdd3 <- mdd3[, c("chr_name", "chrom_end", "MarkerName", "P")]
+    colnames(mdd3) <- c("CHR", "BP", "SNP", "P")
+    # create GRanges object and save into .rds file   
     GenerateGrangesObject(mdd3, ofile = "GWAS_sumstats_MDD3-2019.rds")
     GenerateGrangesObjectFiltered(mdd3, ofile = "GWAS_sumstats_MDD3-2019_p0.05.rds")
-    rm(mdd3)
+    rm(mdd3, rsids)
 
     ### OCD-2017 ###
     ocd <- data.table::fread(paste0(gwas, "/OCD-2017/ocd_aug2017"), header = T, stringsAsFactors = F, select = c("CHR", "BP", "SNP", "P"))
@@ -744,6 +764,13 @@ if(length(args) == 0){
     scz3 <- data.table::fread(paste0(gwas, "/SCZ3-2020/PGC3_SCZ_wave3_public_without_frequencies.v1.tsv"), header = T, stringsAsFactors = F, select = c("CHR", "BP", "SNP", "P"))
     GenerateGrangesObject(scz3, ofile = "GWAS_sumstats_SCZ3-2020.rds")
     GenerateGrangesObjectFiltered(scz3, ofile = "GWAS_sumstats_SCZ3-2020_p0.05.rds")
+    rm(scz3)
+    
+    ### SCZ3-2022 ###
+    scz3 <- data.table::fread(paste0(gwas, "/SCZ3-2022/PGC3_SCZ_wave3.core.autosome.public.v3.vcf.tsv"), header = T, stringsAsFactors = F, select = c("CHROM", "POS", "ID", "PVAL"))
+    colnames(scz3) <- c("CHR", "BP", "SNP", "P")
+    GenerateGrangesObject(scz3, ofile = "GWAS_sumstats_SCZ3-2022.rds")
+    GenerateGrangesObjectFiltered(scz3, ofile = "GWAS_sumstats_SCZ3-2022_p0.05.rds")
     rm(scz3)
 
     ### T2D-2017 ###

@@ -2,9 +2,8 @@
 
 #SBATCH -J run_PRSice-2
 #SBATCH -p cpu_p
-#SBATCH --nodelist=cpusrv04
 #SBATCH --mem=50000 # total memory in MB
-#SBATCH -t 3:00:00 # format dd-hh:mm:ss
+#SBATCH -t 01-00:00:00 # format dd-hh:mm:ss
 #SBATCH --nice=10000  # adjusts scheduling priority
 
 # load R version 3.6.1 and its packages
@@ -81,7 +80,7 @@ echo "Done BIPvsSCZ-2018"
 
 ### BIPSCZvsCONT-2018 ###
 mkdir -p ${outpath_prsice}/BIPSCZvsCONT-2018  # generate output path if not existing already
-Rscript --slave ${script_path}/PRSice.R --prsice ${script_path}/PRSice_linux --base ${sumstats_path}/BIPSCZvsCONT-2018.sumstats --target ${target} --ld ${ld_reference} --pheno ${phenotypes} --cov ${covariates} --cov-factor Sex --thread 3 --A1 A1 --A2 A2 --stat OR --pvalue P --snp SNP --binary-target F --print-snp --or --pheno-col Dx --clump-kb 1000 --clump-r2 0.2 --score avg --all-score --out ${outpath_prsice}/BIPSCZvsCONT-2018/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_BIPSCZvsCONT-2018_PRSice-2_PRS &> ${outpath_prsice}/BIPSCZvsCONT-2018/PRSice-2
+Rscript --slave ${script_path}/PRSice.R --prsice ${script_path}/PRSice_linux --base ${sumstats_path}/BIPSCZvsCONT-2018.sumstats --target ${target} --ld ${ld_reference} --pheno ${phenotypes} --cov ${covariates} --cov-factor Sex --thread 3 --A1 A1 --A2 A2 --stat OR --pvalue P --snp SNP --binary-target T --print-snp --or --pheno-col Dx --clump-kb 1000 --clump-r2 0.2 --score avg --all-score --out ${outpath_prsice}/BIPSCZvsCONT-2018/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_BIPSCZvsCONT-2018_PRSice-2_PRS &> ${outpath_prsice}/BIPSCZvsCONT-2018/PRSice-2
 wait
 echo "Done BIPSCZvsCONT-2018"
 
@@ -123,13 +122,13 @@ echo "Done Cannabis-2018"
 
 ### CDG1-2013 ###
 mkdir -p ${outpath_prsice}/CDG1-2013  # generate output path if not existing already
-Rscript --slave ${script_path}/PRSice.R --prsice ${script_path}/PRSice_linux --base ${sumstats_path}/CDG1-2013.sumstats --target ${target} --ld ${ld_reference} --pheno ${phenotypes} --cov ${covariates} --cov-factor Sex --thread 3 --A1 a1 --A2 a2 --stat or --pvalue pval --snp snpid --binary-target F --print-snp --or --pheno-col Dx --clump-kb 1000 --clump-r2 0.2 --score avg --all-score --out ${outpath_prsice}/CDG1-2013/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_CDG1-2013_PRSice-2_PRS &> ${outpath_prsice}/CDG1-2013/PRSice-2
+Rscript --slave ${script_path}/PRSice.R --prsice ${script_path}/PRSice_linux --base ${sumstats_path}/CDG1-2013.sumstats --target ${target} --ld ${ld_reference} --pheno ${phenotypes} --cov ${covariates} --cov-factor Sex --thread 3 --A1 a1 --A2 a2 --stat or --pvalue pval --snp snpid --binary-target T --print-snp --or --pheno-col Dx --clump-kb 1000 --clump-r2 0.2 --score avg --all-score --out ${outpath_prsice}/CDG1-2013/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_CDG1-2013_PRSice-2_PRS &> ${outpath_prsice}/CDG1-2013/PRSice-2
 wait
 echo "Done CDG1-2013"
 
-### CDG2-2018 ###
+### CDG2-2019 ###
 mkdir -p ${outpath_prsice}/CDG2-2019  # generate output path if not existing already
-Rscript --slave ${script_path}/PRSice.R --prsice ${script_path}/PRSice_linux --base ${sumstats_path}/CDG2-2018.sumstats --target ${target} --ld ${ld_reference} --pheno ${phenotypes} --cov ${covariates} --cov-factor Sex --thread 3 --A1 REF --A2 ALT --stat BETA --pvalue PVAL --snp ID --binary-target F --print-snp --beta --pheno-col Dx --clump-kb 1000 --clump-r2 0.2 --score avg --all-score --out ${outpath_prsice}/CDG2-2019/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_CDG2-2019_PRSice-2_PRS &> ${outpath_prsice}/CDG2-2019/PRSice-2
+Rscript --slave ${script_path}/PRSice.R --prsice ${script_path}/PRSice_linux --base ${sumstats_path}/CDG2-2019.sumstats --target ${target} --ld ${ld_reference} --pheno ${phenotypes} --cov ${covariates} --cov-factor Sex --thread 3 --A1 REF --A2 ALT --stat BETA --pvalue PVAL --snp ID --binary-target T --print-snp --beta --pheno-col Dx --clump-kb 1000 --clump-r2 0.2 --score avg --all-score --out ${outpath_prsice}/CDG2-2019/pmb_info06_all_chr_maf0.01_IDs_changed_noDup_final_CDG2-2019_PRSice-2_PRS &> ${outpath_prsice}/CDG2-2019/PRSice-2
 wait
 echo "Done CDG2-2019"
 

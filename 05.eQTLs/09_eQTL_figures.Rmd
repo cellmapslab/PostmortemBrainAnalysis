@@ -70,27 +70,27 @@ library(ggpubr)  # for balloonplots
 Before we can start, we need to make sure that all necessary paths and folder names are saved. If the output folder does not exist, we will generate it using the systems (Red Hat Enterprise Linux operating system: Fedora 25) "mkdir" command.
 ```{r}
 # path to the eQTL result tables
-results_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/04_result_tables"
+results_path <- "/lustre/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/04_result_tables"
 # path to the clumped eQTL result tables
-clumping_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/05_clumping/03_result_tables"
+clumping_path <- "/lustre/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/05_clumping/03_result_tables"
 # path to SNP rdata GRanges files
-rdata_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/06_RData_files"
+rdata_path <- "/lustre/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/06_RData_files"
 # path to differentially expression analysis (DEA) hits
-dea_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_DEA_results"
+dea_path <- "/lustre/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_DEA_results"
 # path to expression data
-expr_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_files"
+expr_path <- "/lustre/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_files"
 # path to CMC data
-cmc_path <- "/storage/groups/ccm01/datasets/2019_CMC_Fromer_et_al"
+cmc_path <- "/lustre/groups/ccm01/datasets/2019_CMC_Fromer_et_al"
 # path to GTEx data
-gtex_path <- "/storage/groups/ccm01/datasets/2019_GTEx_v8"
+gtex_path <- "/lustre/groups/ccm01/datasets/2019_GTEx_v8"
 # path to fuma pathway results
-fuma_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/07_FUMA"
+fuma_path <- "/lustre/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/07_FUMA"
 # path to eQTS genes of ABMS
-eqts_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/04_FUMA/4.1_input_files/"
+eqts_path <- "/lustre/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/04_FUMA/4.1_input_files/"
 # path to SNP-annotation data
-anno_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/08_SNP-based_annotation"
+anno_path <- "/lustre/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/08_SNP-based_annotation"
 # path to store the output into
-out_path <- "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/09_figures"
+out_path <- "/lustre/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/05.eQTLs/09_figures"
 # generate ouput path if not existing already
 system(paste0("mkdir -p ", out_path))
 ```
@@ -1178,6 +1178,89 @@ ggplot(dat_all, aes(x = as.character(element), y = as.numeric(value), fill = typ
   scale_fill_manual(values = viridis(3, option = "D", begin = 0.15, end = 0.9)) + ggtitle("Variant Effect Predictor (VEP)") + theme(plot.title = element_text(hjust = 0.5)) +
   facet_wrap(~variable, scales = "free_x", labeller = as_labeller(c(`or` = "Odds ratio", `percentdt` = "Proportion")))
 ggsave(paste0(out_path, "/8_Brain_resampling_VEP_pmb_or_and_proportion.pdf"), width = 6, height = 4)
+
+# get proportions to CMC and GTEx
+dat <- fread(paste0(anno_path, "/01_VEP/CMC_GTEx_SNP_overlap_to_VEP_all_states.tsv"), header = T, data.table = F) 
+# read in data
+row.names(dat) <- dat$V1  # change rownames
+dat <- dat[,  c("CMC_eQTL", "CMC_isoQTL", "GTEx_eQTL_brain", "GTEx_sQTL_brain")]  # getcases vs. control data
+dat$V1 <- NULL# remove rowname column
+# get all CMC
+dat_cmc <- dat[, startsWith(colnames(dat), "CMC_")]
+dat_cmc$element <- rownames(dat_cmc)
+dat_cmc <- melt(dat_cmc, id = "element") 
+colnames(dat_cmc) <- c("element", "variable", "percentcmc")
+dat_cmc <- melt(dat_cmc, id = c("element", "variable"))
+colnames(dat_cmc) <- c("element", "type", "variable", "value")
+snp_counts <- rbind("CMC_eQTL" = 1317289, "CMC_isoQTL" = 1397198)
+dat_cmc$percentcmc <- sapply(1:length(dat_cmc$value), function(x) dat_cmc[x, "value"] / snp_counts[unlist(dat_cmc[x, "type"]), 1])
+dat_cmc$value <- NULL
+colnames(dat_cmc) <- c("element", "type", "variable", "value")
+# get all GTEx Brain
+dat_gtex <- dat[, endsWith(colnames(dat), "_brain")]
+dat_gtex$element <- rownames(dat_gtex)
+#dat_gtex$element <- lapply(rownames(dat_gtex), function(x) strsplit(x, "_")[[1]][2])
+dat_gtex <- melt(dat_gtex, id = "element") 
+colnames(dat_gtex) <- c("element", "variable", "percentgtex")
+dat_gtex <- melt(dat_gtex, id = c("element", "variable"))
+colnames(dat_gtex) <- c("element", "type", "variable", "value")
+snp_counts <- rbind("GTEx_eQTL" = 59928, "GTEx_sQTL" = 11793)
+dat_gtex$percentgtex <- sapply(1:length(dat_gtex$value), function(x) dat_gtex[x, "value"] / snp_counts[unlist(dat_gtex[x, "type"]), 1])
+dat_gtex$value <- NULL
+colnames(dat_gtex) <- c("element", "type", "variable", "value")
+# merge CMC and GTEx
+dat_all <- rbind(dat_cmc, dat_gtex)
+dat_all <- dat_all[dat_all$element != "Quies", ]
+dat_all <- dat_all[dat_all$variable == "or" | dat_all$variable == "percentdt" | dat_all$variable == "percentcmc" | dat_all$variable == "percentgtex", ]
+# generate barplot
+ggplot(dat_all, aes(x = as.character(element), y = as.numeric(value), fill = type)) + theme_minimal() +
+  geom_bar(stat = "identity", position = position_dodge()) + ylab("") + xlab("") + coord_flip() + 
+  scale_fill_manual(values = c("#0088aa", "#80e5ff", "#4400aa", "#ccaaff")) + ggtitle("Variant Effect Predictor (VEP)") + theme(plot.title = element_text(hjust = 0.5)) + facet_wrap(~variable, scales = "free_x", labeller = as_labeller(c(`or` = "Odds ratio", `percentdt` = "Proportion", `percentcmc` = "CMC: Proportion of variants", `percentgtex` = "GTEx: Proportion of variants")))
+ggsave(paste0(out_path, "/8_Brain_resampling_VEP_CMC_GTEx_proportions.pdf"), width = 6, height = 4)
+```
+
+## Barplot: GWAS SNP-annotation
+
+```{r}
+dat <- fread(paste0(anno_path, "/06_GWAS/pmb_cis-eQTL_annotation_results_10000_permutations_ALL_GWAS_hits_p5e-8.tsv"), header = T, data.table = F)  # read in data
+row.names(dat) <- dat$V1  # change rownames
+dat <- dat[,  c("Gene", "Transcript", "Exon")]  # get cases vs. control data
+dat[dat == "<= 1e-04"] <- "0.0001"
+dat[] <- lapply(dat, function(x) as.numeric(as.character(x)))
+# get all OR
+dat_or <- dat[endsWith(rownames(dat), "_or"), ]
+dat_or$element <- lapply(rownames(dat_or), function(x) substr(x, 1 , nchar(x) - 7))
+dat_or <- melt(dat_or, id = "element") 
+colnames(dat_or) <- c("element", "variable", "or")
+# get all p-values
+dat_pval <- dat[endsWith(rownames(dat), "_pVal"), ] 
+dat_pval$element <- lapply(rownames(dat_pval), function(x) substr(x, 1 , nchar(x) - 9))  
+dat_pval <- melt(dat_pval, id = "element") 
+dat_pval$value <- -log10(dat_pval$value)
+colnames(dat_pval) <- c("element", "variable", "-log10(p-value)")
+# get all overlaps
+dat_overlap <- dat[endsWith(rownames(dat), "_overlap"), ]
+dat_overlap$element <- lapply(rownames(dat_overlap), function(x) substr(x, 1 , nchar(x) - 12))
+dat_overlap <- melt(dat_overlap, id = "element") 
+colnames(dat_overlap) <- c("element", "variable", "overlap")
+# get proportion of SNPs
+snp_counts <- rbind("Gene" = 41352, "Transcript" = 99009, "Exon" = 260462)
+dat_overlap$percentdt <- sapply(1:length(dat_overlap$overlap), function(x) dat_overlap[x, "overlap"] / snp_counts[unlist(dat_overlap[x, "variable"]), 1])
+# merge all 
+dat_all <- merge(dat_or, dat_overlap, by = c("element", "variable"))
+dat_all <- melt(dat_all, id = c("element", "variable"))
+colnames(dat_all) <- c("element", "type", "variable", "value")
+dat_all <- dat_all[dat_all$element != "Quies", ]
+dat_all <- dat_all[dat_all$variable == "or" | dat_all$variable == "percentdt" | dat_all$variable == "percentcmc" | dat_all$variable == "percentgtex", ]
+# change order of element column
+dat_all$element <- as.factor(dat_all$element)
+dat_all$element <- factor(dat_all$element, levels = c("T2D-2017", "SCZ3-2022", "MDD3-2019", "EA-2018", "CDG2-2019", "BIP-2021", "ASD-2019", "ADHD-2019"))
+# generate barplot
+ggplot(dat_all, aes(x = element, y = as.numeric(value), fill = type)) + theme_minimal() +
+  geom_bar(stat = "identity", position = position_dodge()) + ylab("") + xlab("") + coord_flip() + 
+  scale_fill_manual(values = viridis(3, option = "D", begin = 0.15, end = 0.9), name = "") + ggtitle("GWAS") + theme(plot.title = element_text(hjust = 0.5)) + scale_x_discrete(labels=c("T2D","SCZ","MDD", "EA", "CDG", "BD", "ASD", "ADHD")) +
+  facet_wrap(~variable, scales = "free_x", labeller = as_labeller(c(`or` = "odds ratio", `percentdt` = "proportion")))
+ggsave(paste0(out_path, "/8_Brain_resampling_GWAS_pmb_or_and_proportion.pdf"), width = 6, height = 4)
 
 # get proportions to CMC and GTEx
 dat <- fread(paste0(anno_path, "/01_VEP/CMC_GTEx_SNP_overlap_to_VEP_all_states.tsv"), header = T, data.table = F) 

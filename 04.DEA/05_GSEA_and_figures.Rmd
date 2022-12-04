@@ -77,17 +77,17 @@ library(ggpubr)  # for ggbaloonplot
 Before we can start, we need to make sure that all necessary paths and folder names are saved. If the output folder does not exist, we will generate it using the systems (Red Hat Enterprise Linux operating system: Fedora 25) "mkdir" command.
 ```{r}
 # path to the resulting RData files from the preprocessing step
-rdata_path = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_files"
+rdata_path = "/lustre/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/01_RData_files"
 # path to the DEA result tables
-results_path = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_DEA_results"
+results_path = "/lustre/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/03_DEA_results"
 # path to the polygenic risk score (PRS) results
-prs_path = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/04_PRSice-2"
+prs_path = "/lustre/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/02.PRS/04_PRSice-2"
 # path to CMC data
-cmc_path <- "/storage/groups/ccm01/datasets/2019_CMC_Fromer_et_al"
+cmc_path <- "/lustre/groups/ccm01/datasets/2019_CMC_Fromer_et_al"
 # path to fuma_gtex results
-fuma_path = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/04_FUMA"
+fuma_path = "/lustre/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/04_FUMA"
 # path to store the output into
-outpath = "/storage/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/05_figures"
+outpath = "/lustre/groups/ccm01/workspace/MPIP-Dean_postmortem_brain/04.DEA/05_figures"
 # generate ouput path if not existing already
 system(paste0("mkdir -p ", outpath))
 ```
@@ -320,7 +320,7 @@ exprs(exon_summaries) <- as.matrix(exprs(exon_summaries))
 
 And GENCODE to get the original number of genes, transcripts and exons. We will filter it exactly as in the preprocessing step (only protein-coding genes from the HAVANA source).
 ```{r}
-gencode <- import.gff("/storage/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/annotation_files/gencode.v19.annotation.gtf", format = "gtf")
+gencode <- import.gff("/lustre/groups/ccm01/datasets/2018_MPIP-Dean_postmortem_brain/annotation_files/gencode.v19.annotation.gtf", format = "gtf")
 gencode <- gencode[gencode$gene_type == "protein_coding"]  
 gencode <- gencode[gencode$source == "HAVANA"]
 gencode <- gencode[gencode$type %in% c("gene", "transcript", "exon"), ]
@@ -1298,7 +1298,7 @@ We will generate a barplot of the number of hits, we get using the different cal
 
 We need to load all PRS exon DEA hits and save only the number of found hits (FDR < 10% and FDR < 5%) into a table.
 ```{r, echo = F}
-prs_all <- c("ADHD-2019", "ASD-2019", "BIP-2019", "BMI-2015", "CAD-2017", "CDG1-2013", "CDG2-2019", "EA-2018", "HE-2014", "IN-2018", "MDD1-2012", "MDD2-2018", "MDD3-2019", "SCZ2-2014", "T2D-2017", "SCZ3-2020")
+prs_all <- c("ADHD-2019", "ASD-2019", "BIP-2019", "BIP-2021", "BMI-2015", "CAD-2017", "CDG1-2013", "CDG2-2019", "EA-2018", "HE-2014", "IN-2018", "MDD1-2012", "MDD2-2018", "MDD3-2019", "SCZ2-2014", "SCZ3-2020", "SCZ3-2022", "T2D-2017")
 prs_exons <- data.frame("PRS" = character(), "FDR_0.1" = numeric(), "FDR_0.05" = numeric())
 count = 1
 for (p in prs_all) {
@@ -1351,9 +1351,9 @@ g <- ggplot(prs_both, aes(x = PRS, y = FDR_0.1, fill = Type)) +
 ggsave(plot = g, file = paste0(outpath, "/4_barplot_ALL_PRS_transcript_and_exon_eQTS_new_pvalue_and_fdr.pdf"))
 g
 
-# Graph only with ADHD, ASD, BIP, CDG2, EA, MDD2, MDD3, SCZ2, SCZ3, T2D
-prs_both <- prs_both[prs_both$PRS %in% c("ADHD-2019", "BIP-2019", "CDG2-2019", "EA-2018", "MDD2-2018", "MDD3-2019", "SCZ2-2014", "SCZ3-2020", "T2D-2017"), ]
-prs_both$PRS <- factor(prs_both$PRS, levels = c("ADHD-2019", "BIP-2019", "CDG2-2019", "MDD2-2018", "MDD3-2019", "SCZ2-2014", "SCZ3-2020", "EA-2018", "T2D-2017"))
+# Graph only with BIP, CDG2, MDD3, SCZ3, T2D
+prs_both <- prs_both[prs_both$PRS %in% c("BIP-2021", "CDG2-2019", "MDD3-2019", "SCZ3-2020", "T2D-2017"), ]
+prs_both$PRS <- factor(prs_both$PRS, levels = c("BIP-2021", "MDD3-2019", "SCZ3-2020", "CDG2-2019", "T2D-2017"))
 prs_both$Label <- prs_both$FDR_0.1
 prs_both[prs_both$Type == "Transcript", "FDR_0.1"] <- prs_both[prs_both$Type == "Transcript", "FDR_0.1"] * 330
 g <- ggplot(prs_both, aes(x = PRS, y = FDR_0.1, fill = Type)) + 
@@ -1378,8 +1378,8 @@ ggsave(plot = g, file = paste0(outpath, "/4_barplot_ADHD_BIP_CDG2_EA_MDD2_MDD3_S
 g
 
 # Graph only with ADHD, ASD, BIP, CDG2, EA, MDD2, MDD3, SCZ2, T2D
-prs_both <- prs_both[prs_both$PRS %in% c("ADHD-2019", "BIP-2019", "CDG2-2019", "EA-2018", "MDD2-2018", "MDD3-2019", "SCZ2-2014", "T2D-2017"), ]
-prs_both$PRS <- factor(prs_both$PRS, levels = c("ADHD-2019", "BIP-2019", "CDG2-2019", "MDD2-2018", "MDD3-2019", "SCZ2-2014", "EA-2018", "T2D-2017"))
+prs_both <- prs_both[prs_both$PRS %in% c("BIP-2021", "CDG2-2019", "MDD3-2019", "SCZ3-2022", "T2D-2017"), ]
+prs_both$PRS <- factor(prs_both$PRS, levels = c("BIP-2021", "MDD3-2019", "SCZ2-2022", "CDG2-2019", "T2D-2017"))
 prs_both$Label <- prs_both$FDR_0.1
 prs_both[prs_both$Type == "Transcript", "FDR_0.1"] <- prs_both[prs_both$Type == "Transcript", "FDR_0.1"] * 330
 g <- ggplot(prs_both, aes(x = PRS, y = FDR_0.1, fill = Type)) + 
